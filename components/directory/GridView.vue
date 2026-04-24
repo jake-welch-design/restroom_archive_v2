@@ -168,7 +168,7 @@ function formatShortDate(iso: string) {
 }
 @media (max-width: 500px) {
   .grid {
-    grid-template-columns: 1fr;
+    /* grid-template-columns: 1fr; */
     gap: 8px;
   }
 }
@@ -185,7 +185,7 @@ function formatShortDate(iso: string) {
 }
 .thumb {
   width: 100%;
-  aspect-ratio: 1;
+  /* aspect-ratio: 1; */
   background: #f0f0f0;
   overflow: hidden;
   position: relative;

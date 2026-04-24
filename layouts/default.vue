@@ -196,8 +196,8 @@ function goPrev() {
 }
 
 .bottom-nav {
-  position: fixed;
-  bottom: 1.75rem;
+  position: absolute;
+  bottom: 0.75rem;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -229,10 +229,11 @@ function goPrev() {
   align-items: center;
   gap: 8px;
   border-top: 1px solid #fff;
+  padding-top: 8px;
 }
 .nav-btn {
-  width: 36px;
-  height: 36px;
+  /* width: 36px;
+  height: 36px; */
   display: flex;
   align-items: center;
   justify-content: center;
