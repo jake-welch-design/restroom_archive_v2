@@ -1,0 +1,12 @@
+node_modules
+.nuxt
+.output
+.data
+.wrangler
+dist
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+.local-seed.sql

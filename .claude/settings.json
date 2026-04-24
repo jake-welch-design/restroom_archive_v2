@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//Users/jakewelch/Desktop/Projects/Personal/Websites/**)"
+    ]
+  }
+}

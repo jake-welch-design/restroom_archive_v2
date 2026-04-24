@@ -1,0 +1,45 @@
+{
+  "name": "restroom-archive-v2",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nuxt dev",
+    "dev:remote": "nuxt dev --remote",
+    "build": "nuxt build",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare",
+    "deploy": "nuxt build && wrangler pages deploy dist --project-name=restroom-archive-v2",
+    "preview:pages": "nuxt build && wrangler pages dev dist",
+    "db:generate": "drizzle-kit generate",
+    "db:schema:dump": "wrangler d1 execute restroom-archive-db --remote --command \"SELECT sql FROM sqlite_master WHERE type IN ('table','index') AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name NOT LIKE 'd1_%'\"",
+    "db:migrate:local": "wrangler d1 migrations apply restroom-archive-db --local",
+    "db:migrate:remote": "wrangler d1 migrations apply restroom-archive-db --remote",
+    "db:seed:local": "bash scripts/seed-local-db.sh",
+    "thumbs": "tsx scripts/render-thumbs.ts"
+  },
+  "dependencies": {
+    "@nuxtjs/turnstile": "^1.1.2",
+    "drizzle-orm": "^0.33.0",
+    "fuse.js": "^7.0.0",
+    "maplibre-gl": "^4.7.1",
+    "nuxt": "^3.13.2",
+    "nuxt-auth-utils": "^0.5.29",
+    "pmtiles": "^3.2.0",
+    "three": "^0.174.0",
+    "vue": "^3.5.12",
+    "vue-router": "^4.4.5",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241022.0",
+    "@types/three": "^0.169.0",
+    "drizzle-kit": "^0.24.2",
+    "nitro-cloudflare-dev": "^0.2.2",
+    "puppeteer": "^24.42.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.6.3",
+    "vue-tsc": "^2.2.12",
+    "wrangler": "^4.84.1"
+  }
+}

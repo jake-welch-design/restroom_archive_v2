@@ -1,0 +1,32 @@
+name = "restroom-archive-v2"
+compatibility_date = "2025-04-01"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = "dist"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "restroom-archive-db"
+database_id = "912568c9-0f14-426b-a469-520e1e1ba46d"
+migrations_dir = "server/db/migrations"
+
+[[r2_buckets]]
+binding = "MODELS"
+bucket_name = "restroom-models"
+
+[[r2_buckets]]
+binding = "THUMBS"
+bucket_name = "restroom-archive-thumbs"
+
+[vars]
+# Public base URLs override nuxt runtimeConfig.public.* at build time via env vars.
+# Until the custom domain is attached these can stay pointed at R2's public dev URL
+# or a Pages worker route; set via `wrangler pages secret` / dashboard for prod.
+NUXT_PUBLIC_SITE_URL = ""
+NUXT_PUBLIC_MODELS_BASE_URL = ""
+NUXT_PUBLIC_THUMBS_BASE_URL = ""
+
+# Secrets (set via `wrangler pages secret put <NAME>`):
+#   NUXT_SESSION_PASSWORD        -- 32+ char random string for nuxt-auth-utils session sealing
+#   NUXT_TURNSTILE_SECRET_KEY    -- Cloudflare Turnstile secret key
+# Public vars (set below or in dashboard):
+#   NUXT_PUBLIC_TURNSTILE_SITE_KEY -- Cloudflare Turnstile site key
