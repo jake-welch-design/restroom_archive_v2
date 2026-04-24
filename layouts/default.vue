@@ -307,6 +307,10 @@ function goPrev() {
     display: inline-block;
     transform: rotate(90deg);
   }
+  .bottom-nav {
+    bottom: 0.75rem;
+  }
+
   .bottom-nav-info {
     white-space: normal;
     max-width: calc(100vw - 80px);
