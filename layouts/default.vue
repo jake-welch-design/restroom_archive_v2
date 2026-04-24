@@ -272,7 +272,7 @@ function goPrev() {
     flex: 0 0 auto;
     width: auto;
     height: calc(100dvh * 2 / 3);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    /* box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2); */
     transition: margin-top 0.35s ease;
   }
   .panel.closed {

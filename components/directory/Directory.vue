@@ -442,6 +442,7 @@ watch(data, maybeAutoSelect);
 .link-btn {
   background: none;
   border: none;
+  padding: 0;
   font-size: 14px;
   cursor: pointer;
   color: #000;
@@ -474,6 +475,9 @@ watch(data, maybeAutoSelect);
     align-items: flex-start;
     gap: 6px;
     padding: 6px 8px;
+  }
+  .view-mode {
+    padding: 8px 0 0 0;
   }
   .sub-header {
     padding: 6px 8px;
