@@ -9,7 +9,7 @@
     "build": "nuxt build",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
-    "deploy": "nuxt build && wrangler pages deploy dist --project-name=restroom-archive-v2",
+    "deploy": "nuxt build && wrangler pages deploy dist --project-name=restroom-archive-v2 --branch=main",
     "preview:pages": "nuxt build && wrangler pages dev dist",
     "db:generate": "drizzle-kit generate",
     "db:schema:dump": "wrangler d1 execute restroom-archive-db --remote --command \"SELECT sql FROM sqlite_master WHERE type IN ('table','index') AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name NOT LIKE 'd1_%'\"",
