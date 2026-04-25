@@ -185,7 +185,7 @@ function formatShortDate(iso: string) {
 }
 .thumb {
   width: 100%;
-  /* aspect-ratio: 1; */
+  aspect-ratio: 1;
   background: #f0f0f0;
   overflow: hidden;
   position: relative;

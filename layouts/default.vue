@@ -142,6 +142,7 @@ function goPrev() {
   cursor: pointer;
   padding: 0 0 0 4px;
   z-index: 1;
+  touch-action: manipulation;
   transition: left 0.35s ease;
 }
 
@@ -279,6 +280,11 @@ function goPrev() {
     margin-left: 0;
     margin-top: calc(-100dvh * 2 / 3);
   }
+
+  .corner-title {
+    padding: 8px 0;
+  }
+
   .viewer-panel {
     display: block;
     flex: 1 1 auto;

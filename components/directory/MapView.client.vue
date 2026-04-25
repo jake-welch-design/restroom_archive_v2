@@ -159,4 +159,10 @@ onBeforeUnmount(() => {
   inset: 16px;
   border: 1px solid #000;
 }
+
+@media (max-width: 750px) {
+  .map {
+    inset: 8px;
+  }
+}
 </style>

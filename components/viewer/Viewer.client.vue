@@ -162,50 +162,6 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
       </div>
 
       <div class="overlay-right">
-        <!-- Annotation controls: toggle always visible; add button approved-only -->
-        <div class="ctrl-group">
-          <button
-            class="ctrl-toggle"
-            :class="{ active: markersVisible }"
-            title="Show annotations"
-            @click="markersVisible = !markersVisible"
-          >
-            <span class="toggle-track"><span class="toggle-thumb" /></span>
-          </button>
-          <button
-            v-if="approved"
-            class="ctrl-btn ctrl-add"
-            :class="{ active: createMode }"
-            :title="
-              createMode
-                ? 'Click model to place annotation (Esc to cancel)'
-                : 'Add annotation'
-            "
-            @click="
-              createMode = !createMode;
-              if (!createMode) {
-                pendingPoint = null;
-                pendingSnapshot = null;
-              }
-            "
-          >
-            <svg
-              viewBox="0 0 16 16"
-              width="14"
-              height="14"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M11.5 2.5l2 2L6 12H4v-2z" />
-              <path d="M10 4l2 2" />
-            </svg>
-          </button>
-        </div>
-
         <!-- View mode: single circle that changes icon -->
         <div class="ctrl-group">
           <button
@@ -254,6 +210,50 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
                 d="M783.802469 632.907852C916.770765 607.446914 1011.358025 543.149827 1011.358025 467.753086c0-42.085136-29.50637-80.693728-78.569877-111.059753l34.866568-34.866568C1026.439901 361.34558 1061.925926 412.204247 1061.925926 467.753086c0 100.819753-116.67279 186.191012-278.123457 216.064v-50.909234z"
                 fill="currentColor"
               />
+            </svg>
+          </button>
+        </div>
+
+        <!-- Annotation controls: toggle always visible; add button approved-only -->
+        <div class="ctrl-group">
+          <button
+            class="ctrl-toggle"
+            :class="{ active: markersVisible }"
+            title="Show annotations"
+            @click="markersVisible = !markersVisible"
+          >
+            <span class="toggle-track"><span class="toggle-thumb" /></span>
+          </button>
+          <button
+            v-if="approved"
+            class="ctrl-btn ctrl-add"
+            :class="{ active: createMode }"
+            :title="
+              createMode
+                ? 'Click model to place annotation (Esc to cancel)'
+                : 'Add annotation'
+            "
+            @click="
+              createMode = !createMode;
+              if (!createMode) {
+                pendingPoint = null;
+                pendingSnapshot = null;
+              }
+            "
+          >
+            <svg
+              viewBox="0 0 16 16"
+              width="14"
+              height="14"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M11.5 2.5l2 2L6 12H4v-2z" />
+              <path d="M10 4l2 2" />
             </svg>
           </button>
         </div>
