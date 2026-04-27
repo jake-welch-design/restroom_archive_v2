@@ -17,6 +17,22 @@ const viewMode = useCookie<ViewMode>("viewMode", { default: () => "index" });
 const dateFrom = ref<string>("");
 const dateTo = ref<string>("");
 const activeTags = ref<string[]>([]);
+const filterOpen = ref(false);
+
+const allTags = computed(() => {
+  const seen = new Set<string>();
+  for (const r of data.value ?? []) {
+    for (const t of r.descriptors ?? []) {
+      seen.add(t);
+    }
+  }
+  return [...seen].sort((a, b) => a.localeCompare(b));
+});
+
+function isTagActive(tag: string) {
+  const lower = tag.toLowerCase();
+  return activeTags.value.some((t) => t.toLowerCase() === lower);
+}
 
 function formatDisplayDate(iso: string) {
   if (!iso) return "";
@@ -33,8 +49,12 @@ function toggleTag(tag: string) {
   if (!t) return;
   const lower = t.toLowerCase();
   const idx = activeTags.value.findIndex((x) => x.toLowerCase() === lower);
-  if (idx >= 0) activeTags.value.splice(idx, 1);
-  else activeTags.value.push(t);
+  if (idx >= 0) {
+    activeTags.value.splice(idx, 1);
+  } else {
+    activeTags.value.push(t);
+    filterOpen.value = true;
+  }
 }
 
 function removeTag(tag: string) {
@@ -51,7 +71,9 @@ const fuse = computed(() => {
 });
 
 const rows = computed<RestroomSummary[]>(() => {
-  const list = data.value ?? [];
+  // Admins get pending entries in `data` so /r/<slug> can resolve them, but
+  // they shouldn't clutter the visible directory.
+  const list = (data.value ?? []).filter(r => r.status !== 'pending');
   const q = query.value.trim();
   const base = q
     ? fuse.value.search(q).map((r) => r.item)
@@ -162,6 +184,15 @@ watch(data, maybeAutoSelect);
         <button type="button" class="link-btn" @click="randomPick">
           Random
         </button>
+
+        <button
+          type="button"
+          class="link-btn filter-btn"
+          :class="{ active: filterOpen }"
+          @click="filterOpen = !filterOpen"
+        >
+          Filter <span class="filter-caret" :class="{ open: filterOpen }">›</span>
+        </button>
       </div>
 
       <div class="view-mode">
@@ -187,6 +218,19 @@ watch(data, maybeAutoSelect);
           Map
         </button>
       </div>
+    </div>
+
+    <div v-if="filterOpen && allTags.length" class="filter-panel">
+      <button
+        v-for="t in allTags"
+        :key="t"
+        type="button"
+        class="filter-chip"
+        :class="{ active: isTagActive(t) }"
+        @click="toggleTag(t)"
+      >
+        {{ t }}
+      </button>
     </div>
 
     <div v-if="viewMode === 'grid'" class="sub-header">
@@ -452,6 +496,61 @@ watch(data, maybeAutoSelect);
   color: #b3b3b3;
 }
 
+.filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.filter-btn.active {
+  color: #000;
+}
+
+.filter-caret {
+  display: inline-block;
+  font-size: 12px;
+  line-height: 1;
+  transition: transform 0.15s;
+  transform: rotate(0deg);
+}
+
+.filter-caret.open {
+  transform: rotate(90deg);
+}
+
+.filter-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 16px;
+  border-bottom: 1px solid #000;
+  flex: 0 0 auto;
+}
+
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  background: #fff;
+  color: #000;
+  border: 1px solid #000;
+  border-radius: 3px;
+  padding: 3px 8px;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+
+.filter-chip:hover:not(.active) {
+  background: #f0f0f0;
+}
+
+.filter-chip.active {
+  background: #000;
+  color: #fff;
+}
+
 .view-mode {
   display: flex;
   gap: 20px;
@@ -488,6 +587,9 @@ watch(data, maybeAutoSelect);
   .search input {
     font-size: 12px;
     width: 140px;
+  }
+  .filter-panel {
+    padding: 8px 8px;
   }
 }
 </style>

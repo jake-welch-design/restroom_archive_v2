@@ -37,7 +37,6 @@ export function useThreeScene(
   let controls: OrbitControls | null = null;
   let currentModel: THREE.Group | null = null;
   let raf = 0;
-  let resizeObserver: ResizeObserver | null = null;
 
   let userInteracted = false;
   let orbitDistance = 4;
@@ -94,8 +93,6 @@ export function useThreeScene(
     });
 
     sizeToContainer(canvas);
-    resizeObserver = new ResizeObserver(() => sizeToContainer(canvas));
-    resizeObserver.observe(canvas.parentElement ?? canvas);
 
     canvas.addEventListener("pointerdown", onPointerDown);
     canvas.addEventListener("pointermove", onPointerMove);
@@ -112,13 +109,25 @@ export function useThreeScene(
     const parent = canvas.parentElement;
     const w = parent?.clientWidth ?? canvas.clientWidth;
     const h = parent?.clientHeight ?? canvas.clientHeight;
-    renderer.setSize(w, h, false);
-    camera.aspect = w / Math.max(h, 1);
-    camera.updateProjectionMatrix();
+    const pr = renderer.getPixelRatio();
+    const targetW = Math.round(w * pr);
+    const targetH = Math.round(h * pr);
+    if (
+      renderer.domElement.width !== targetW ||
+      renderer.domElement.height !== targetH
+    ) {
+      renderer.setSize(w, h, false);
+      camera.aspect = w / Math.max(h, 1);
+      camera.updateProjectionMatrix();
+    }
   }
 
   function animate() {
     raf = requestAnimationFrame(animate);
+    if (renderer) {
+      const canvas = renderer.domElement;
+      sizeToContainer(canvas);
+    }
     if (mode.value === "orbit" && controls) {
       if (!userInteracted && currentModel) {
         currentModel.rotation.y += 0.001;
@@ -137,17 +146,25 @@ export function useThreeScene(
     userInteracted = false;
     const myId = ++loadId;
 
+    const tag = `[viewer] load ${url.split("/").pop()}`;
+    const t0 = performance.now();
+
     if (currentModel) {
+      const tDispose = performance.now();
       scene.remove(currentModel);
       disposeObject(currentModel);
       currentModel = null;
+      console.log(`${tag} dispose: ${(performance.now() - tDispose).toFixed(0)}ms`);
     }
 
     try {
       const loader = new GLTFLoader();
+      const tFetch = performance.now();
       const gltf = await loader.loadAsync(url);
       if (myId !== loadId) return;
+      console.log(`${tag} fetch+parse: ${(performance.now() - tFetch).toFixed(0)}ms`);
 
+      const tAdd = performance.now();
       currentModel = gltf.scene;
       scene.add(currentModel);
 
@@ -168,6 +185,38 @@ export function useThreeScene(
         camera.updateProjectionMatrix();
         controls.target.set(0, 0, 0);
         controls.update();
+      }
+      console.log(`${tag} scene add+frame: ${(performance.now() - tAdd).toFixed(0)}ms`);
+      console.log(`${tag} TOTAL: ${(performance.now() - t0).toFixed(0)}ms`);
+
+      let meshCount = 0;
+      let triangles = 0;
+      let vertices = 0;
+      const textures = new Set<THREE.Texture>();
+      currentModel.traverse((child) => {
+        const mesh = child as THREE.Mesh;
+        if (!mesh.isMesh || !mesh.geometry) return;
+        meshCount++;
+        const idx = mesh.geometry.index;
+        const pos = mesh.geometry.attributes.position;
+        if (idx) triangles += idx.count / 3;
+        else if (pos) triangles += pos.count / 3;
+        if (pos) vertices += pos.count;
+        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        for (const m of mats) {
+          if (!m) continue;
+          for (const key of Object.keys(m)) {
+            const v = (m as unknown as Record<string, unknown>)[key];
+            if (v && typeof v === "object" && (v as { isTexture?: boolean }).isTexture) {
+              textures.add(v as THREE.Texture);
+            }
+          }
+        }
+      });
+      console.log(`${tag} stats: ${meshCount} meshes · ${Math.round(triangles).toLocaleString()} tris · ${vertices.toLocaleString()} verts · ${textures.size} textures`);
+      const renderInfo = renderer?.info;
+      if (renderInfo) {
+        console.log(`${tag} renderer.info before frame:`, JSON.parse(JSON.stringify(renderInfo)));
       }
     } catch (e) {
       if (myId === loadId)
@@ -489,14 +538,27 @@ export function useThreeScene(
     camera.updateProjectionMatrix();
   }
 
+  function disposeMaterial(material: THREE.Material) {
+    // material.dispose() does NOT cascade to textures, so we have to do it
+    // manually. Skipping this leaves photogrammetry-sized textures resident
+    // on the GPU after a model swap, which tanks interactive perf.
+    for (const key of Object.keys(material)) {
+      const value = (material as unknown as Record<string, unknown>)[key];
+      if (value && typeof value === "object" && (value as { isTexture?: boolean }).isTexture) {
+        (value as THREE.Texture).dispose();
+      }
+    }
+    material.dispose();
+  }
+
   function disposeObject(obj: THREE.Object3D) {
     obj.traverse((child) => {
       const mesh = child as THREE.Mesh;
       if (mesh.isMesh) {
         mesh.geometry?.dispose();
         const mat = mesh.material as THREE.Material | THREE.Material[];
-        if (Array.isArray(mat)) mat.forEach((m) => m.dispose());
-        else mat?.dispose();
+        if (Array.isArray(mat)) mat.forEach(disposeMaterial);
+        else if (mat) disposeMaterial(mat);
       }
     });
   }
@@ -504,7 +566,6 @@ export function useThreeScene(
   function dispose() {
     cancelAnimationFrame(raf);
     cancelAnimationFrame(tweenRaf);
-    resizeObserver?.disconnect();
     if (currentModel) disposeObject(currentModel);
     controls?.dispose();
     renderer?.dispose();

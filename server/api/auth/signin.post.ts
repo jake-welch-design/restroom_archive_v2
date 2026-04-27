@@ -28,7 +28,24 @@ export default defineEventHandler(async (event) => {
   const valid = user ? await verifyPassword(body.password, user.passwordHash) : false
   if (!user || !valid) throw createError({ statusCode: 401, statusMessage: 'Invalid email or password' })
 
-  await setUserSession(event, { user: { id: user.id, email: user.email, displayName: user.displayName, role: user.role, approvedAt: user.approvedAt ?? null } })
+  if (user.bannedAt) {
+    throw createError({ statusCode: 403, statusMessage: 'This account has been banned.' })
+  }
+
+  await setUserSession(event, {
+    user: {
+      id: user.id,
+      email: user.email,
+      displayName: user.displayName,
+      role: user.role,
+      submissionRequestedAt: user.submissionRequestedAt ?? null,
+      approvedAt: user.approvedAt ?? null,
+      mutedUntil: user.mutedUntil ?? null,
+      bannedAt: user.bannedAt ?? null,
+      adminMessage: user.adminMessage ?? null,
+      adminMessageAt: user.adminMessageAt ?? null,
+    },
+  })
 
   return { ok: true }
 })

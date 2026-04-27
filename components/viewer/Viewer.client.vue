@@ -12,7 +12,7 @@ const canvasRef = ref<HTMLCanvasElement | null>(null);
 const modelUrlRef = toRef(props, "modelUrl");
 const slugRef = toRef(props, "slug");
 
-const { approved, isAdmin } = useAuth();
+const { loggedIn, isAdmin } = useAuth();
 const { selectedAnnotationId, selectAnnotation } = useSelection();
 
 // Annotation data
@@ -132,6 +132,38 @@ async function saveAnnotation(body: string) {
   }
 }
 
+// Transient toast describing the last viewport-button action
+const toastMessage = ref("");
+let toastTimer: ReturnType<typeof setTimeout> | null = null;
+function showToast(msg: string) {
+  toastMessage.value = msg;
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    toastMessage.value = "";
+    toastTimer = null;
+  }, 1200);
+}
+
+function toggleViewMode() {
+  const next = mode.value === "pov" ? "orbit" : "pov";
+  setMode(next);
+  showToast(next === "pov" ? "First-person view" : "Orbit view");
+}
+
+function toggleMarkers() {
+  markersVisible.value = !markersVisible.value;
+  showToast(markersVisible.value ? "Annotations on" : "Annotations off");
+}
+
+function toggleCreateMode() {
+  createMode.value = !createMode.value;
+  if (!createMode.value) {
+    pendingPoint.value = null;
+    pendingSnapshot.value = null;
+  }
+  showToast(createMode.value ? "Add annotation" : "Cancel add annotation");
+}
+
 // Esc to cancel create mode / close active bubble
 function onKeydown(e: KeyboardEvent) {
   if (e.key === "Escape") {
@@ -171,7 +203,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
                 ? 'Switch to orbit view'
                 : 'Switch to first-person view'
             "
-            @click="setMode(mode === 'pov' ? 'orbit' : 'pov')"
+            @click="toggleViewMode"
           >
             <!-- Eye icon for POV mode -->
             <svg
@@ -214,18 +246,18 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
           </button>
         </div>
 
-        <!-- Annotation controls: toggle always visible; add button approved-only -->
+        <!-- Annotation controls: toggle always visible; add button signed-in users only -->
         <div class="ctrl-group">
           <button
             class="ctrl-toggle"
             :class="{ active: markersVisible }"
             title="Show annotations"
-            @click="markersVisible = !markersVisible"
+            @click="toggleMarkers"
           >
             <span class="toggle-track"><span class="toggle-thumb" /></span>
           </button>
           <button
-            v-if="approved"
+            v-if="loggedIn"
             class="ctrl-btn ctrl-add"
             :class="{ active: createMode }"
             :title="
@@ -233,13 +265,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
                 ? 'Click model to place annotation (Esc to cancel)'
                 : 'Add annotation'
             "
-            @click="
-              createMode = !createMode;
-              if (!createMode) {
-                pendingPoint = null;
-                pendingSnapshot = null;
-              }
-            "
+            @click="toggleCreateMode"
           >
             <svg
               viewBox="0 0 16 16"
@@ -258,6 +284,12 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
           </button>
         </div>
       </div>
+    </div>
+
+    <div class="viewport-toast-wrap">
+      <Transition name="toast">
+        <div v-if="toastMessage" class="viewport-toast">{{ toastMessage }}</div>
+      </Transition>
     </div>
 
     <ClientOnly>
@@ -435,6 +467,34 @@ canvas {
   border-radius: 3px;
   font-family: Arial, Helvetica, sans-serif;
   white-space: nowrap;
+}
+.viewport-toast-wrap {
+  position: absolute;
+  top: 3.25rem;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: none;
+  z-index: 4;
+}
+.viewport-toast {
+  background: rgba(0, 0, 0, 0.75);
+  color: #fff;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.toast-enter-active,
+.toast-leave-active {
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
+}
+.toast-enter-from,
+.toast-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
 }
 
 @media (max-width: 750px) {

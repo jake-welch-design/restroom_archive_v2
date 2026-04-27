@@ -5,7 +5,12 @@ declare module '#auth-utils' {
     email: string
     displayName: string | null
     role: string
+    submissionRequestedAt: string | null
     approvedAt: string | null
+    mutedUntil: string | null
+    bannedAt: string | null
+    adminMessage: string | null
+    adminMessageAt: string | null
   }
 }
 
@@ -17,7 +22,12 @@ declare module 'h3' {
       email: string
       displayName: string | null
       role: string
+      submissionRequestedAt: string | null
       approvedAt: string | null
+      mutedUntil: string | null
+      bannedAt: string | null
+      adminMessage: string | null
+      adminMessageAt: string | null
     }
   }
 }

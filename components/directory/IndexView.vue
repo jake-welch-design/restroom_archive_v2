@@ -25,7 +25,7 @@ function isTagActive(tag: string) {
   return props.activeTags.some((t) => t.toLowerCase() === lower);
 }
 
-const { isAdmin, approved, user } = useAuth();
+const { isAdmin, loggedIn, user } = useAuth();
 const { selectAnnotation } = useSelection();
 
 // Annotations for the expanded row
@@ -201,20 +201,6 @@ function formatShortDate(iso: string) {
       >
         Location <span class="arrow">{{ sortArrow("location") }}</span>
       </button>
-      <div class="th col-desc">
-        <span>Descriptors</span>
-        <span v-for="t in activeTags" :key="t" class="tag-chip header-chip">
-          <span class="tag-text">{{ t }}</span>
-          <button
-            type="button"
-            class="tag-x"
-            aria-label="Remove filter"
-            @click="emit('removeTag', t)"
-          >
-            ×
-          </button>
-        </span>
-      </div>
     </div>
 
     <ul ref="tbodyRef" class="tbody">
@@ -230,18 +216,6 @@ function formatShortDate(iso: string) {
           <div class="col-date">{{ formatShortDate(r.isoDate) }}</div>
           <div class="col-name">{{ r.name }}</div>
           <div class="col-loc">{{ r.location }}</div>
-          <div class="col-desc">
-            <button
-              v-for="t in r.descriptors ?? []"
-              :key="t"
-              type="button"
-              class="tag-chip row-chip"
-              :class="{ active: isTagActive(t) }"
-              @click.stop="emit('toggleTag', t)"
-            >
-              {{ t }}
-            </button>
-          </div>
         </div>
 
         <div v-if="r.slug === selectedSlug" class="row-expanded">
@@ -353,6 +327,23 @@ function formatShortDate(iso: string) {
               </button>
             </div>
 
+            <!-- Descriptors -->
+            <div v-if="r.descriptors?.length" class="descriptors-section" @click.stop>
+              <div class="label">Descriptors:</div>
+              <div class="descriptor-chips">
+                <button
+                  v-for="t in r.descriptors"
+                  :key="t"
+                  type="button"
+                  class="tag-chip row-chip"
+                  :class="{ active: isTagActive(t) }"
+                  @click.stop="emit('toggleTag', t)"
+                >
+                  {{ t }}
+                </button>
+              </div>
+            </div>
+
             <!-- Annotations -->
             <div class="annotations-section" @click.stop>
               <button
@@ -399,7 +390,7 @@ function formatShortDate(iso: string) {
 
             <!-- Request removal -->
             <div
-              v-if="approved && !isAdmin"
+              v-if="loggedIn && !isAdmin"
               class="removal-section"
               @click.stop
             >
@@ -468,7 +459,7 @@ function formatShortDate(iso: string) {
 }
 .thead {
   display: grid;
-  grid-template-columns: 118px 203px 202px 1fr;
+  grid-template-columns: 118px 203px 1fr;
   gap: 12px;
   padding: 10px 24px;
   border-top: none;
@@ -510,63 +501,49 @@ function formatShortDate(iso: string) {
 }
 .row-main {
   display: grid;
-  grid-template-columns: 118px 203px 202px 1fr;
+  grid-template-columns: 118px 203px 1fr;
   gap: 12px;
   padding: 8px 24px;
   font-size: 16px;
   align-items: start;
   min-height: 20px;
 }
-.col-desc {
+.descriptors-section {
+  margin-top: 16px;
+}
+.descriptor-chips {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
   gap: 4px;
-  min-width: 0;
-}
-.th.col-desc {
-  flex-wrap: wrap;
-  row-gap: 4px;
+  margin-top: 8px;
 }
 .tag-chip {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  background: #000;
-  color: #fff;
-  padding: 4px 6px;
+  background: #fff;
+  color: #000;
+  padding: 3px 8px;
   font-size: 12px;
-  font-weight: 200;
+  font-weight: 400;
   line-height: 1.2;
-  border: 0;
+  border: 1px solid #000;
   border-radius: 3px;
   font-family: inherit;
 }
 .row-chip {
   cursor: pointer;
+  transition: background 0.1s, color 0.1s;
 }
 .row-chip.active {
-  outline: 1px solid #fff;
-  outline-offset: -3px;
-}
-.row-chip:hover {
-  background: #333;
-}
-.header-chip {
-  font-size: 12px;
-}
-.tag-x {
-  background: transparent;
-  border: 0;
+  background: #000;
   color: #fff;
-  font: inherit;
-  font-size: 12px;
-  line-height: 1;
-  cursor: pointer;
-  padding: 0;
 }
-.tag-x:hover {
-  color: #ccc;
+.row-chip:hover:not(.active) {
+  background: #f0f0f0;
+}
+.row-chip.active:hover {
+  background: #333;
 }
 .row.selected {
   background: #fff;
@@ -815,10 +792,6 @@ function formatShortDate(iso: string) {
     gap: 8px;
     padding: 6px 12px;
     font-size: 12px;
-  }
-  .col-desc,
-  .th.col-desc {
-    display: none;
   }
   .desc-text {
     font-size: 12px;

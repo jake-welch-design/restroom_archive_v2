@@ -15,7 +15,7 @@ const MetaSchema = z.object({
 })
 
 function toSlug(str: string) {
-  return str.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
+  return str.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 }
 
 function formatDisplayDate(isoDate: string) {
@@ -61,7 +61,7 @@ export default defineEventHandler(async (event) => {
     }
     catch { /* ignore malformed */ }
   }
-  const slug = `${isoDate}_${toSlug(name)}_${toSlug(location)}`
+  const slug = `${isoDate}-${toSlug(name)}`
   const fileKey = `${slug}.glb`
 
   const db = useDb(event)

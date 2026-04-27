@@ -1,8 +1,8 @@
 import type { H3Event } from 'h3'
-import { requireRole } from './requireRole'
+import { requireActiveUser } from './requireActiveUser'
 
 export function requireApproved(event: H3Event) {
-  const user = requireRole(event, 'archivist')
+  const user = requireActiveUser(event)
   if (user.role !== 'admin' && !user.approvedAt) {
     throw createError({ statusCode: 403, statusMessage: 'Your account is awaiting admin approval.' })
   }

@@ -1,4 +1,4 @@
-import { and, asc, isNotNull, isNull } from 'drizzle-orm'
+import { desc } from 'drizzle-orm'
 import { useDb, schema } from '~~/server/utils/db'
 import { requireRole } from '~~/server/utils/requireRole'
 
@@ -12,12 +12,17 @@ export default defineEventHandler(async (event) => {
       id: schema.users.id,
       email: schema.users.email,
       displayName: schema.users.displayName,
-      createdAt: schema.users.createdAt,
+      role: schema.users.role,
       submissionRequestedAt: schema.users.submissionRequestedAt,
+      approvedAt: schema.users.approvedAt,
+      mutedUntil: schema.users.mutedUntil,
+      bannedAt: schema.users.bannedAt,
+      adminMessage: schema.users.adminMessage,
+      adminMessageAt: schema.users.adminMessageAt,
+      createdAt: schema.users.createdAt,
     })
     .from(schema.users)
-    .where(and(isNotNull(schema.users.submissionRequestedAt), isNull(schema.users.approvedAt)))
-    .orderBy(asc(schema.users.submissionRequestedAt))
+    .orderBy(desc(schema.users.createdAt))
     .all()
 
   return rows

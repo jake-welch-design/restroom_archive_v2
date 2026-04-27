@@ -1,14 +1,14 @@
 import { eq, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { useDb, schema } from '~~/server/utils/db'
-import { requireApproved } from '~~/server/utils/requireApproved'
+import { requireActiveUser } from '~~/server/utils/requireActiveUser'
 
 const Body = z.object({
   reason: z.string().max(500).optional(),
 })
 
 export default defineEventHandler(async (event) => {
-  const user = requireApproved(event)
+  const user = requireActiveUser(event)
 
   const slug = getRouterParam(event, 'slug')
   if (!slug) throw createError({ statusCode: 400, statusMessage: 'Missing slug' })

@@ -1,14 +1,20 @@
-import { desc, eq } from 'drizzle-orm'
+import { desc, inArray } from 'drizzle-orm'
 import { useDb, schema } from '~~/server/utils/db'
 import { parseDescriptors } from '~~/server/utils/descriptors'
 
 export default defineEventHandler(async (event) => {
   const db = useDb(event)
 
+  // Admins also see pending entries so they can preview them via /r/<slug>
+  // — same rendering path as published models, just hidden from the directory
+  // for everyone else by client-side filtering.
+  const isAdmin = event.context.user?.role === 'admin'
+  const statuses = isAdmin ? ['published', 'pending'] : ['published']
+
   const rows = await db
     .select()
     .from(schema.restrooms)
-    .where(eq(schema.restrooms.status, 'published'))
+    .where(inArray(schema.restrooms.status, statuses))
     .orderBy(desc(schema.restrooms.isoDate))
     .all()
 

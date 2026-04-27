@@ -8,11 +8,18 @@ export default defineEventHandler(async (event) => {
   const id = Number(getRouterParam(event, 'id'))
   if (!id) throw createError({ statusCode: 400, statusMessage: 'Invalid id' })
 
+  const body = await readBody(event).catch(() => ({})) as { message?: string }
+  const message = typeof body?.message === 'string' ? body.message.trim() : null
+
   const db = useDb(event)
 
   const row = await db
     .update(schema.restrooms)
-    .set({ status: 'hidden', updatedAt: sql`(datetime('now'))` })
+    .set({
+      status: 'rejected',
+      rejectionMessage: message || null,
+      updatedAt: sql`(datetime('now'))`,
+    })
     .where(eq(schema.restrooms.id, id))
     .returning({ id: schema.restrooms.id })
     .get()

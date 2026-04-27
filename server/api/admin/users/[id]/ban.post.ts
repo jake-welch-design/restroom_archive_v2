@@ -9,29 +9,32 @@ const Body = z.object({
 })
 
 export default defineEventHandler(async (event) => {
-  requireRole(event, 'admin')
+  const actor = requireRole(event, 'admin')
 
   const id = Number(getRouterParam(event, 'id'))
   if (!id) throw createError({ statusCode: 400, statusMessage: 'Invalid id' })
+  if (id === actor.id) throw createError({ statusCode: 400, statusMessage: 'You cannot ban yourself' })
 
-  const body = await readValidatedBody(event, async (raw) => {
-    if (raw == null) return {}
-    return Body.parse(raw)
-  })
+  const body = await readValidatedBody(event, Body.parse)
 
   const db = useDb(event)
 
-  const row = await db
+  const target = await db
+    .select({ id: schema.users.id, role: schema.users.role })
+    .from(schema.users)
+    .where(eq(schema.users.id, id))
+    .get()
+
+  if (!target) throw createError({ statusCode: 404, statusMessage: 'User not found' })
+  if (target.role === 'admin') throw createError({ statusCode: 409, statusMessage: 'Cannot ban an admin' })
+
+  await db
     .update(schema.users)
     .set({
-      approvedAt: sql`(datetime('now'))`,
+      bannedAt: sql`(datetime('now'))`,
       ...adminMessagePatch(body.message),
     })
     .where(eq(schema.users.id, id))
-    .returning({ id: schema.users.id })
-    .get()
-
-  if (!row) throw createError({ statusCode: 404, statusMessage: 'User not found' })
 
   return { ok: true }
 })

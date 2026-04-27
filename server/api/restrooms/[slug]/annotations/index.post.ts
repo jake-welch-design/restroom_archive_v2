@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { useDb, schema } from '~~/server/utils/db'
-import { requireApproved } from '~~/server/utils/requireApproved'
+import { requireActiveUser } from '~~/server/utils/requireActiveUser'
 
 const OrbitSnapshot = z.object({
   cameraMode: z.literal('orbit'),
@@ -41,7 +41,7 @@ const Body = z.intersection(
 )
 
 export default defineEventHandler(async (event) => {
-  const user = requireApproved(event)
+  const user = requireActiveUser(event)
 
   const slug = getRouterParam(event, 'slug')
   if (!slug) throw createError({ statusCode: 400, statusMessage: 'Missing slug' })

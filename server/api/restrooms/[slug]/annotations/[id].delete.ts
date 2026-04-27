@@ -1,9 +1,9 @@
 import { and, eq } from 'drizzle-orm'
 import { useDb, schema } from '~~/server/utils/db'
-import { requireApproved } from '~~/server/utils/requireApproved'
+import { requireActiveUser } from '~~/server/utils/requireActiveUser'
 
 export default defineEventHandler(async (event) => {
-  const user = requireApproved(event)
+  const user = requireActiveUser(event)
 
   const slug = getRouterParam(event, 'slug')
   const id = Number(getRouterParam(event, 'id'))

@@ -9,6 +9,7 @@ const mapContainer = ref<HTMLDivElement | null>(null);
 let map: maplibregl.Map | null = null;
 let resizeObs: ResizeObserver | null = null;
 let sourceReady = false;
+let hoverPopup: maplibregl.Popup | null = null;
 
 function setPins(rows: RestroomSummary[]) {
   if (!map || !sourceReady) return;
@@ -18,7 +19,7 @@ function setPins(rows: RestroomSummary[]) {
     features: pinned.map((r) => ({
       type: "Feature" as const,
       geometry: { type: "Point" as const, coordinates: [r.lng!, r.lat!] },
-      properties: { slug: r.slug, name: r.name },
+      properties: { slug: r.slug, name: r.name, date: r.date },
     })),
   });
   if (!pinned.length) return;
@@ -110,11 +111,42 @@ onMounted(async () => {
       if (slug) emit("select", slug);
     });
 
-    map!.on("mouseenter", "restroom-pins", () => {
-      map!.getCanvas().style.cursor = "pointer";
+    hoverPopup = new maplibregl.Popup({
+      closeButton: false,
+      closeOnClick: false,
+      offset: 10,
+      className: "restroom-hover-popup",
+    });
+
+    map!.on("mousemove", "restroom-pins", (e) => {
+      if (!map || !hoverPopup) return;
+      map.getCanvas().style.cursor = "pointer";
+      const f = e.features?.[0];
+      if (!f || f.geometry.type !== "Point") return;
+      const [lng, lat] = f.geometry.coordinates as [number, number];
+      const name = (f.properties?.name as string) ?? "";
+      const date = (f.properties?.date as string) ?? "";
+      const safe = (s: string) =>
+        s.replace(/[&<>"']/g, (c) =>
+          c === "&"
+            ? "&amp;"
+            : c === "<"
+              ? "&lt;"
+              : c === ">"
+                ? "&gt;"
+                : c === '"'
+                  ? "&quot;"
+                  : "&#39;",
+        );
+      const html = `<div class="hover-name">${safe(name)}</div>${
+        date ? `<div class="hover-date">${safe(date)}</div>` : ""
+      }`;
+      hoverPopup.setLngLat([lng, lat]).setHTML(html).addTo(map);
     });
     map!.on("mouseleave", "restroom-pins", () => {
-      map!.getCanvas().style.cursor = "";
+      if (!map) return;
+      map.getCanvas().style.cursor = "";
+      hoverPopup?.remove();
     });
 
     sourceReady = true;
@@ -136,6 +168,8 @@ watch(
 onBeforeUnmount(() => {
   resizeObs?.disconnect();
   resizeObs = null;
+  hoverPopup?.remove();
+  hoverPopup = null;
   map?.remove();
   map = null;
 });
@@ -164,5 +198,29 @@ onBeforeUnmount(() => {
   .map {
     inset: 8px;
   }
+}
+</style>
+
+<style>
+.restroom-hover-popup .maplibregl-popup-content {
+  background: #fff;
+  color: #000;
+  border: 1px solid #000;
+  border-radius: 0;
+  padding: 6px 8px;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 12px;
+  line-height: 1.25;
+  box-shadow: none;
+}
+.restroom-hover-popup .maplibregl-popup-tip {
+  display: none;
+}
+.restroom-hover-popup .hover-name {
+  font-weight: 600;
+}
+.restroom-hover-popup .hover-date {
+  color: #555;
+  margin-top: 2px;
 }
 </style>

@@ -38,7 +38,20 @@ export default defineEventHandler(async (event) => {
     .returning()
     .get()
 
-  await setUserSession(event, { user: { id: user.id, email: user.email, displayName: user.displayName, role: user.role, approvedAt: user.approvedAt ?? null } })
+  await setUserSession(event, {
+    user: {
+      id: user.id,
+      email: user.email,
+      displayName: user.displayName,
+      role: user.role,
+      submissionRequestedAt: user.submissionRequestedAt ?? null,
+      approvedAt: user.approvedAt ?? null,
+      mutedUntil: user.mutedUntil ?? null,
+      bannedAt: user.bannedAt ?? null,
+      adminMessage: user.adminMessage ?? null,
+      adminMessageAt: user.adminMessageAt ?? null,
+    },
+  })
 
   return { ok: true }
 })
