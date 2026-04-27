@@ -3,6 +3,7 @@ declare module '#auth-utils' {
   interface User {
     id: number
     email: string
+    username: string
     displayName: string | null
     role: string
     submissionRequestedAt: string | null
@@ -20,6 +21,7 @@ declare module 'h3' {
     user?: {
       id: number
       email: string
+      username: string
       displayName: string | null
       role: string
       submissionRequestedAt: string | null

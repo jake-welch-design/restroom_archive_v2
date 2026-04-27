@@ -1,4 +1,4 @@
-import { desc, inArray } from 'drizzle-orm'
+import { desc, eq, inArray } from 'drizzle-orm'
 import { useDb, schema } from '~~/server/utils/db'
 import { parseDescriptors } from '~~/server/utils/descriptors'
 
@@ -12,13 +12,31 @@ export default defineEventHandler(async (event) => {
   const statuses = isAdmin ? ['published', 'pending'] : ['published']
 
   const rows = await db
-    .select()
+    .select({
+      id: schema.restrooms.id,
+      slug: schema.restrooms.slug,
+      name: schema.restrooms.name,
+      location: schema.restrooms.location,
+      coords: schema.restrooms.coords,
+      lat: schema.restrooms.lat,
+      lng: schema.restrooms.lng,
+      date: schema.restrooms.date,
+      isoDate: schema.restrooms.isoDate,
+      description: schema.restrooms.description,
+      descriptors: schema.restrooms.descriptors,
+      file: schema.restrooms.file,
+      thumbKey: schema.restrooms.thumbKey,
+      status: schema.restrooms.status,
+      submitterUsername: schema.users.username,
+      submitterDisplayName: schema.users.displayName,
+    })
     .from(schema.restrooms)
+    .leftJoin(schema.users, eq(schema.restrooms.submittedBy, schema.users.id))
     .where(inArray(schema.restrooms.status, statuses))
     .orderBy(desc(schema.restrooms.isoDate))
     .all()
 
-  return rows.map((r) => ({
+  return rows.map(r => ({
     id: r.id,
     slug: r.slug,
     name: r.name,
@@ -30,7 +48,9 @@ export default defineEventHandler(async (event) => {
     isoDate: r.isoDate,
     description: r.description,
     descriptors: parseDescriptors(r.descriptors),
-    attribution: r.attribution,
+    submitter: r.submitterUsername
+      ? { username: r.submitterUsername, displayName: r.submitterDisplayName }
+      : null,
     status: r.status,
     // Relative URLs — resolved against document.baseURI on the client.
     // Avoids SSR-time host confusion (Nitro internal fetch reports localhost).

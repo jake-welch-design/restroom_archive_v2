@@ -17,6 +17,7 @@ export default defineEventHandler(async (event) => {
       status: schema.restrooms.status,
       removalReason: schema.restrooms.removalReason,
       requesterEmail: schema.users.email,
+      requesterUsername: schema.users.username,
       requesterName: schema.users.displayName,
     })
     .from(schema.restrooms)
@@ -28,7 +29,7 @@ export default defineEventHandler(async (event) => {
   return rows.map(r => ({
     ...r,
     requester: r.requesterEmail
-      ? { email: r.requesterEmail, displayName: r.requesterName }
+      ? { email: r.requesterEmail, username: r.requesterUsername, displayName: r.requesterName }
       : null,
   }))
 })

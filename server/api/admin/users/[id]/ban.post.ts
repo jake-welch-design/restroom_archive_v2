@@ -36,5 +36,13 @@ export default defineEventHandler(async (event) => {
     })
     .where(eq(schema.users.id, id))
 
+  // Soft-hide the banned user's submissions so the public archive treats the
+  // account's contributions as withdrawn. Hidden rows stay in the DB and R2 so
+  // the action is reversible (e.g. by manually flipping the status back).
+  await db
+    .update(schema.restrooms)
+    .set({ status: 'hidden', updatedAt: sql`(datetime('now'))` })
+    .where(eq(schema.restrooms.submittedBy, id))
+
   return { ok: true }
 })

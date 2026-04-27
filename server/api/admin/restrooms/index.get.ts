@@ -23,6 +23,7 @@ export default defineEventHandler(async (event) => {
       file: schema.restrooms.file,
       createdAt: schema.restrooms.createdAt,
       submitterEmail: schema.users.email,
+      submitterUsername: schema.users.username,
       submitterName: schema.users.displayName,
     })
     .from(schema.restrooms)
@@ -36,7 +37,7 @@ export default defineEventHandler(async (event) => {
     descriptors: parseDescriptors(r.descriptors),
     modelUrl: `/api/r2/models/${r.file}`,
     submitter: r.submitterEmail
-      ? { email: r.submitterEmail, displayName: r.submitterName }
+      ? { email: r.submitterEmail, username: r.submitterUsername, displayName: r.submitterName }
       : null,
   }))
 })

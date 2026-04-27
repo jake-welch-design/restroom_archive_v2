@@ -1,3 +1,8 @@
+export interface PublicUserRef {
+  username: string
+  displayName: string | null
+}
+
 export interface RestroomSummary {
   id: number
   slug: string
@@ -10,7 +15,7 @@ export interface RestroomSummary {
   isoDate: string
   description: string | null
   descriptors: string[]
-  attribution: string
+  submitter: PublicUserRef | null
   status: string
   modelUrl: string
   thumbUrl: string | null

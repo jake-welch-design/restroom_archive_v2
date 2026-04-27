@@ -11,6 +11,7 @@ export default defineEventHandler(async (event) => {
     .select({
       id: schema.users.id,
       email: schema.users.email,
+      username: schema.users.username,
       displayName: schema.users.displayName,
       createdAt: schema.users.createdAt,
       submissionRequestedAt: schema.users.submissionRequestedAt,

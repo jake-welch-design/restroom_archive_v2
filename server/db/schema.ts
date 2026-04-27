@@ -4,6 +4,7 @@ import { sql } from 'drizzle-orm'
 export const users = sqliteTable('users', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   email: text('email').notNull(),
+  username: text('username').notNull(),
   passwordHash: text('password_hash').notNull(),
   displayName: text('display_name'),
   role: text('role').notNull().default('archivist'),
@@ -16,6 +17,7 @@ export const users = sqliteTable('users', {
   createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
 }, (t) => ({
   emailIdx: uniqueIndex('users_email_unique').on(t.email),
+  usernameIdx: uniqueIndex('users_username_unique').on(t.username),
 }))
 
 export const restrooms = sqliteTable('restrooms', {
@@ -37,7 +39,6 @@ export const restrooms = sqliteTable('restrooms', {
   removalRequestedBy: integer('removal_requested_by').references(() => users.id),
   removalReason: text('removal_reason'),
   rejectionMessage: text('rejection_message'),
-  attribution: text('attribution').notNull().default('Jake Welch'),
   createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
   updatedAt: text('updated_at').notNull().default(sql`(datetime('now'))`),
 }, (t) => ({

@@ -37,6 +37,7 @@ export default defineEventHandler(async (event) => {
       createdAt: schema.annotations.createdAt,
       authorId: schema.users.id,
       authorEmail: schema.users.email,
+      authorUsername: schema.users.username,
       authorDisplayName: schema.users.displayName,
     })
     .from(schema.annotations)
@@ -66,6 +67,7 @@ export default defineEventHandler(async (event) => {
     createdAt: r.createdAt,
     author: {
       id: r.authorId!,
+      username: r.authorUsername!,
       displayName: r.authorDisplayName,
       email: r.authorEmail!,
     },

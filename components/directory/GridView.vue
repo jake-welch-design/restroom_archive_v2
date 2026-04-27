@@ -40,7 +40,7 @@ async function deleteAnnotation(slug: string, id: number) {
 }
 
 function authorLabel(a: Annotation) {
-  return a.author.displayName ?? a.author.email;
+  return a.author.displayName ?? `@${a.author.username}`;
 }
 
 function shortDate(iso: string) {
@@ -143,6 +143,10 @@ function formatShortDate(iso: string) {
                 <p v-else-if="annotationsOpen" class="annotation-empty">
                   No annotations yet.
                 </p>
+              </div>
+
+              <div class="submitter-line">
+                <UserAttribution :user="r.submitter" />
               </div>
             </div>
           </template>
@@ -302,6 +306,13 @@ function formatShortDate(iso: string) {
 }
 .annotations-section {
   margin-top: auto;
+}
+.submitter-line {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+  font-size: 11px;
+  color: #666;
 }
 .annotations-toggle {
   background: transparent;

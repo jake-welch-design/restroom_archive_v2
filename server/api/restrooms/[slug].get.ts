@@ -9,8 +9,26 @@ export default defineEventHandler(async (event) => {
   const db = useDb(event)
 
   const row = await db
-    .select()
+    .select({
+      id: schema.restrooms.id,
+      slug: schema.restrooms.slug,
+      name: schema.restrooms.name,
+      location: schema.restrooms.location,
+      coords: schema.restrooms.coords,
+      lat: schema.restrooms.lat,
+      lng: schema.restrooms.lng,
+      date: schema.restrooms.date,
+      isoDate: schema.restrooms.isoDate,
+      description: schema.restrooms.description,
+      descriptors: schema.restrooms.descriptors,
+      file: schema.restrooms.file,
+      thumbKey: schema.restrooms.thumbKey,
+      status: schema.restrooms.status,
+      submitterUsername: schema.users.username,
+      submitterDisplayName: schema.users.displayName,
+    })
     .from(schema.restrooms)
+    .leftJoin(schema.users, eq(schema.restrooms.submittedBy, schema.users.id))
     .where(eq(schema.restrooms.slug, slug))
     .get()
 
@@ -28,7 +46,9 @@ export default defineEventHandler(async (event) => {
     isoDate: row.isoDate,
     description: row.description,
     descriptors: parseDescriptors(row.descriptors),
-    attribution: row.attribution,
+    submitter: row.submitterUsername
+      ? { username: row.submitterUsername, displayName: row.submitterDisplayName }
+      : null,
     status: row.status,
     modelUrl: `/api/r2/models/${row.file}`,
     thumbUrl: row.thumbKey ? `/api/r2/thumbs/${row.thumbKey}` : null,

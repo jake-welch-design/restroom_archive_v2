@@ -2,6 +2,7 @@ export type CameraMode = 'orbit' | 'pov'
 
 export interface AnnotationAuthor {
   id: number
+  username: string
   displayName: string | null
   email: string
 }

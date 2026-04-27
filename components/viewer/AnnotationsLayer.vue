@@ -131,7 +131,7 @@ const pendingPos = computed(() => {
       <p class="bubble-body">{{ activeAnnotation.body }}</p>
       <span class="bubble-meta">
         {{
-          activeAnnotation.author.displayName ?? activeAnnotation.author.email
+          activeAnnotation.author.displayName ?? `@${activeAnnotation.author.username}`
         }}
       </span>
     </div>
