@@ -369,7 +369,7 @@ function formatShortDate(iso: string) {
             </div>
 
             <div class="submitter-line">
-              <UserAttribution :user="r.submitter" />
+              <!-- <UserAttribution :user="r.submitter" /> -->
             </div>
           </div>
         </div>

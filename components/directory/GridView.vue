@@ -89,7 +89,11 @@ function formatShortDate(iso: string) {
                 {{ r.description ?? "No description yet." }}
               </p>
 
-              <div v-if="r.descriptors?.length" class="descriptors-section" @click.stop>
+              <div
+                v-if="r.descriptors?.length"
+                class="descriptors-section"
+                @click.stop
+              >
                 <button
                   v-for="t in r.descriptors"
                   :key="t"
@@ -146,7 +150,7 @@ function formatShortDate(iso: string) {
               </div>
 
               <div class="submitter-line">
-                <UserAttribution :user="r.submitter" />
+                <!-- <UserAttribution :user="r.submitter" /> -->
               </div>
             </div>
           </template>
@@ -292,7 +296,9 @@ function formatShortDate(iso: string) {
   font-size: 11px;
   line-height: 1.2;
   cursor: pointer;
-  transition: background 0.1s, color 0.1s;
+  transition:
+    background 0.1s,
+    color 0.1s;
 }
 .tag-chip:hover:not(.active) {
   background: #f0f0f0;
