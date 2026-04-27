@@ -61,41 +61,12 @@ function goPrev() {
             <span>{{ selected.date }}</span>
             <span>{{ selected.location }}</span>
           </p>
-          <!-- <div class="bottom-nav-divider" /> -->
           <div class="bottom-nav-controls">
-            <button class="nav-btn" title="Previous" @click="goPrev">
-              <svg
-                viewBox="0 0 16 16"
-                width="14"
-                height="14"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.75"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M10 3L5 8l5 5" />
-              </svg>
-            </button>
+            <button class="nav-btn" title="Previous" @click="goPrev">←</button>
             <button class="nav-btn" title="Random" @click="randomPick">
               Random
             </button>
-            <button class="nav-btn" title="Next" @click="goNext">
-              <svg
-                viewBox="0 0 16 16"
-                width="14"
-                height="14"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.75"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M6 3l5 5-5 5" />
-              </svg>
-            </button>
+            <button class="nav-btn" title="Next" @click="goNext">→</button>
           </div>
         </div>
       </Transition>
@@ -176,7 +147,8 @@ function goPrev() {
   font-size: 24px;
   font-weight: 400;
   color: #fff;
-  mix-blend-mode: difference;
+  text-shadow: 0px 0px 5px rgba(0, 0, 0, 0.2);
+  /* mix-blend-mode: difference; */
   pointer-events: none;
   z-index: 1;
 }
@@ -186,11 +158,11 @@ function goPrev() {
   bottom: 0;
   left: 0;
   right: 0;
-  height: 220px;
+  height: 150px;
   background: linear-gradient(
     to bottom,
     rgba(0, 0, 0, 0) 0%,
-    rgba(0, 0, 0, 0.5) 100%
+    rgba(0, 0, 0, 0.2) 100%
   );
   pointer-events: none;
   z-index: 2;
@@ -214,46 +186,32 @@ function goPrev() {
   font-size: 14px;
   color: #fff;
   text-align: center;
-  white-space: nowrap;
   mix-blend-mode: difference;
 }
-.bottom-nav-info span + span::before {
-  content: " \2022\00A0 ";
+.bottom-nav-info span {
+  display: block;
 }
-/* .bottom-nav-divider {
-  width: 50px;
-  height: 1px;
-  background: #fff;
-} */
 .bottom-nav-controls {
   display: flex;
   align-items: center;
-  gap: 8px;
-  border-top: 1px solid #fff;
-  padding-top: 8px;
+  gap: 6px;
 }
 .nav-btn {
-  /* width: 36px;
-  height: 36px; */
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 0;
-  /* border-radius: 50%; */
+  border: 1px solid #fff;
+  border-radius: 3px;
   background: transparent;
   cursor: pointer;
   color: #ffffff;
-  padding: 0;
-  transition:
-    background 0.12s,
-    color 0.12s;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 14px;
+  padding: 4px 10px;
+  transition: opacity 0.12s;
 }
 .nav-btn:hover {
   opacity: 0.8;
-}
-
-.nav-btn[title="Random"] {
-  text-decoration: underline;
 }
 
 .fade-enter-active,
@@ -319,15 +277,7 @@ function goPrev() {
   }
 
   .bottom-nav-info {
-    white-space: normal;
     max-width: calc(100vw - 80px);
-  }
-  .bottom-nav-info span + span::before {
-    content: none;
-  }
-  .bottom-nav-info span {
-    display: block;
-    text-align: center;
   }
 }
 </style>
