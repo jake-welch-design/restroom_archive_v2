@@ -304,7 +304,11 @@ function formatShortDate(iso: string) {
             </div>
 
             <!-- Descriptors -->
-            <div v-if="r.descriptors?.length" class="descriptors-section" @click.stop>
+            <div
+              v-if="r.descriptors?.length"
+              class="descriptors-section"
+              @click.stop
+            >
               <div class="label">Descriptors:</div>
               <div class="descriptor-chips">
                 <button
@@ -363,7 +367,6 @@ function formatShortDate(iso: string) {
                 No annotations yet.
               </p>
             </div>
-
           </div>
         </div>
       </li>
@@ -383,7 +386,7 @@ function formatShortDate(iso: string) {
 }
 .thead {
   display: grid;
-  grid-template-columns: 118px 203px 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   padding: 10px 24px;
   border-top: none;
@@ -425,7 +428,7 @@ function formatShortDate(iso: string) {
 }
 .row-main {
   display: grid;
-  grid-template-columns: 118px 203px 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   padding: 8px 24px;
   font-size: 16px;
@@ -457,7 +460,9 @@ function formatShortDate(iso: string) {
 }
 .row-chip {
   cursor: pointer;
-  transition: background 0.1s, color 0.1s;
+  transition:
+    background 0.1s,
+    color 0.1s;
 }
 .row-chip.active {
   background: #000;
@@ -670,7 +675,7 @@ function formatShortDate(iso: string) {
 /* Responsive columns via container queries */
 @container (max-width: 560px) {
   .thead {
-    grid-template-columns: 84px 1fr 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 8px;
     padding: 8px 12px;
     font-size: 12px;
@@ -679,7 +684,7 @@ function formatShortDate(iso: string) {
     font-size: 12px;
   }
   .row-main {
-    grid-template-columns: 84px 1fr 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 8px;
     padding: 6px 12px;
     font-size: 12px;
@@ -700,12 +705,12 @@ function formatShortDate(iso: string) {
 
 @container (max-width: 400px) {
   .thead {
-    grid-template-columns: 72px 1fr 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 6px;
     padding: 8px 10px;
   }
   .row-main {
-    grid-template-columns: 72px 1fr 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 6px;
     padding: 6px 10px;
   }
