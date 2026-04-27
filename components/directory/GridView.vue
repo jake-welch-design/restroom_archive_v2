@@ -5,8 +5,17 @@ import type { Annotation } from "~/types/annotation";
 const props = defineProps<{
   rows: RestroomSummary[];
   selectedSlug: string | null;
+  activeTags: string[];
 }>();
-const emit = defineEmits<{ select: [slug: string] }>();
+const emit = defineEmits<{
+  select: [slug: string];
+  toggleTag: [tag: string];
+}>();
+
+function isTagActive(tag: string) {
+  const lower = tag.toLowerCase();
+  return props.activeTags.some((t) => t.toLowerCase() === lower);
+}
 
 const { isAdmin, user } = useAuth();
 const { selectAnnotation } = useSelection();
@@ -79,6 +88,19 @@ function formatShortDate(iso: string) {
               <p class="desc-text">
                 {{ r.description ?? "No description yet." }}
               </p>
+
+              <div v-if="r.descriptors?.length" class="descriptors-section" @click.stop>
+                <button
+                  v-for="t in r.descriptors"
+                  :key="t"
+                  type="button"
+                  class="tag-chip"
+                  :class="{ active: isTagActive(t) }"
+                  @click.stop="emit('toggleTag', t)"
+                >
+                  {{ t }}
+                </button>
+              </div>
 
               <div class="annotations-section">
                 <button
@@ -248,6 +270,35 @@ function formatShortDate(iso: string) {
   color: #000;
   font-size: 12px;
   line-height: 1.35;
+}
+.descriptors-section {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  background: #fff;
+  color: #000;
+  border: 1px solid #000;
+  border-radius: 3px;
+  padding: 3px 8px;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+.tag-chip:hover:not(.active) {
+  background: #f0f0f0;
+}
+.tag-chip.active {
+  background: #000;
+  color: #fff;
+}
+.tag-chip.active:hover {
+  background: #333;
 }
 .annotations-section {
   margin-top: auto;

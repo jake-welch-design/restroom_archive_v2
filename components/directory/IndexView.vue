@@ -25,37 +25,13 @@ function isTagActive(tag: string) {
   return props.activeTags.some((t) => t.toLowerCase() === lower);
 }
 
-const { isAdmin, loggedIn, user } = useAuth();
+const { isAdmin, user } = useAuth();
 const { selectAnnotation } = useSelection();
 
 // Annotations for the expanded row
 const expandedSlug = computed(() => props.selectedSlug);
 const { data: annotations, refresh: refreshAnnotations } =
   useAnnotations(expandedSlug);
-
-// Removal request state
-const removalSlug = ref<string | null>(null);
-const removalReason = ref("");
-const removalLoading = ref(false);
-const removalError = ref("");
-
-async function submitRemoval(slug: string) {
-  removalLoading.value = true;
-  removalError.value = "";
-  try {
-    await $fetch(`/api/restrooms/${slug}/request-removal`, {
-      method: "POST",
-      body: { reason: removalReason.value || undefined },
-    });
-    removalSlug.value = null;
-    removalReason.value = "";
-  } catch (e: unknown) {
-    const err = e as { data?: { statusMessage?: string } };
-    removalError.value = err.data?.statusMessage ?? "Failed to submit request.";
-  } finally {
-    removalLoading.value = false;
-  }
-}
 
 // Annotations collapse
 const annotationsOpen = ref(false);
@@ -388,58 +364,6 @@ function formatShortDate(iso: string) {
               </p>
             </div>
 
-            <!-- Request removal -->
-            <div
-              v-if="loggedIn && !isAdmin"
-              class="removal-section"
-              @click.stop
-            >
-              <div v-if="removalSlug === r.slug" class="removal-form">
-                <textarea
-                  v-model="removalReason"
-                  class="removal-textarea"
-                  placeholder="Reason (optional)"
-                  rows="2"
-                  maxlength="500"
-                  @click.stop
-                />
-                <p v-if="removalError" class="removal-error">
-                  {{ removalError }}
-                </p>
-                <div class="removal-actions">
-                  <button
-                    type="button"
-                    class="edit-btn edit-btn-save"
-                    :disabled="removalLoading"
-                    @click.stop="submitRemoval(r.slug)"
-                  >
-                    {{ removalLoading ? "…" : "Send" }}
-                  </button>
-                  <button
-                    type="button"
-                    class="edit-btn edit-btn-cancel"
-                    @click.stop="
-                      removalSlug = null;
-                      removalReason = '';
-                      removalError = '';
-                    "
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-              <button
-                v-else
-                type="button"
-                class="edit-link removal-link"
-                @click.stop="
-                  removalSlug = r.slug;
-                  removalError = '';
-                "
-              >
-                Request removal
-              </button>
-            </div>
           </div>
         </div>
       </li>
@@ -667,39 +591,6 @@ function formatShortDate(iso: string) {
 .annotation-empty {
   margin: 4px 0 0;
   font-size: 13px;
-  color: #999;
-}
-
-/* Removal request */
-.removal-section {
-  margin-top: 12px;
-}
-.removal-form {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.removal-textarea {
-  border: 1px solid #000;
-  padding: 6px;
-  font: inherit;
-  font-size: 13px;
-  resize: vertical;
-  background: transparent;
-  outline: none;
-  width: 100%;
-  box-sizing: border-box;
-}
-.removal-error {
-  margin: 0;
-  font-size: 12px;
-  color: #c33;
-}
-.removal-actions {
-  display: flex;
-  gap: 8px;
-}
-.removal-link {
   color: #999;
 }
 

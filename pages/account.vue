@@ -217,7 +217,16 @@ function submissionStatusLabel(status: string) {
 
 // Lists default to collapsed; click the section header to expand.
 const mySubmissionsOpen = ref(false)
+const pendingSubmissionsOpen = ref(false)
 const myAnnotationsOpen = ref(false)
+
+const publishedSubmissions = computed(() =>
+  (mySubmissions.value ?? []).filter(r => r.status === 'published' || r.status === 'removal_requested')
+)
+
+const pendingAndRejectedSubmissions = computed(() =>
+  (mySubmissions.value ?? []).filter(r => r.status === 'pending' || r.status === 'rejected' || r.status === 'hidden')
+)
 
 const removalSlug = ref<string | null>(null)
 const removalReason = ref('')
@@ -691,7 +700,7 @@ const roleLabel = computed(() => {
         </form>
       </section>
 
-      <!-- My submissions -->
+      <!-- My submissions (published) -->
       <section class="section">
         <button
           type="button"
@@ -701,20 +710,18 @@ const roleLabel = computed(() => {
         >
           <span class="caret">{{ mySubmissionsOpen ? '▾' : '▸' }}</span>
           My submissions
-          <span v-if="mySubmissions?.length" class="count">{{ mySubmissions.length }}</span>
+          <span v-if="publishedSubmissions.length" class="count">{{ publishedSubmissions.length }}</span>
         </button>
         <template v-if="mySubmissionsOpen">
-          <div v-if="!mySubmissions?.length" class="empty">No submissions yet.</div>
+          <div v-if="!publishedSubmissions.length" class="empty">No approved submissions yet.</div>
           <ul v-else class="simple-list">
-            <li v-for="r in mySubmissions" :key="r.id" class="simple-row">
+            <li v-for="r in publishedSubmissions" :key="r.id" class="simple-row">
               <div class="simple-main">
                 <NuxtLink class="simple-title link" :to="`/r/${r.slug}`">{{ r.name }}</NuxtLink>
-                <span class="simple-meta">
-                  {{ r.date }} · {{ r.location }} · {{ submissionStatusLabel(r.status) }}<template v-if="r.removalRequested"> · removal requested</template>
-                </span>
-                <span v-if="r.status === 'rejected' && r.rejectionMessage" class="simple-meta rejection-msg">{{ r.rejectionMessage }}</span>
+                <span class="simple-meta">{{ r.date }} · {{ r.location }}</span>
+                <span v-if="r.removalRequested" class="simple-meta">Removal requested</span>
 
-                <div v-if="removalSlug === r.slug" class="inline-removal-form" @click.stop>
+                <div v-if="removalSlug === r.slug" class="inline-removal-form">
                   <textarea
                     v-model="removalReason"
                     class="field-input field-textarea"
@@ -730,23 +737,47 @@ const roleLabel = computed(() => {
                       :disabled="submissionActionId === r.id"
                       @click="submitRemovalRequest(r.slug)"
                     >
-                      {{ submissionActionId === r.id ? '…' : 'Submit removal request' }}
+                      {{ submissionActionId === r.id ? '…' : 'Submit' }}
                     </button>
                   </div>
                 </div>
               </div>
-              <div
-                v-if="r.status === 'published' && !r.removalRequested && removalSlug !== r.slug"
-                class="simple-actions"
-              >
-                <button type="button" class="btn btn-reject" @click="openRemovalForm(r.slug)">Request removal</button>
+              <div v-if="!r.removalRequested && removalSlug !== r.slug" class="simple-actions">
+                <button type="button" class="btn btn-reject" @click="openRemovalForm(r.slug)">
+                  Request removal
+                </button>
               </div>
-              <div v-else-if="r.status === 'rejected' || r.status === 'hidden' || r.status === 'pending'" class="simple-actions">
+            </li>
+          </ul>
+        </template>
+      </section>
+
+      <!-- Pending submissions -->
+      <section v-if="pendingAndRejectedSubmissions.length" class="section">
+        <button
+          type="button"
+          class="section-title section-toggle"
+          :aria-expanded="pendingSubmissionsOpen"
+          @click="pendingSubmissionsOpen = !pendingSubmissionsOpen"
+        >
+          <span class="caret">{{ pendingSubmissionsOpen ? '▾' : '▸' }}</span>
+          Pending submissions
+          <span class="count">{{ pendingAndRejectedSubmissions.length }}</span>
+        </button>
+        <template v-if="pendingSubmissionsOpen">
+          <ul class="simple-list">
+            <li v-for="r in pendingAndRejectedSubmissions" :key="r.id" class="simple-row">
+              <div class="simple-main">
+                <span class="simple-title">{{ r.name }}</span>
+                <span class="simple-meta">{{ r.date }} · {{ r.location }} · {{ submissionStatusLabel(r.status) }}</span>
+                <span v-if="r.status === 'rejected' && r.rejectionMessage" class="simple-meta rejection-msg">{{ r.rejectionMessage }}</span>
+              </div>
+              <div class="simple-actions">
                 <button
                   type="button"
                   class="icon-btn"
                   :disabled="submissionActionId === r.id"
-                  :title="r.status === 'pending' ? 'Withdraw submission' : 'Dismiss'"
+                  :title="r.status === 'pending' ? 'Withdraw submission' : 'Remove'"
                   @click="dismissRejectedSubmission(r.slug, r.id, r.status)"
                 >
                   {{ submissionActionId === r.id ? '…' : '✕' }}

@@ -339,7 +339,9 @@ watch(data, maybeAutoSelect);
           v-else-if="viewMode === 'grid'"
           :rows="rows"
           :selected-slug="selectedSlug"
+          :active-tags="activeTags"
           @select="select"
+          @toggle-tag="toggleTag"
         />
       </template>
     </template>
