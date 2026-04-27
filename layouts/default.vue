@@ -218,7 +218,7 @@ function goPrev() {
   mix-blend-mode: difference;
 }
 .bottom-nav-info span + span::before {
-  content: " \2022 ";
+  content: " \2022\00A0 ";
 }
 /* .bottom-nav-divider {
   width: 50px;
