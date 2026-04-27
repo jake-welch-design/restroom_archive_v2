@@ -28,22 +28,16 @@
         <a href="mailto:hello@restroomarchive.com">hello@restroomarchive.com</a>
       </p>
 
-      <h2>License</h2>
-      <p>
-        All 3D models and associated media on this site are licensed under
-        Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International
-        (CC BY-NC-SA 4.0). This means you are free to share and adapt the
-        material for non-commercial purposes, as long as you give appropriate
-        credit and distribute your contributions under the same license.
-      </p>
-      <p>
-        For more details, please see the full license text at
-        <a
-          href="https://creativecommons.org/licenses/by-nc-sa/4.0/"
-          target="_blank"
-          >https://creativecommons.org/licenses/by-nc-sa/4.0/</a
-        >.
-      </p>
+      <!-- <h2>Stats</h2>
+      <p>Restrooms scanned:</p>
+      <p>Largest restroom:</p>
+      <p>Smallest restroom:</p>
+      <p>Reminder signs:</p>
+      <p>Squares of toilet paper on the floor:</p> -->
+
+      <footer class="about-footer">
+        <p>© 2026 Jake Welch. All rights reserved.</p>
+      </footer>
     </article>
   </div>
 </template>
@@ -84,6 +78,18 @@
   margin-bottom: 0;
 }
 
+.about-footer {
+  margin-top: 3em;
+  padding-top: 1.5em;
+}
+
+.about-footer p {
+  font-size: 12px;
+  color: #666;
+  margin: 0;
+  line-height: 1.4;
+}
+
 @media (max-width: 750px) {
   .about-page {
     font-size: 12px;
@@ -94,6 +100,10 @@
 
   .about-content h2 {
     font-size: 14px;
+  }
+
+  .about-footer p {
+    font-size: 10px;
   }
 }
 </style>

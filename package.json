@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "rm -rf .nuxt",
     "dev": "nuxt dev",
     "dev:remote": "nuxt dev --remote",
     "build": "nuxt build",
