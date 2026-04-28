@@ -1048,8 +1048,9 @@ const roleLabel = computed(() => {
             <span>{{ text }}</span>
           </label>
           <p class="agreement-note">
-            Admins have the right to deny or remove any submissions as they see
-            fit.
+            Admins reserve the right to deny, remove, and edit any submissions
+            as they see fit, without notice. By submitting this request, you
+            agree to these terms.
           </p>
 
           <p v-if="agreementError" class="form-error">{{ agreementError }}</p>
@@ -1601,31 +1602,33 @@ const roleLabel = computed(() => {
                     </button>
                   </div>
 
-                  <button
-                    type="button"
-                    class="btn btn-delete"
-                    :disabled="actionLoading === `acct-${a.id}-delete`"
-                    @click="deleteAccount(a)"
-                  >
-                    {{
-                      actionLoading === `acct-${a.id}-delete`
-                        ? "…"
-                        : "Delete account"
-                    }}
-                  </button>
-                  <button
-                    v-if="!a.bannedAt"
-                    type="button"
-                    class="btn btn-reject"
-                    :disabled="actionLoading === `acct-${a.id}-ban`"
-                    @click="banAccount(a)"
-                  >
-                    {{
-                      actionLoading === `acct-${a.id}-ban`
-                        ? "…"
-                        : "Permanently ban"
-                    }}
-                  </button>
+                  <div class="ban-group">
+                    <button
+                      type="button"
+                      class="btn btn-delete"
+                      :disabled="actionLoading === `acct-${a.id}-delete`"
+                      @click="deleteAccount(a)"
+                    >
+                      {{
+                        actionLoading === `acct-${a.id}-delete`
+                          ? "…"
+                          : "Delete account"
+                      }}
+                    </button>
+                    <button
+                      v-if="!a.bannedAt"
+                      type="button"
+                      class="btn btn-reject"
+                      :disabled="actionLoading === `acct-${a.id}-ban`"
+                      @click="banAccount(a)"
+                    >
+                      {{
+                        actionLoading === `acct-${a.id}-ban`
+                          ? "…"
+                          : "Permanently ban"
+                      }}
+                    </button>
+                  </div>
                 </div>
               </div>
             </li>
@@ -2308,6 +2311,10 @@ dd {
   padding: 10px 0 6px;
 }
 
+.ban-group {
+  display: flex;
+  gap: 8px;
+}
 .btn-delete {
   border-color: #999;
   color: #666;
