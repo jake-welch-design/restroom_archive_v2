@@ -112,7 +112,7 @@ function goPrev() {
   justify-content: center;
   cursor: pointer;
   padding: 0 0 0 4px;
-  z-index: 1;
+  z-index: 11;
   touch-action: manipulation;
   transition: left 0.35s ease;
 }

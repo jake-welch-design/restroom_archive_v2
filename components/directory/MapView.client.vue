@@ -35,22 +35,23 @@ function setPins(rows: RestroomSummary[]) {
 onMounted(async () => {
   if (!mapContainer.value) return;
 
-  // Wait for the container to have non-zero size before creating the map.
-  // On a fresh load in map view, flex layout may not have settled when
-  // onMounted fires — defer one tick first, then wait for a real size.
+  // Wait for the flex parent (.map-wrap) to have a non-zero height before
+  // initialising the map. The .map container is position:absolute so its
+  // clientHeight is derived from the parent — watching the parent directly
+  // avoids resolving too early on fresh page loads.
   await nextTick();
 
   await new Promise<void>((resolve) => {
-    const el = mapContainer.value;
-    if (!el) return resolve();
-    if (el.clientWidth > 0 && el.clientHeight > 0) return resolve();
+    const wrap = mapContainer.value?.parentElement;
+    if (!wrap) return resolve();
+    if (wrap.clientWidth > 0 && wrap.clientHeight > 0) return resolve();
     const ro = new ResizeObserver(() => {
-      if (el.clientWidth > 0 && el.clientHeight > 0) {
+      if (wrap.clientWidth > 0 && wrap.clientHeight > 0) {
         ro.disconnect();
         resolve();
       }
     });
-    ro.observe(el);
+    ro.observe(wrap);
   });
 
   if (!mapContainer.value) return;
@@ -108,7 +109,9 @@ onMounted(async () => {
 
     map!.on("click", "restroom-pins", (e) => {
       const slug = e.features?.[0]?.properties?.slug;
-      if (slug) emit("select", slug);
+      if (!slug) return;
+      map!.flyTo({ center: e.lngLat, zoom: 14 });
+      emit("select", slug);
     });
 
     hoverPopup = new maplibregl.Popup({
@@ -152,12 +155,20 @@ onMounted(async () => {
     sourceReady = true;
     setPins(props.rows);
     map!.resize();
-    // Extra resize after the next paint to catch any deferred flex layout
-    requestAnimationFrame(() => map?.resize());
+    // Cascade of resizes to catch any remaining layout shifts after load
+    requestAnimationFrame(() => {
+      map?.resize();
+      requestAnimationFrame(() => map?.resize());
+    });
+    setTimeout(() => map?.resize(), 300);
   });
 
   resizeObs = new ResizeObserver(() => map?.resize());
   resizeObs.observe(mapContainer.value);
+  // Also observe the flex parent so panel-open/close transitions trigger resize
+  if (mapContainer.value.parentElement) {
+    resizeObs.observe(mapContainer.value.parentElement);
+  }
 });
 
 watch(

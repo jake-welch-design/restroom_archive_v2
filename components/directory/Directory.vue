@@ -7,7 +7,7 @@ type SortDir = "asc" | "desc";
 type ViewMode = "index" | "grid" | "map";
 
 const { data, pending, error } = useRestrooms();
-const { selectedSlug, select } = useSelection();
+const { selectedSlug, selected, select } = useSelection();
 const directoryRows = useDirectoryRows();
 
 const sortKey = ref<SortKey>("isoDate");
@@ -117,6 +117,17 @@ function toggleSort(key: SortKey) {
     sortDir.value = key === "isoDate" ? "desc" : "asc";
   }
 }
+
+const mapPanelVisible = ref(false);
+
+function handleMapSelect(slug: string) {
+  select(slug);
+  mapPanelVisible.value = true;
+}
+
+watch(viewMode, (mode) => {
+  if (mode !== "map") mapPanelVisible.value = false;
+});
 
 const randomPick = useRandomRestroom();
 
@@ -316,7 +327,18 @@ watch(data, maybeAutoSelect);
       </button>
     </div>
 
-    <MapView v-if="viewMode === 'map'" :rows="mapRows" @select="select" />
+    <div v-if="viewMode === 'map'" class="map-area">
+      <MapView :rows="mapRows" @select="handleMapSelect" />
+      <Transition name="slide-up">
+        <MapPanel
+          v-if="mapPanelVisible && selected"
+          :restroom="selected"
+          :active-tags="activeTags"
+          @close="mapPanelVisible = false"
+          @toggle-tag="toggleTag"
+        />
+      </Transition>
+    </div>
 
     <template v-else>
       <div v-if="pending && !rows.length" class="state">Loading…</div>
@@ -556,6 +578,24 @@ watch(data, maybeAutoSelect);
 .view-mode {
   display: flex;
   gap: 20px;
+}
+
+.map-area {
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.slide-up-enter-active,
+.slide-up-leave-active {
+  transition: transform 0.3s ease;
+}
+
+.slide-up-enter-from,
+.slide-up-leave-to {
+  transform: translateY(100%);
 }
 
 .state {
