@@ -11,7 +11,10 @@ let resizeObs: ResizeObserver | null = null;
 let sourceReady = false;
 let hoverPopup: maplibregl.Popup | null = null;
 
-function setPins(rows: RestroomSummary[]) {
+// Update GeoJSON data only — no camera movement.
+// The watcher calls this so that data refreshes (e.g. thumbnail auto-capture
+// triggering refreshNuxtData) and filter changes don't override a flyTo.
+function updatePinData(rows: RestroomSummary[]) {
   if (!map || !sourceReady) return;
   const pinned = rows.filter((r) => r.lat != null && r.lng != null);
   (map.getSource("restrooms") as maplibregl.GeoJSONSource).setData({
@@ -22,7 +25,12 @@ function setPins(rows: RestroomSummary[]) {
       properties: { slug: r.slug, name: r.name, date: r.date },
     })),
   });
-  if (!pinned.length) return;
+  return pinned;
+}
+
+// Fit the camera to all visible pins. Only called on initial data load.
+function fitView(pinned: RestroomSummary[]) {
+  if (!map || !pinned.length) return;
   if (pinned.length === 1) {
     map.easeTo({ center: [pinned[0].lng!, pinned[0].lat!], zoom: 12 });
   } else {
@@ -35,24 +43,28 @@ function setPins(rows: RestroomSummary[]) {
 onMounted(async () => {
   if (!mapContainer.value) return;
 
-  // Wait for the flex parent (.map-wrap) to have a non-zero height before
-  // initialising the map. The .map container is position:absolute so its
-  // clientHeight is derived from the parent — watching the parent directly
-  // avoids resolving too early on fresh page loads.
-  await nextTick();
+  // Always wait two paint cycles before reading layout sizes.
+  // During SSR hydration the browser may not have finished computing flex
+  // heights when onMounted fires, so a single nextTick is not enough.
+  await new Promise<void>((resolve) =>
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+  );
 
-  await new Promise<void>((resolve) => {
-    const wrap = mapContainer.value?.parentElement;
-    if (!wrap) return resolve();
-    if (wrap.clientWidth > 0 && wrap.clientHeight > 0) return resolve();
-    const ro = new ResizeObserver(() => {
-      if (wrap.clientWidth > 0 && wrap.clientHeight > 0) {
-        ro.disconnect();
-        resolve();
-      }
+  if (!mapContainer.value) return;
+
+  // If the flex parent still has no height after two frames, wait for it.
+  const wrap = mapContainer.value.parentElement;
+  if (wrap && (wrap.clientWidth === 0 || wrap.clientHeight === 0)) {
+    await new Promise<void>((resolve) => {
+      const ro = new ResizeObserver(() => {
+        if (wrap.clientWidth > 0 && wrap.clientHeight > 0) {
+          ro.disconnect();
+          resolve();
+        }
+      });
+      ro.observe(wrap);
     });
-    ro.observe(wrap);
-  });
+  }
 
   if (!mapContainer.value) return;
 
@@ -85,7 +97,14 @@ onMounted(async () => {
     },
     center: [-98, 38],
     zoom: 4,
+    // Disable rotate and tilt — pan and zoom only.
+    dragRotate: false,
+    pitchWithRotate: false,
+    touchPitch: false,
   });
+
+  // Keep two-finger zoom but disable two-finger rotation.
+  map.touchZoomRotate.disableRotation();
 
   map.addControl(new maplibregl.NavigationControl(), "top-right");
 
@@ -102,15 +121,17 @@ onMounted(async () => {
       paint: {
         "circle-radius": 6,
         "circle-color": "#ff0000",
-        // "circle-stroke-width": 2,
-        // "circle-stroke-color": "#fff",
       },
     });
 
     map!.on("click", "restroom-pins", (e) => {
-      const slug = e.features?.[0]?.properties?.slug;
+      const slug = e.features?.[0]?.properties?.slug as string | undefined;
       if (!slug) return;
-      map!.flyTo({ center: e.lngLat, zoom: 14 });
+      // Use stored row coordinates — more reliable than e.lngLat at low zoom.
+      const row = props.rows.find((r) => r.slug === slug);
+      if (row?.lng != null && row?.lat != null) {
+        map!.flyTo({ center: [row.lng, row.lat], zoom: 14 });
+      }
       emit("select", slug);
     });
 
@@ -153,9 +174,10 @@ onMounted(async () => {
     });
 
     sourceReady = true;
-    setPins(props.rows);
+    const pinned = updatePinData(props.rows) ?? [];
+    fitView(pinned);
+
     map!.resize();
-    // Cascade of resizes to catch any remaining layout shifts after load
     requestAnimationFrame(() => {
       map?.resize();
       requestAnimationFrame(() => map?.resize());
@@ -165,15 +187,15 @@ onMounted(async () => {
 
   resizeObs = new ResizeObserver(() => map?.resize());
   resizeObs.observe(mapContainer.value);
-  // Also observe the flex parent so panel-open/close transitions trigger resize
   if (mapContainer.value.parentElement) {
     resizeObs.observe(mapContainer.value.parentElement);
   }
 });
 
+// Data-only update — no camera movement so flyTo is never overridden.
 watch(
   () => props.rows,
-  (rows) => setPins(rows),
+  (rows) => updatePinData(rows),
 );
 
 onBeforeUnmount(() => {
