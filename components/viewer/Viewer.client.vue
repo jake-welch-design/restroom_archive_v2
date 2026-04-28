@@ -280,7 +280,10 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
       </div>
     </div>
 
-    <div v-if="createMode && !pendingPoint" class="crosshair-hint">
+    <div
+      v-if="createMode && !pendingPoint && !toastMessage"
+      class="crosshair-hint"
+    >
       Click to place an annotation
     </div>
 
@@ -524,6 +527,12 @@ canvas {
     align-items: flex-end;
     gap: 8px;
     pointer-events: auto;
+  }
+  .crosshair-hint {
+    top: 2.75rem;
+  }
+  .viewport-toast-wrap {
+    top: 2.75rem;
   }
 }
 </style>
