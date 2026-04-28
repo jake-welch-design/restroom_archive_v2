@@ -1,6 +1,6 @@
 <template>
   <div class="about-page">
-    <DirectoryHeader />
+    <CatalogHeader />
     <article class="about-content">
       <h2>What is The Restroom Archive?</h2>
       <p>

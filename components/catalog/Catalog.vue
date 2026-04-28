@@ -4,16 +4,16 @@ import type { RestroomSummary } from "~/types/restroom";
 
 type SortKey = "isoDate" | "name" | "location";
 type SortDir = "asc" | "desc";
-type ViewMode = "index" | "grid" | "map";
+type ViewMode = "list" | "grid" | "map";
 
 const { data, pending, error } = useRestrooms();
 const { selectedSlug, selected, select } = useSelection();
-const directoryRows = useDirectoryRows();
+const catalogRows = useCatalogRows();
 
 const sortKey = ref<SortKey>("isoDate");
 const sortDir = ref<SortDir>("desc");
 const query = ref("");
-const viewMode = useCookie<ViewMode>("viewMode", { default: () => "index" });
+const viewMode = useCookie<ViewMode>("viewMode", { default: () => "list" });
 const dateFrom = ref<string>("");
 const dateTo = ref<string>("");
 const activeTags = ref<string[]>([]);
@@ -73,7 +73,7 @@ const fuse = computed(() => {
 const rows = computed<RestroomSummary[]>(() => {
   // Admins get pending entries in `data` so /r/<slug> can resolve them, but
   // they shouldn't clutter the visible directory.
-  const list = (data.value ?? []).filter(r => r.status !== 'pending');
+  const list = (data.value ?? []).filter((r) => r.status !== "pending");
   const q = query.value.trim();
   const base = q
     ? fuse.value.search(q).map((r) => r.item)
@@ -95,7 +95,7 @@ const rows = computed<RestroomSummary[]>(() => {
 });
 
 watchEffect(() => {
-  directoryRows.value = rows.value;
+  catalogRows.value = rows.value;
 });
 
 const mapRows = computed<RestroomSummary[]>(() => {
@@ -146,8 +146,8 @@ watch(data, maybeAutoSelect);
 </script>
 
 <template>
-  <div class="directory">
-    <DirectoryHeader />
+  <div class="catalog">
+    <CatalogHeader />
 
     <div class="controls">
       <div class="controls-left">
@@ -202,17 +202,18 @@ watch(data, maybeAutoSelect);
           :class="{ active: filterOpen }"
           @click="filterOpen = !filterOpen"
         >
-          Filter <span class="filter-caret" :class="{ open: filterOpen }">›</span>
+          Filter
+          <span class="filter-caret" :class="{ open: filterOpen }">›</span>
         </button>
       </div>
 
       <div class="view-mode">
         <button
           class="link-btn"
-          :class="{ active: viewMode === 'index' }"
-          @click="viewMode = 'index'"
+          :class="{ active: viewMode === 'list' }"
+          @click="viewMode = 'list'"
         >
-          Index
+          List
         </button>
         <button
           class="link-btn"
@@ -342,11 +343,11 @@ watch(data, maybeAutoSelect);
 
     <template v-else>
       <div v-if="pending && !rows.length" class="state">Loading…</div>
-      <div v-else-if="error" class="state error">Failed to load directory.</div>
+      <div v-else-if="error" class="state error">Failed to load catalog.</div>
       <div v-else-if="!rows.length" class="state">No restrooms match.</div>
       <template v-else>
-        <IndexView
-          v-if="viewMode === 'index'"
+        <ListView
+          v-if="viewMode === 'list'"
           :rows="rows"
           :selected-slug="selectedSlug"
           :sort-key="sortKey"
@@ -371,7 +372,7 @@ watch(data, maybeAutoSelect);
 </template>
 
 <style scoped>
-.directory {
+.catalog {
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -563,7 +564,9 @@ watch(data, maybeAutoSelect);
   font-size: 12px;
   line-height: 1.2;
   cursor: pointer;
-  transition: background 0.1s, color 0.1s;
+  transition:
+    background 0.1s,
+    color 0.1s;
 }
 
 .filter-chip:hover:not(.active) {
@@ -608,7 +611,7 @@ watch(data, maybeAutoSelect);
 }
 
 @media (max-width: 750px) {
-  .directory {
+  .catalog {
     font-size: 12px;
   }
   .controls {

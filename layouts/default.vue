@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const directoryRows = useDirectoryRows();
+const catalogRows = useCatalogRows();
 const { selected, selectedSlug, select } = useSelection();
 const randomPick = useRandomRestroom();
 const panelOpen = ref(true);
@@ -10,17 +10,17 @@ function togglePanel() {
 
 const currentIndex = computed(() => {
   const slug = selectedSlug.value;
-  return directoryRows.value.findIndex((r) => r.slug === slug);
+  return catalogRows.value.findIndex((r) => r.slug === slug);
 });
 
 function goNext() {
-  const list = directoryRows.value;
+  const list = catalogRows.value;
   if (!list.length || currentIndex.value < 0) return;
   select(list[(currentIndex.value + 1) % list.length].slug);
 }
 
 function goPrev() {
-  const list = directoryRows.value;
+  const list = catalogRows.value;
   if (!list.length || currentIndex.value < 0) return;
   select(list[(currentIndex.value - 1 + list.length) % list.length].slug);
 }
@@ -36,7 +36,7 @@ function goPrev() {
       type="button"
       class="expand-tab"
       :class="{ closed: !panelOpen }"
-      :aria-label="panelOpen ? 'Hide directory' : 'Show directory'"
+      :aria-label="panelOpen ? 'Hide catalog' : 'Show catalog'"
       @click="togglePanel"
     >
       <span class="caret" :class="{ flip: !panelOpen }">‹</span>

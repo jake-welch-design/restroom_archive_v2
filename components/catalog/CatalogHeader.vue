@@ -1,30 +1,29 @@
 <script setup lang="ts">
-const route = useRoute()
-const { loggedIn } = useAuth()
+const route = useRoute();
+const { loggedIn } = useAuth();
 </script>
 
 <template>
-  <header class="directory-head">
+  <header class="catalog-head">
     <h1>The Restroom Archive</h1>
     <nav class="top-nav">
-      <NuxtLink
-        to="/about"
-        :class="{ active: route.path === '/about' }"
-      >About</NuxtLink>
+      <NuxtLink to="/about" :class="{ active: route.path === '/about' }"
+        >About</NuxtLink
+      >
       <NuxtLink
         to="/"
         :class="{ active: route.path === '/' || route.path.startsWith('/r/') }"
-      >Directory</NuxtLink>
-      <NuxtLink
-        to="/account"
-        :class="{ active: route.path === '/account' }"
-      >{{ loggedIn ? 'Account' : 'Login' }}</NuxtLink>
+        >Catalog</NuxtLink
+      >
+      <NuxtLink to="/account" :class="{ active: route.path === '/account' }">{{
+        loggedIn ? "Account" : "Login"
+      }}</NuxtLink>
     </nav>
   </header>
 </template>
 
 <style scoped>
-.directory-head {
+.catalog-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -34,7 +33,7 @@ const { loggedIn } = useAuth()
   font-family: Arial, Helvetica, sans-serif;
   background: #fff;
 }
-.directory-head h1 {
+.catalog-head h1 {
   margin: 0;
   font-size: 24px;
   font-weight: 400;
@@ -54,7 +53,7 @@ const { loggedIn } = useAuth()
 }
 
 @media (max-width: 750px) {
-  .directory-head {
+  .catalog-head {
     flex-direction: column;
     align-items: flex-start;
     gap: 8px;

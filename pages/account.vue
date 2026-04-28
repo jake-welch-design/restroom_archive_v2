@@ -705,7 +705,7 @@ const roleLabel = computed(() => {
 
 <template>
   <div class="account-page">
-    <DirectoryHeader />
+    <CatalogHeader />
 
     <!-- Logged-out: auth forms -->
     <div v-if="!loggedIn" class="body-section">

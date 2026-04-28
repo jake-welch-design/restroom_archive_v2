@@ -1,7 +1,7 @@
 <script setup lang="ts">
-await useRestrooms()
+await useRestrooms();
 </script>
 
 <template>
-  <Directory />
+  <Catalog />
 </template>
