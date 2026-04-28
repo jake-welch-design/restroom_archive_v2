@@ -5,15 +5,20 @@ import type { RestroomSummary } from "~/types/restroom";
 const props = defineProps<{ rows: RestroomSummary[] }>();
 const emit = defineEmits<{ select: [slug: string] }>();
 
+// Two-element strategy: wrapRef is always in the DOM so we can observe its
+// size. The inner mapContainer is only rendered (v-if="mapReady") once the
+// wrapper has non-zero dimensions, guaranteeing MapLibre always gets a
+// properly-sized container.
+const wrapRef = ref<HTMLDivElement | null>(null);
 const mapContainer = ref<HTMLDivElement | null>(null);
+const mapReady = ref(false);
+
 let map: maplibregl.Map | null = null;
 let resizeObs: ResizeObserver | null = null;
+let initObs: ResizeObserver | null = null;
 let sourceReady = false;
 let hoverPopup: maplibregl.Popup | null = null;
 
-// Update GeoJSON data only — no camera movement.
-// The watcher calls this so that data refreshes (e.g. thumbnail auto-capture
-// triggering refreshNuxtData) and filter changes don't override a flyTo.
 function updatePinData(rows: RestroomSummary[]) {
   if (!map || !sourceReady) return;
   const pinned = rows.filter((r) => r.lat != null && r.lng != null);
@@ -28,7 +33,6 @@ function updatePinData(rows: RestroomSummary[]) {
   return pinned;
 }
 
-// Fit the camera to all visible pins. Only called on initial data load.
 function fitView(pinned: RestroomSummary[]) {
   if (!map || !pinned.length) return;
   if (pinned.length === 1) {
@@ -40,36 +44,12 @@ function fitView(pinned: RestroomSummary[]) {
   }
 }
 
-onMounted(async () => {
-  if (!mapContainer.value) return;
-
-  // Always wait two paint cycles before reading layout sizes.
-  // During SSR hydration the browser may not have finished computing flex
-  // heights when onMounted fires, so a single nextTick is not enough.
-  await new Promise<void>((resolve) =>
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-  );
-
-  if (!mapContainer.value) return;
-
-  // If the flex parent still has no height after two frames, wait for it.
-  const wrap = mapContainer.value.parentElement;
-  if (wrap && (wrap.clientWidth === 0 || wrap.clientHeight === 0)) {
-    await new Promise<void>((resolve) => {
-      const ro = new ResizeObserver(() => {
-        if (wrap.clientWidth > 0 && wrap.clientHeight > 0) {
-          ro.disconnect();
-          resolve();
-        }
-      });
-      ro.observe(wrap);
-    });
-  }
-
-  if (!mapContainer.value) return;
+function initMap() {
+  const el = mapContainer.value;
+  if (!el || map) return;
 
   map = new maplibregl.Map({
-    container: mapContainer.value,
+    container: el,
     style: {
       version: 8,
       sources: {
@@ -97,15 +77,12 @@ onMounted(async () => {
     },
     center: [-98, 38],
     zoom: 4,
-    // Disable rotate and tilt — pan and zoom only.
     dragRotate: false,
     pitchWithRotate: false,
     touchPitch: false,
   });
 
-  // Keep two-finger zoom but disable two-finger rotation.
   map.touchZoomRotate.disableRotation();
-
   map.addControl(new maplibregl.NavigationControl(), "top-right");
 
   map.on("load", () => {
@@ -127,7 +104,6 @@ onMounted(async () => {
     map!.on("click", "restroom-pins", (e) => {
       const slug = e.features?.[0]?.properties?.slug as string | undefined;
       if (!slug) return;
-      // Use stored row coordinates — more reliable than e.lngLat at low zoom.
       const row = props.rows.find((r) => r.slug === slug);
       if (row?.lng != null && row?.lat != null) {
         map!.flyTo({ center: [row.lng, row.lat], zoom: 14 });
@@ -167,6 +143,7 @@ onMounted(async () => {
       }`;
       hoverPopup.setLngLat([lng, lat]).setHTML(html).addTo(map);
     });
+
     map!.on("mouseleave", "restroom-pins", () => {
       if (!map) return;
       map.getCanvas().style.cursor = "";
@@ -176,41 +153,62 @@ onMounted(async () => {
     sourceReady = true;
     const pinned = updatePinData(props.rows) ?? [];
     fitView(pinned);
-
     map!.resize();
-    requestAnimationFrame(() => {
-      map?.resize();
-      requestAnimationFrame(() => map?.resize());
-    });
-    setTimeout(() => map?.resize(), 300);
   });
 
   resizeObs = new ResizeObserver(() => map?.resize());
-  resizeObs.observe(mapContainer.value);
-  if (mapContainer.value.parentElement) {
-    resizeObs.observe(mapContainer.value.parentElement);
+  resizeObs.observe(el);
+  if (el.parentElement) resizeObs.observe(el.parentElement);
+}
+
+onMounted(() => {
+  const wrap = wrapRef.value;
+  if (!wrap) return;
+
+  const tryReady = () => {
+    if (wrap.clientWidth > 0 && wrap.clientHeight > 0) {
+      mapReady.value = true;
+      nextTick(initMap);
+      return true;
+    }
+    return false;
+  };
+
+  if (!tryReady()) {
+    initObs = new ResizeObserver(() => {
+      if (tryReady()) {
+        initObs?.disconnect();
+        initObs = null;
+      }
+    });
+    initObs.observe(wrap);
   }
 });
 
-// Data-only update — no camera movement so flyTo is never overridden.
+// Data-only update on row changes — never moves the camera so flyTo is never
+// overridden by data refreshes (e.g. thumbnail auto-capture → refreshNuxtData).
 watch(
   () => props.rows,
   (rows) => updatePinData(rows),
 );
 
 onBeforeUnmount(() => {
+  initObs?.disconnect();
+  initObs = null;
   resizeObs?.disconnect();
   resizeObs = null;
   hoverPopup?.remove();
   hoverPopup = null;
   map?.remove();
   map = null;
+  sourceReady = false;
+  mapReady.value = false;
 });
 </script>
 
 <template>
-  <div class="map-wrap">
-    <div ref="mapContainer" class="map" />
+  <div ref="wrapRef" class="map-wrap">
+    <div v-if="mapReady" ref="mapContainer" class="map" />
   </div>
 </template>
 
