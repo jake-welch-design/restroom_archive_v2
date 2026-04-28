@@ -63,14 +63,27 @@ function formatShortDate(iso: string) {
   const year = d.getUTCFullYear();
   return `${day} ${month} ${year}`;
 }
+
+const gridWrapRef = ref<HTMLDivElement | null>(null);
+
+async function scrollToSelected(slug: string | null | undefined) {
+  if (!slug || !gridWrapRef.value) return;
+  await nextTick();
+  const el = gridWrapRef.value.querySelector<HTMLElement>(`[data-slug="${slug}"]`);
+  el?.scrollIntoView({ block: "start", behavior: "smooth" });
+}
+
+watch(() => props.selectedSlug, scrollToSelected);
+onMounted(() => scrollToSelected(props.selectedSlug));
 </script>
 
 <template>
-  <div class="grid-wrap">
+  <div ref="gridWrapRef" class="grid-wrap">
     <div class="grid">
       <button
         v-for="r in rows"
         :key="r.id"
+        :data-slug="r.slug"
         type="button"
         class="tile"
         :class="{ selected: r.slug === selectedSlug }"

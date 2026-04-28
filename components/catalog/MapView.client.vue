@@ -2,22 +2,17 @@
 import maplibregl from "maplibre-gl";
 import type { RestroomSummary } from "~/types/restroom";
 
-const props = defineProps<{ rows: RestroomSummary[] }>();
+const props = defineProps<{ rows: RestroomSummary[]; selectedSlug: string | null }>();
 const emit = defineEmits<{ select: [slug: string] }>();
 
-// Two-element strategy: wrapRef is always in the DOM so we can observe its
-// size. The inner mapContainer is only rendered (v-if="mapReady") once the
-// wrapper has non-zero dimensions, guaranteeing MapLibre always gets a
-// properly-sized container.
-const wrapRef = ref<HTMLDivElement | null>(null);
 const mapContainer = ref<HTMLDivElement | null>(null);
-const mapReady = ref(false);
 
 let map: maplibregl.Map | null = null;
 let resizeObs: ResizeObserver | null = null;
-let initObs: ResizeObserver | null = null;
 let sourceReady = false;
 let hoverPopup: maplibregl.Popup | null = null;
+let needsInitialFit = false;
+let initialPins: RestroomSummary[] = [];
 
 function updatePinData(rows: RestroomSummary[]) {
   if (!map || !sourceReady) return;
@@ -86,22 +81,26 @@ function initMap() {
   map.addControl(new maplibregl.NavigationControl(), "top-right");
 
   map.on("load", () => {
-    map!.addSource("restrooms", {
+    if (!map) return;
+
+    map.addSource("restrooms", {
       type: "geojson",
       data: { type: "FeatureCollection", features: [] },
     });
 
-    map!.addLayer({
+    map.addLayer({
       id: "restroom-pins",
       type: "circle",
       source: "restrooms",
       paint: {
-        "circle-radius": 6,
+        "circle-radius": 5,
         "circle-color": "#ff0000",
+        "circle-stroke-color": "#fff",
+        "circle-stroke-width": 1,
       },
     });
 
-    map!.on("click", "restroom-pins", (e) => {
+    map.on("click", "restroom-pins", (e) => {
       const slug = e.features?.[0]?.properties?.slug as string | undefined;
       if (!slug) return;
       const row = props.rows.find((r) => r.slug === slug);
@@ -118,7 +117,7 @@ function initMap() {
       className: "restroom-hover-popup",
     });
 
-    map!.on("mousemove", "restroom-pins", (e) => {
+    map.on("mousemove", "restroom-pins", (e) => {
       if (!map || !hoverPopup) return;
       map.getCanvas().style.cursor = "pointer";
       const f = e.features?.[0];
@@ -144,7 +143,7 @@ function initMap() {
       hoverPopup.setLngLat([lng, lat]).setHTML(html).addTo(map);
     });
 
-    map!.on("mouseleave", "restroom-pins", () => {
+    map.on("mouseleave", "restroom-pins", () => {
       if (!map) return;
       map.getCanvas().style.cursor = "";
       hoverPopup?.remove();
@@ -152,37 +151,37 @@ function initMap() {
 
     sourceReady = true;
     const pinned = updatePinData(props.rows) ?? [];
-    fitView(pinned);
-    map!.resize();
+
+    // If the container has real dimensions, fit now; otherwise defer until
+    // the first resize when the flex layout resolves.
+    if (el.clientWidth > 0 && el.clientHeight > 0) {
+      fitView(pinned);
+    } else {
+      needsInitialFit = true;
+      initialPins = pinned;
+    }
+
+    map.resize();
   });
 
-  resizeObs = new ResizeObserver(() => map?.resize());
+  // Resize the map whenever the container (or its parent) changes size.
+  // This also handles the on-refresh case: the flex layout resolves after
+  // mount, ResizeObserver fires, resize() corrects the canvas, and if the
+  // initial fitView was deferred we run it now.
+  resizeObs = new ResizeObserver(() => {
+    if (!map) return;
+    map.resize();
+    if (needsInitialFit && el.clientWidth > 0 && el.clientHeight > 0) {
+      needsInitialFit = false;
+      fitView(initialPins);
+    }
+  });
   resizeObs.observe(el);
   if (el.parentElement) resizeObs.observe(el.parentElement);
 }
 
 onMounted(() => {
-  const wrap = wrapRef.value;
-  if (!wrap) return;
-
-  const tryReady = () => {
-    if (wrap.clientWidth > 0 && wrap.clientHeight > 0) {
-      mapReady.value = true;
-      nextTick(initMap);
-      return true;
-    }
-    return false;
-  };
-
-  if (!tryReady()) {
-    initObs = new ResizeObserver(() => {
-      if (tryReady()) {
-        initObs?.disconnect();
-        initObs = null;
-      }
-    });
-    initObs.observe(wrap);
-  }
+  nextTick(initMap);
 });
 
 // Data-only update on row changes — never moves the camera so flyTo is never
@@ -192,9 +191,18 @@ watch(
   (rows) => updatePinData(rows),
 );
 
+watch(
+  () => props.selectedSlug,
+  (slug) => {
+    if (!slug || !map || !sourceReady) return;
+    const row = props.rows.find((r) => r.slug === slug);
+    if (row?.lng != null && row?.lat != null) {
+      map.flyTo({ center: [row.lng, row.lat], zoom: 14 });
+    }
+  },
+);
+
 onBeforeUnmount(() => {
-  initObs?.disconnect();
-  initObs = null;
   resizeObs?.disconnect();
   resizeObs = null;
   hoverPopup?.remove();
@@ -202,13 +210,13 @@ onBeforeUnmount(() => {
   map?.remove();
   map = null;
   sourceReady = false;
-  mapReady.value = false;
+  needsInitialFit = false;
 });
 </script>
 
 <template>
-  <div ref="wrapRef" class="map-wrap">
-    <div v-if="mapReady" ref="mapContainer" class="map" />
+  <div class="map-wrap">
+    <div ref="mapContainer" class="map" />
   </div>
 </template>
 

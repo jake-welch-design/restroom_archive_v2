@@ -127,6 +127,11 @@ function handleMapSelect(slug: string) {
 
 watch(viewMode, (mode) => {
   if (mode !== "map") mapPanelVisible.value = false;
+  else if (selectedSlug.value) mapPanelVisible.value = true;
+});
+
+watch(selectedSlug, (slug) => {
+  if (viewMode.value === "map" && slug) mapPanelVisible.value = true;
 });
 
 const randomPick = useRandomRestroom();
@@ -329,7 +334,7 @@ watch(data, maybeAutoSelect);
     </div>
 
     <div v-if="viewMode === 'map'" class="map-area">
-      <MapView :rows="mapRows" @select="handleMapSelect" />
+      <MapView :rows="mapRows" :selected-slug="selectedSlug" @select="handleMapSelect" />
       <Transition name="slide-up">
         <MapPanel
           v-if="mapPanelVisible && selected"

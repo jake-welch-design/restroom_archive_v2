@@ -661,6 +661,28 @@ function banAccount(a: AccountRow) {
     return;
   return runAccountAction(a, "ban", `/api/admin/users/${a.id}/ban`);
 }
+async function deleteAccount(a: AccountRow) {
+  if (
+    !confirm(
+      `Delete @${a.username}? This removes them from the database. Their submissions stay in the archive (unattributed). Their email is NOT blacklisted — they can sign up again.`,
+    )
+  )
+    return;
+  const fullKey = `acct-${a.id}-delete`;
+  actionLoading.value = fullKey;
+  actionError.value = "";
+  try {
+    await $fetch(`/api/admin/users/${a.id}/delete`, { method: "POST" });
+    await refreshAccounts();
+    await refreshUserQueue();
+    optionsAccountId.value = null;
+  } catch (e: unknown) {
+    const err = e as { data?: { statusMessage?: string } };
+    actionError.value = err.data?.statusMessage ?? "Delete failed.";
+  } finally {
+    actionLoading.value = null;
+  }
+}
 
 // -------------- Admin: rename username --------------
 const renamingAccountId = ref<number | null>(null);
@@ -1580,6 +1602,18 @@ const roleLabel = computed(() => {
                   </div>
 
                   <button
+                    type="button"
+                    class="btn btn-delete"
+                    :disabled="actionLoading === `acct-${a.id}-delete`"
+                    @click="deleteAccount(a)"
+                  >
+                    {{
+                      actionLoading === `acct-${a.id}-delete`
+                        ? "…"
+                        : "Delete account"
+                    }}
+                  </button>
+                  <button
                     v-if="!a.bannedAt"
                     type="button"
                     class="btn btn-reject"
@@ -2272,6 +2306,17 @@ dd {
   flex-direction: column;
   gap: 8px;
   padding: 10px 0 6px;
+}
+
+.btn-delete {
+  border-color: #999;
+  color: #666;
+  font-size: 13px;
+}
+.btn-delete:hover:not(:disabled) {
+  background: #c33;
+  border-color: #c33;
+  color: #fff;
 }
 
 @media (max-width: 750px) {
