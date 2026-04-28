@@ -147,7 +147,7 @@ function showToast(msg: string) {
 function toggleViewMode() {
   const next = mode.value === "pov" ? "orbit" : "pov";
   setMode(next);
-  showToast(next === "pov" ? "First-person view" : "Orbit view");
+  showToast(next === "pov" ? "POV view" : "Orbit view");
 }
 
 function toggleMarkers() {
@@ -161,7 +161,7 @@ function toggleCreateMode() {
     pendingPoint.value = null;
     pendingSnapshot.value = null;
   }
-  showToast(createMode.value ? "Add annotation" : "Cancel add annotation");
+  showToast(createMode.value ? "Adding annotation" : "Canceled");
 }
 
 // Esc to cancel create mode / close active bubble
@@ -189,7 +189,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
     <div class="overlay">
       <div class="overlay-left">
         <div v-if="createMode && !pendingPoint" class="crosshair-hint">
-          Click the model to place an annotation
+          Click to place an annotation
         </div>
       </div>
 
@@ -199,9 +199,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
           <button
             class="ctrl-btn"
             :title="
-              mode === 'pov'
-                ? 'Switch to orbit view'
-                : 'Switch to first-person view'
+              mode === 'pov' ? 'Switch to orbit view' : 'Switch to POV view'
             "
             @click="toggleViewMode"
           >
@@ -262,7 +260,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
             :class="{ active: createMode }"
             :title="
               createMode
-                ? 'Click model to place annotation (Esc to cancel)'
+                ? 'Click to place an annotation (Esc to cancel)'
                 : 'Add annotation'
             "
             @click="toggleCreateMode"
@@ -460,8 +458,9 @@ canvas {
   color: #ff6b6b;
 }
 .crosshair-hint {
-  background: rgba(0, 0, 0, 0.7);
+  background: none;
   color: #fff;
+  border: 1px solid #fff;
   font-size: 12px;
   padding: 4px 10px;
   border-radius: 3px;
@@ -470,19 +469,20 @@ canvas {
 }
 .viewport-toast-wrap {
   position: absolute;
-  top: 3.25rem;
+  top: 0.75rem;
   left: 50%;
   transform: translateX(-50%);
   pointer-events: none;
   z-index: 4;
 }
 .viewport-toast {
-  background: rgba(0, 0, 0, 0.75);
+  background: none;
   color: #fff;
+  border: 1px solid #fff;
   font-family: Arial, Helvetica, sans-serif;
   font-size: 12px;
-  padding: 5px 10px;
-  border-radius: 999px;
+  padding: 4px 10px;
+  border-radius: 3px;
   white-space: nowrap;
 }
 .toast-enter-active,
