@@ -161,7 +161,7 @@ function toggleCreateMode() {
     pendingPoint.value = null;
     pendingSnapshot.value = null;
   }
-  showToast(createMode.value ? "Adding annotation" : "Canceled");
+  if (!createMode.value) showToast("Canceled");
 }
 
 // Esc to cancel create mode / close active bubble
@@ -187,11 +187,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
     <canvas ref="canvasRef" @pointerdown="onCanvasPointerDown" />
 
     <div class="overlay">
-      <div class="overlay-left">
-        <div v-if="createMode && !pendingPoint" class="crosshair-hint">
-          Click to place an annotation
-        </div>
-      </div>
+      <div class="overlay-left" />
 
       <div class="overlay-right">
         <!-- View mode: single circle that changes icon -->
@@ -210,7 +206,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
               width="20"
               height="20"
               fill="none"
-              stroke="currentColor"
+              stroke="#ffffff"
               stroke-width="1.5"
               stroke-linecap="round"
               stroke-linejoin="round"
@@ -230,15 +226,15 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
             >
               <path
                 d="M657.382716 505.679012L442.469136 379.259259V126.419753L657.382716 0l214.91358 126.419753v252.839506z m164.345679-151.703703V192.158025l-139.061728 84.878222v162.550518z m-328.691358 0l139.061728 85.586172V269.602765l-139.061728-83.361185V353.975309zM657.382716 50.567901l-144.371358 88.822519L660.214519 227.555556h5.676246l140.174223-85.560889z"
-                fill="currentColor"
+                fill="#ffffff"
               />
               <path
                 d="M720.592593 670.024691l-113.777778 101.135803v-79.03763C412.988049 675.018272 252.839506 581.290667 252.839506 467.753086c0-51.098864 30.340741-98.089086 80.845432-136.06558l33.261037 35.043556C326.997333 395.39042 303.407407 430.168494 303.407407 467.753086c0 86.926222 137.569975 158.84642 303.407408 173.776593V568.888889z"
-                fill="currentColor"
+                fill="#ffffff"
               />
               <path
                 d="M783.802469 632.907852C916.770765 607.446914 1011.358025 543.149827 1011.358025 467.753086c0-42.085136-29.50637-80.693728-78.569877-111.059753l34.866568-34.866568C1026.439901 361.34558 1061.925926 412.204247 1061.925926 467.753086c0 100.819753-116.67279 186.191012-278.123457 216.064v-50.909234z"
-                fill="currentColor"
+                fill="#ffffff"
               />
             </svg>
           </button>
@@ -270,7 +266,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
               width="14"
               height="14"
               fill="none"
-              stroke="currentColor"
+              stroke="#ffffff"
               stroke-width="1"
               stroke-linecap="round"
               stroke-linejoin="round"
@@ -282,6 +278,10 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
           </button>
         </div>
       </div>
+    </div>
+
+    <div v-if="createMode && !pendingPoint" class="crosshair-hint">
+      Click to place an annotation
     </div>
 
     <div class="viewport-toast-wrap">
@@ -366,7 +366,8 @@ canvas {
   display: flex;
   align-items: center;
   gap: 2px;
-  background: rgba(255, 255, 255);
+  background: none;
+  border: 1px solid #fff;
   border-radius: 999px;
   padding: 4px 5px;
 }
@@ -395,14 +396,15 @@ canvas {
   color: #fff;
 }
 .ctrl-add {
-  background: rgba(0, 0, 0, 0.07);
+  background: #000;
+  border: 1px solid #fff;
 }
 .ctrl-add:hover {
-  background: rgba(0, 0, 0, 0.15);
+  background: rgba(255, 255, 255, 0.15);
 }
 .ctrl-add.active {
-  background: #000;
-  color: #fff;
+  background: #ff0000;
+  color: #ffffff;
 }
 .ctrl-toggle {
   display: flex;
@@ -415,7 +417,8 @@ canvas {
 .toggle-track {
   width: 28px;
   height: 16px;
-  background: #000000;
+  background: none;
+  border: 1px solid #fff;
   border-radius: 8px;
   position: relative;
   transition: background 0.15s;
@@ -458,6 +461,10 @@ canvas {
   color: #ff6b6b;
 }
 .crosshair-hint {
+  position: absolute;
+  top: 0.75rem;
+  left: 50%;
+  transform: translateX(-50%);
   background: none;
   color: #fff;
   border: 1px solid #fff;
@@ -466,6 +473,8 @@ canvas {
   border-radius: 3px;
   font-family: Arial, Helvetica, sans-serif;
   white-space: nowrap;
+  pointer-events: none;
+  z-index: 3;
 }
 .viewport-toast-wrap {
   position: absolute;
