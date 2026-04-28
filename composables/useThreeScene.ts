@@ -179,12 +179,22 @@ export function useThreeScene(
         const distance = (maxDim / 2 / Math.tan(fovRad / 2)) * 1.4;
         orbitDistance = distance;
 
-        camera.position.set(distance * 0.7, distance * 0.5, distance * 0.8);
         camera.near = Math.max(distance / 1000, 0.01);
         camera.far = distance * 100;
+
+        if (mode.value === "pov") {
+          controls.enabled = false;
+          camera.fov = povState.fov;
+          camera.position.set(0, 0.2, 0);
+          povState.rotationX = 0;
+          povState.rotationY = 0;
+          camera.rotation.set(0, 0, 0);
+        } else {
+          camera.position.set(distance * 0.7, distance * 0.5, distance * 0.8);
+          controls.target.set(0, 0, 0);
+          controls.update();
+        }
         camera.updateProjectionMatrix();
-        controls.target.set(0, 0, 0);
-        controls.update();
       }
       console.log(`${tag} scene add+frame: ${(performance.now() - tAdd).toFixed(0)}ms`);
       console.log(`${tag} TOTAL: ${(performance.now() - t0).toFixed(0)}ms`);

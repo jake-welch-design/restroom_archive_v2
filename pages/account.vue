@@ -699,9 +699,6 @@ async function submitRename(a: AccountRow) {
 const roleLabel = computed(() => {
   if (!user.value) return "";
   if (isAdmin.value) return "Admin";
-  if (canSubmit.value) return "Archivist · submission access";
-  if (submissionRequested.value)
-    return "Archivist · awaiting submission approval";
   return "Archivist";
 });
 </script>
@@ -834,14 +831,24 @@ const roleLabel = computed(() => {
                 placeholder="Display name (blank to clear)"
                 @keydown.esc="editingDisplayName = false"
               />
-              <button type="submit" class="dn-btn" :disabled="displayNameLoading">
+              <button
+                type="submit"
+                class="dn-btn"
+                :disabled="displayNameLoading"
+              >
                 {{ displayNameLoading ? "…" : "Save" }}
               </button>
-              <button type="button" class="dn-btn dn-cancel" @click="editingDisplayName = false">
+              <button
+                type="button"
+                class="dn-btn dn-cancel"
+                @click="editingDisplayName = false"
+              >
                 Cancel
               </button>
             </form>
-            <p v-if="displayNameError" class="form-error dn-error">{{ displayNameError }}</p>
+            <p v-if="displayNameError" class="form-error dn-error">
+              {{ displayNameError }}
+            </p>
           </template>
           <template v-else>
             <UserAttribution
@@ -852,7 +859,11 @@ const roleLabel = computed(() => {
                 displayName: (user as any).displayName,
               }"
             />
-            <button type="button" class="dn-edit-btn" @click="startEditDisplayName">
+            <button
+              type="button"
+              class="dn-edit-btn"
+              @click="startEditDisplayName"
+            >
               edit
             </button>
           </template>
@@ -1446,43 +1457,48 @@ const roleLabel = computed(() => {
                   />
                 </label>
 
-                <div v-if="renamingAccountId === a.id" class="rename-row">
-                  <input
-                    v-model="renameDraft"
-                    type="text"
-                    minlength="3"
-                    maxlength="20"
-                    pattern="[a-z0-9_]+"
-                    class="field-input rename-input"
-                    placeholder="new_username"
-                  />
+                <!-- Row 1: Rename + Promote -->
+                <div class="mod-row">
+                  <div v-if="renamingAccountId === a.id" class="rename-row">
+                    <input
+                      v-model="renameDraft"
+                      type="text"
+                      minlength="3"
+                      maxlength="20"
+                      pattern="[a-z0-9_]+"
+                      class="field-input rename-input"
+                      placeholder="new_username"
+                    />
+                    <button
+                      type="button"
+                      class="btn btn-publish"
+                      :disabled="actionLoading === `acct-${a.id}-rename`"
+                      @click="submitRename(a)"
+                    >
+                      {{
+                        actionLoading === `acct-${a.id}-rename` ? "…" : "Save"
+                      }}
+                    </button>
+                    <button
+                      type="button"
+                      class="link-btn"
+                      @click="renamingAccountId = null"
+                    >
+                      Cancel
+                    </button>
+                    <p v-if="renameError" class="form-error">
+                      {{ renameError }}
+                    </p>
+                  </div>
                   <button
+                    v-else-if="a.id !== (user as any)?.id"
                     type="button"
-                    class="btn btn-publish"
-                    :disabled="actionLoading === `acct-${a.id}-rename`"
-                    @click="submitRename(a)"
+                    class="btn rename-btn"
+                    @click="startRename(a)"
                   >
-                    {{ actionLoading === `acct-${a.id}-rename` ? "…" : "Save" }}
+                    Rename @{{ a.username }}
                   </button>
-                  <button
-                    type="button"
-                    class="link-btn"
-                    @click="renamingAccountId = null"
-                  >
-                    Cancel
-                  </button>
-                  <p v-if="renameError" class="form-error">{{ renameError }}</p>
-                </div>
-                <button
-                  v-else-if="a.id !== (user as any)?.id"
-                  type="button"
-                  class="btn rename-btn"
-                  @click="startRename(a)"
-                >
-                  Rename @{{ a.username }}
-                </button>
 
-                <div class="account-options-actions">
                   <button
                     v-if="a.role !== 'admin'"
                     type="button"
@@ -1496,35 +1512,47 @@ const roleLabel = computed(() => {
                         : "Promote to admin"
                     }}
                   </button>
+                </div>
 
-                  <button
-                    v-if="a.role !== 'admin' && a.approvedAt"
-                    type="button"
-                    class="btn"
-                    :disabled="actionLoading === `acct-${a.id}-revoke`"
-                    @click="revokeSubmissionAccess(a)"
-                  >
-                    {{
-                      actionLoading === `acct-${a.id}-revoke`
-                        ? "…"
-                        : "Revoke submission access"
-                    }}
-                  </button>
-                  <button
-                    v-else-if="a.role !== 'admin'"
-                    type="button"
-                    class="btn btn-publish"
-                    :disabled="actionLoading === `acct-${a.id}-grant`"
-                    @click="grantSubmissionAccess(a)"
-                  >
-                    {{
-                      actionLoading === `acct-${a.id}-grant`
-                        ? "…"
-                        : "Grant submission access"
-                    }}
-                  </button>
-
-                  <div v-if="a.role !== 'admin'" class="mute-row">
+                <!-- Row 2: Timed restrictions + Permanent ban -->
+                <div v-if="a.role !== 'admin'" class="mod-row mod-row-restrict">
+                  <div class="restrict-group">
+                    <template v-if="!isAccountMuted(a)">
+                      <input
+                        v-model.number="optionsMuteDays"
+                        type="number"
+                        min="1"
+                        max="3650"
+                        class="field-input mute-days"
+                        placeholder="days"
+                      />
+                    </template>
+                    <button
+                      v-if="a.approvedAt"
+                      type="button"
+                      class="btn"
+                      :disabled="actionLoading === `acct-${a.id}-revoke`"
+                      @click="revokeSubmissionAccess(a)"
+                    >
+                      {{
+                        actionLoading === `acct-${a.id}-revoke`
+                          ? "…"
+                          : "Revoke submission access"
+                      }}
+                    </button>
+                    <button
+                      v-else
+                      type="button"
+                      class="btn btn-publish"
+                      :disabled="actionLoading === `acct-${a.id}-grant`"
+                      @click="grantSubmissionAccess(a)"
+                    >
+                      {{
+                        actionLoading === `acct-${a.id}-grant`
+                          ? "…"
+                          : "Grant submission access"
+                      }}
+                    </button>
                     <button
                       v-if="isAccountMuted(a)"
                       type="button"
@@ -1536,30 +1564,23 @@ const roleLabel = computed(() => {
                         actionLoading === `acct-${a.id}-unmute` ? "…" : "Unmute"
                       }}
                     </button>
-                    <template v-else>
-                      <input
-                        v-model.number="optionsMuteDays"
-                        type="number"
-                        min="1"
-                        max="3650"
-                        class="field-input mute-days"
-                        placeholder="days"
-                      />
-                      <button
-                        type="button"
-                        class="btn"
-                        :disabled="actionLoading === `acct-${a.id}-mute`"
-                        @click="muteAccount(a)"
-                      >
-                        {{
-                          actionLoading === `acct-${a.id}-mute` ? "…" : "Mute"
-                        }}
-                      </button>
-                    </template>
+                    <button
+                      v-else
+                      type="button"
+                      class="btn"
+                      :disabled="actionLoading === `acct-${a.id}-mute`"
+                      @click="muteAccount(a)"
+                    >
+                      {{
+                        actionLoading === `acct-${a.id}-mute`
+                          ? "…"
+                          : "Revoke All Access"
+                      }}
+                    </button>
                   </div>
 
                   <button
-                    v-if="a.role !== 'admin' && !a.bannedAt"
+                    v-if="!a.bannedAt"
                     type="button"
                     class="btn btn-reject"
                     :disabled="actionLoading === `acct-${a.id}-ban`"
@@ -1568,7 +1589,7 @@ const roleLabel = computed(() => {
                     {{
                       actionLoading === `acct-${a.id}-ban`
                         ? "…"
-                        : "Ban account permanently"
+                        : "Permanently ban"
                     }}
                   </button>
                 </div>
@@ -1661,7 +1682,7 @@ const roleLabel = computed(() => {
 }
 .account-identity {
   display: flex;
-  align-items: center;
+  align-items: last baseline;
   gap: 6px;
   min-width: 0;
 }
@@ -1676,7 +1697,11 @@ const roleLabel = computed(() => {
 }
 .account-role {
   font-size: 14px;
-  color: #b3b3b3;
+  /* font-weight: 700; */
+  background: #000;
+  color: #fff;
+  padding: 3px 8px;
+  border-radius: 3px;
 }
 .dn-edit-btn {
   background: transparent;
@@ -1686,14 +1711,15 @@ const roleLabel = computed(() => {
   font-size: 12px;
   color: #999;
   cursor: pointer;
-  line-height: 1;
+  line-height: 0.1;
+  text-decoration: underline;
 }
 .dn-edit-btn:hover {
   color: #000;
 }
 .dn-inline-form {
   display: flex;
-  align-items: center;
+  align-items: last baseline;
   gap: 6px;
 }
 .dn-input {
@@ -1881,10 +1907,10 @@ const roleLabel = computed(() => {
 }
 .field-input {
   border: 0;
-  border-bottom: 1px solid #000;
-  padding: 4px 0;
+  border: 1px solid #000;
+  padding: 4px 2px;
   font: inherit;
-  font-size: 16px;
+  font-size: 14px;
   background: transparent;
   outline: none;
   color: #000;
@@ -1947,7 +1973,7 @@ const roleLabel = computed(() => {
 .link-btn {
   background: transparent;
   border: 0;
-  padding: 0;
+  padding: 6px 10px;
   font: inherit;
   font-size: 14px;
   color: #000;
@@ -1994,8 +2020,8 @@ const roleLabel = computed(() => {
   font-size: 12px;
   background: #000;
   color: #fff;
-  border-radius: 999px;
-  padding: 1px 8px;
+  border-radius: 6px;
+  padding: 2px 8px;
 }
 .empty {
   color: #666;
@@ -2089,7 +2115,7 @@ dd {
 .btn {
   background: transparent;
   border: 1px solid #000;
-  padding: 6px 20px;
+  padding: 6px 10px;
   font: inherit;
   font-size: 14px;
   cursor: pointer;
@@ -2115,7 +2141,7 @@ dd {
   display: flex;
   flex-direction: column;
   gap: 0;
-  border-top: 1px solid #000;
+  border-top: 1px solid #ccc;
 }
 .simple-row {
   display: flex;
@@ -2123,7 +2149,8 @@ dd {
   align-items: center;
   gap: 16px;
   padding: 12px 0;
-  border-bottom: 1px solid #000;
+  /* background: #ccc; */
+  border-bottom: 1px solid #ccc;
 }
 .simple-main {
   display: flex;
@@ -2157,23 +2184,23 @@ dd {
 
 .icon-btn {
   background: transparent;
-  border: 1px solid #000;
+  /* border: 1px solid #000; */
+  border: none;
   width: 28px;
   height: 28px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font: inherit;
-  font-size: 14px;
+  font-size: 12px;
   cursor: pointer;
   padding: 0;
   color: #000;
 }
 .icon-btn:hover:not(:disabled) {
-  background: #c33;
-  color: #fff;
-  border-color: #c33;
+  color: #ff0000;
 }
+
 .icon-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -2195,7 +2222,7 @@ dd {
 .account-row {
   display: flex;
   flex-direction: column;
-  border-bottom: 1px solid #000;
+  border-bottom: 1px solid #ccc;
 }
 .account-row > .simple-row {
   border-bottom: 0;
@@ -2211,21 +2238,25 @@ dd {
   gap: 12px;
   border-top: 1px dashed #ccc;
 }
-.account-options-actions {
+.mod-row {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
 }
-.mute-row {
-  display: inline-flex;
-  align-items: center;
+.mod-row-restrict {
+  justify-content: space-between;
+}
+.restrict-group {
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+  align-items: center;
 }
 .mute-days {
-  width: 80px;
+  width: 70px;
   border: 1px solid #000;
-  padding: 4px 6px;
+  padding: 6px 6px;
   font-size: 14px;
 }
 .admin-msg-preview {
