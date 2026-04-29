@@ -3,6 +3,7 @@ const props = defineProps<{
   modelValue: string[];
   placeholder?: string;
   maxLength?: number;
+  ariaLabel?: string;
 }>();
 const emit = defineEmits<{ "update:modelValue": [tags: string[]] }>();
 
@@ -68,6 +69,7 @@ function focusInput() {
       v-model="draft"
       type="text"
       class="tag-inner"
+      :aria-label="ariaLabel ?? 'Add descriptor'"
       :placeholder="modelValue.length ? '' : (placeholder ?? 'Add descriptor')"
       @keydown="onKeydown"
       @blur="commit"

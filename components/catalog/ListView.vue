@@ -159,6 +159,7 @@ function formatShortDate(iso: string) {
       <button
         type="button"
         class="th col-date"
+        :aria-pressed="sortKey === 'isoDate'"
         @click="emit('toggleSort', 'isoDate')"
       >
         Date <span class="arrow">{{ sortArrow("isoDate") }}</span>
@@ -166,6 +167,7 @@ function formatShortDate(iso: string) {
       <button
         type="button"
         class="th col-name"
+        :aria-pressed="sortKey === 'name'"
         @click="emit('toggleSort', 'name')"
       >
         Name <span class="arrow">{{ sortArrow("name") }}</span>
@@ -173,6 +175,7 @@ function formatShortDate(iso: string) {
       <button
         type="button"
         class="th col-loc"
+        :aria-pressed="sortKey === 'location'"
         @click="emit('toggleSort', 'location')"
       >
         Location <span class="arrow">{{ sortArrow("location") }}</span>
@@ -329,6 +332,7 @@ function formatShortDate(iso: string) {
               <button
                 type="button"
                 class="annotations-toggle"
+                :aria-expanded="annotationsOpen"
                 @click.stop="annotationsOpen = !annotationsOpen"
               >
                 Annotations ({{ annotations?.length ?? 0 }})
@@ -508,7 +512,7 @@ function formatShortDate(iso: string) {
   padding: 0;
   font: inherit;
   font-size: 14px;
-  color: #b3b3b3;
+  color: #595959;
   cursor: pointer;
   flex-shrink: 0;
 }

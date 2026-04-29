@@ -28,6 +28,8 @@ function goPrev() {
 
 <template>
   <div class="shell">
+    <a href="#main" class="skip-link">Skip to main content</a>
+
     <aside class="panel" :class="{ closed: !panelOpen }">
       <slot />
     </aside>
@@ -42,7 +44,7 @@ function goPrev() {
       <span class="caret" :class="{ flip: !panelOpen }">‹</span>
     </button>
 
-    <main class="viewer-panel">
+    <main id="main" class="viewer-panel">
       <p v-show="!panelOpen" class="corner-title">The Restroom Archive</p>
       <Viewer
         :model-url="selected?.modelUrl ?? null"

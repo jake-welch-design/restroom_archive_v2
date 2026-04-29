@@ -1,11 +1,14 @@
 <script setup lang="ts">
 const route = useRoute();
 const { loggedIn } = useAuth();
+const isHome = computed(() => route.path === "/");
 </script>
 
 <template>
   <header class="catalog-head">
-    <h1>The Restroom Archive</h1>
+    <component :is="isHome ? 'h1' : 'p'" class="site-title">
+      The Restroom Archive
+    </component>
     <nav class="top-nav">
       <NuxtLink to="/about" :class="{ active: route.path === '/about' }"
         >About</NuxtLink
@@ -33,7 +36,7 @@ const { loggedIn } = useAuth();
   font-family: Arial, Helvetica, sans-serif;
   background: #fff;
 }
-.catalog-head h1 {
+.site-title {
   margin: 0;
   font-size: 24px;
   font-weight: 400;
@@ -49,7 +52,7 @@ const { loggedIn } = useAuth();
   text-decoration: none;
 }
 .top-nav a.active {
-  color: #b3b3b3;
+  color: #595959;
 }
 
 @media (max-width: 750px) {

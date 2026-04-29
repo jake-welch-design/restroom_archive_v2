@@ -197,6 +197,9 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
             :title="
               mode === 'pov' ? 'Switch to orbit view' : 'Switch to POV view'
             "
+            :aria-label="
+              mode === 'pov' ? 'Switch to orbit view' : 'Switch to POV view'
+            "
             @click="toggleViewMode"
           >
             <!-- Eye icon for POV mode -->
@@ -246,6 +249,8 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
             class="ctrl-toggle"
             :class="{ active: markersVisible }"
             title="Show annotations"
+            :aria-label="markersVisible ? 'Hide annotations' : 'Show annotations'"
+            :aria-pressed="markersVisible"
             @click="toggleMarkers"
           >
             <span class="toggle-track"><span class="toggle-thumb" /></span>
@@ -259,6 +264,12 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
                 ? 'Click to place an annotation (Esc to cancel)'
                 : 'Add annotation'
             "
+            :aria-label="
+              createMode
+                ? 'Click to place an annotation (Esc to cancel)'
+                : 'Add annotation'
+            "
+            :aria-pressed="createMode"
             @click="toggleCreateMode"
           >
             <svg

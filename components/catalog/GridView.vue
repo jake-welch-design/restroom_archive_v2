@@ -123,6 +123,7 @@ onMounted(() => scrollToSelected(props.selectedSlug));
                 <button
                   type="button"
                   class="annotations-toggle"
+                  :aria-expanded="annotationsOpen"
                   @click.stop="annotationsOpen = !annotationsOpen"
                 >
                   Annotations ({{ annotations?.length ?? 0 }})

@@ -96,11 +96,13 @@ const pendingPos = computed(() => {
   >
     <!-- Markers -->
     <template v-if="markersVisible">
-      <div
+      <button
         v-for="a in annotations"
         :key="a.id"
+        type="button"
         class="annotation-dot"
         :class="{ active: a.id === activeAnnotationId }"
+        :aria-label="`Annotation by ${a.author.displayName ?? '@' + a.author.username}: ${a.body}`"
         :style="{
           left: `${positions.get(a.id)?.x ?? 0}px`,
           top: `${positions.get(a.id)?.y ?? 0}px`,
@@ -108,8 +110,8 @@ const pendingPos = computed(() => {
         }"
         @click.stop="emit('selectAnnotation', a.id)"
       >
-        <div class="tooltip">{{ a.body }}</div>
-      </div>
+        <div class="tooltip" aria-hidden="true">{{ a.body }}</div>
+      </button>
     </template>
 
     <!-- Active chat bubble -->
@@ -124,6 +126,7 @@ const pendingPos = computed(() => {
       <button
         type="button"
         class="bubble-close"
+        aria-label="Close annotation"
         @click.stop="emit('closeActive')"
       >
         ×
@@ -202,6 +205,7 @@ const pendingPos = computed(() => {
   cursor: pointer;
   pointer-events: all;
   border: none;
+  padding: 0;
 }
 .annotation-dot.active {
   background: rgb(255, 83, 83);

@@ -175,8 +175,8 @@ watch(data, maybeAutoSelect);
             </svg>
           </button>
 
-          <span v-else class="search-icon">
-            <svg viewBox="0 0 12 12" width="12" height="12">
+          <span v-else class="search-icon" aria-hidden="true">
+            <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true">
               <circle
                 cx="5"
                 cy="5"
@@ -205,6 +205,7 @@ watch(data, maybeAutoSelect);
           type="button"
           class="link-btn filter-btn"
           :class="{ active: filterOpen }"
+          :aria-expanded="filterOpen"
           @click="filterOpen = !filterOpen"
         >
           Filter
@@ -216,6 +217,7 @@ watch(data, maybeAutoSelect);
         <button
           class="link-btn"
           :class="{ active: viewMode === 'list' }"
+          :aria-pressed="viewMode === 'list'"
           @click="viewMode = 'list'"
         >
           List
@@ -223,6 +225,7 @@ watch(data, maybeAutoSelect);
         <button
           class="link-btn"
           :class="{ active: viewMode === 'grid' }"
+          :aria-pressed="viewMode === 'grid'"
           @click="viewMode = 'grid'"
         >
           Grid
@@ -230,6 +233,7 @@ watch(data, maybeAutoSelect);
         <button
           class="link-btn"
           :class="{ active: viewMode === 'map' }"
+          :aria-pressed="viewMode === 'map'"
           @click="viewMode = 'map'"
         >
           Map
@@ -261,6 +265,7 @@ watch(data, maybeAutoSelect);
         type="button"
         class="sort-btn"
         :class="{ active: sortKey === opt.key }"
+        :aria-pressed="sortKey === opt.key"
         @click="toggleSort(opt.key)"
       >
         {{ opt.label }}
@@ -523,7 +528,7 @@ watch(data, maybeAutoSelect);
 }
 
 .link-btn.active {
-  color: #b3b3b3;
+  color: #595959;
 }
 
 .filter-btn {

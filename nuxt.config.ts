@@ -4,7 +4,7 @@ export default defineNuxtConfig({
 
   modules: ["nuxt-auth-utils", "@nuxtjs/turnstile"],
 
-  css: ["maplibre-gl/dist/maplibre-gl.css"],
+  css: ["maplibre-gl/dist/maplibre-gl.css", "~/assets/css/a11y.css"],
 
   nitro: {
     preset: "cloudflare-pages",
@@ -71,8 +71,7 @@ export default defineNuxtConfig({
     head: {
       title: "The Restroom Archive",
 
-      viewport:
-        "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no",
+      viewport: "width=device-width, initial-scale=1",
 
       link: [
         {
@@ -111,7 +110,7 @@ export default defineNuxtConfig({
         },
         {
           property: "og:image",
-          content: "https://restroomarchive.com/metatag.png",
+          content: "https://restroomarchive.com/metatag.jpg",
         },
         {
           property: "og:image:alt",
@@ -130,7 +129,7 @@ export default defineNuxtConfig({
         },
         {
           name: "twitter:image",
-          content: "https://restroomarchive.com/metatag.png",
+          content: "https://restroomarchive.com/metatag.jpg",
         },
 
         { name: "apple-mobile-web-app-title", content: "The Restroom Archive" },

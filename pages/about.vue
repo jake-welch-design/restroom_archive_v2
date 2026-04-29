@@ -1,20 +1,48 @@
+<script setup lang="ts">
+const { toAbsolute } = useAbsoluteUrl();
+
+const siteUrl = "https://restroomarchive.com";
+const description =
+  "An on-going repository of public restrooms dedicated to documenting the humorous, chaotic, and often scary nature of these publicly accessible private spaces.";
+
+useSeoMeta({
+  title: "About",
+  description,
+  ogTitle: "About – The Restroom Archive",
+  ogDescription: description,
+  ogUrl: `${siteUrl}/about`,
+  ogImage: toAbsolute("/metatag.jpg"),
+  twitterTitle: "About – The Restroom Archive",
+  twitterDescription: description,
+  twitterImage: toAbsolute("/metatag.jpg"),
+});
+
+useHead({
+  link: [{ rel: "canonical", href: `${siteUrl}/about` }],
+});
+</script>
+
 <template>
   <div class="about-page">
     <CatalogHeader />
     <article class="about-content">
-      <h2>What is The Restroom Archive?</h2>
+      <h1>What is The Restroom Archive?</h1>
       <p>
         The Restroom Archive is an ongoing repository of 3D scans of restrooms
         designed, built, and maintained by
-        <a href="https://jakewelch.design" target="_blank">Jake Welch</a>. What
-        began as a joke in 2023 has become a years-long practice of 3D scanning
-        restrooms in restaurants, gas stations, convenience stores, bars, coffee
-        shops, and other establishments across the U.S. and Europe. The scans
-        are intended to document the diverse nature of these uniquely private,
-        publicly accessible spaces. By documenting their characteristics,
-        atmosphere, decor, and artifacts left behind by visitors, Jake hopes to
-        reveal how public restrooms reflect the creativity and impertinence of
-        humans when they know no one is watching.
+        <a
+          href="https://jakewelch.design"
+          target="_blank"
+          rel="noopener noreferrer"
+          >Jake Welch</a
+        >. What began as a joke in 2023 has become a years-long practice of 3D
+        scanning restrooms in restaurants, gas stations, convenience stores,
+        bars, coffee shops, and other establishments across the U.S. and Europe.
+        The scans are intended to document the diverse nature of these uniquely
+        private, publicly accessible spaces. By documenting their
+        characteristics, atmosphere, decor, and artifacts left behind by
+        visitors, Jake hopes to reveal how public restrooms reflect the
+        creativity and impertinence of humans when they know no one is watching.
       </p>
 
       <p>
@@ -68,7 +96,7 @@
   text-decoration: underline;
 }
 
-.about-content h2 {
+.about-content h1 {
   font-size: 18px;
   font-weight: 400;
   border-bottom: 1px solid #000;
@@ -98,7 +126,7 @@
     padding: 12px;
   }
 
-  .about-content h2 {
+  .about-content h1 {
     font-size: 14px;
   }
 
