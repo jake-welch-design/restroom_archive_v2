@@ -3,6 +3,16 @@ import { z } from 'zod'
 import { useDb, schema } from '~~/server/utils/db'
 import { requireApproved } from '~~/server/utils/requireApproved'
 import { serializeDescriptors } from '~~/server/utils/descriptors'
+import { rateLimitByUser } from '~~/server/utils/rateLimit'
+
+const MAX_GLB_BYTES = 50 * 1024 * 1024 // 50 MB
+
+// GLB binary format starts with "glTF" magic (0x46546C67 little-endian).
+function isGlb(buf: Buffer): boolean {
+  return buf.length >= 4 &&
+    buf[0] === 0x67 && buf[1] === 0x6C &&
+    buf[2] === 0x54 && buf[3] === 0x46
+}
 
 const MetaSchema = z.object({
   name: z.string().min(1).max(200),
@@ -28,6 +38,7 @@ function formatDisplayDate(isoDate: string) {
 
 export default defineEventHandler(async (event) => {
   const user = requireApproved(event)
+  await rateLimitByUser(event, 'submit', { max: 10, windowSec: 86400 })
 
   const parts = await readMultipartFormData(event)
   if (!parts) throw createError({ statusCode: 400, statusMessage: 'Expected multipart form data' })
@@ -46,6 +57,8 @@ export default defineEventHandler(async (event) => {
   }
 
   if (!glbPart?.data.length) throw createError({ statusCode: 400, statusMessage: 'GLB file is required' })
+  if (glbPart.data.length > MAX_GLB_BYTES) throw createError({ statusCode: 413, statusMessage: `GLB file must be under ${MAX_GLB_BYTES / 1024 / 1024} MB` })
+  if (!isGlb(glbPart.data)) throw createError({ statusCode: 422, statusMessage: 'File is not a valid GLB model' })
 
   const meta = MetaSchema.safeParse(fields)
   if (!meta.success) {

@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { useDb, schema } from '~~/server/utils/db'
 import { verifyPassword } from '~~/server/utils/hash'
 import { verifyTurnstile } from '~~/server/utils/turnstile'
+import { rateLimitByIp } from '~~/server/utils/rateLimit'
 
 const Body = z.object({
   email: z.string().email(),
@@ -11,6 +12,8 @@ const Body = z.object({
 })
 
 export default defineEventHandler(async (event) => {
+  await rateLimitByIp(event, 'signin', { max: 10, windowSec: 3600 })
+
   const body = await readValidatedBody(event, Body.parse)
 
   const ok = await verifyTurnstile(event, body.turnstileToken)

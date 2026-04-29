@@ -14,6 +14,30 @@ export default defineNuxtConfig({
   components: [{ path: "~/components", pathPrefix: false }],
 
   routeRules: {
+    "/**": {
+      headers: {
+        "X-Frame-Options": "DENY",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(), geolocation=(), interest-cohort=()",
+        "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload",
+        // Report-only to observe violations without blocking. Promote to
+        // Content-Security-Policy once a clean run is confirmed in production.
+        "Content-Security-Policy-Report-Only": [
+          "default-src 'self'",
+          "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com",
+          "style-src 'self' 'unsafe-inline'",
+          "img-src 'self' data: blob: https:",
+          "font-src 'self' data:",
+          "connect-src 'self' https:",
+          "worker-src 'self' blob:",
+          "frame-src https://challenges.cloudflare.com",
+          "object-src 'none'",
+          "base-uri 'self'",
+          "form-action 'self'",
+        ].join("; "),
+      },
+    },
     "/": { swr: 60 },
     "/r/**": { ssr: true },
     "/about": { ssr: true },
@@ -22,6 +46,15 @@ export default defineNuxtConfig({
 
   runtimeConfig: {
     turnstileSecretKey: "",
+    session: {
+      password: "", // overridden by NUXT_SESSION_PASSWORD env var
+      maxAge: 60 * 60 * 24 * 30, // 30 days
+      cookie: {
+        httpOnly: true,
+        sameSite: "lax" as const,
+        secure: true,
+      },
+    },
     public: {
       modelsBaseUrl: "",
       thumbsBaseUrl: "",

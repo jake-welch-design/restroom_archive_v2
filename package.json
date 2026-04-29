@@ -21,26 +21,26 @@
   },
   "dependencies": {
     "@nuxtjs/turnstile": "^1.1.2",
-    "drizzle-orm": "^0.33.0",
+    "drizzle-orm": "^0.45.2",
     "fuse.js": "^7.0.0",
     "maplibre-gl": "^4.7.1",
     "nuxt": "^3.13.2",
     "nuxt-auth-utils": "^0.5.29",
     "pmtiles": "^3.2.0",
     "three": "^0.174.0",
-    "vue": "^3.5.12",
+    "vue": "^3.5.33",
     "vue-router": "^4.4.5",
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20241022.0",
+    "@cloudflare/workers-types": "^4.20260426.1",
     "@types/three": "^0.169.0",
-    "drizzle-kit": "^0.24.2",
+    "drizzle-kit": "^0.31.10",
     "nitro-cloudflare-dev": "^0.2.2",
     "puppeteer": "^24.42.0",
     "tsx": "^4.21.0",
     "typescript": "^5.6.3",
     "vue-tsc": "^2.2.12",
-    "wrangler": "^4.84.1"
+    "wrangler": "^4.86.0"
   }
 }

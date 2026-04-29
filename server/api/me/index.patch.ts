@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { useDb, schema } from '~~/server/utils/db'
 import { requireActiveUser } from '~~/server/utils/requireActiveUser'
+import { rateLimitByUser } from '~~/server/utils/rateLimit'
 
 // Vue's `{{ }}` interpolation escapes HTML, but we still strip ASCII control
 // chars so a stray newline or NUL can't sneak into a stored identifier.
@@ -20,6 +21,7 @@ const Body = z.object({
 
 export default defineEventHandler(async (event) => {
   const user = requireActiveUser(event)
+  await rateLimitByUser(event, 'display-name', { max: 5, windowSec: 3600 })
   const body = await readValidatedBody(event, Body.parse)
 
   const trimmed = body.displayName?.trim() ?? ''
