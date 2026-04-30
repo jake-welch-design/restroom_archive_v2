@@ -2,7 +2,10 @@
 import maplibregl from "maplibre-gl";
 import type { RestroomSummary } from "~/types/restroom";
 
-const props = defineProps<{ rows: RestroomSummary[]; selectedSlug: string | null }>();
+const props = defineProps<{
+  rows: RestroomSummary[];
+  selectedSlug: string | null;
+}>();
 const emit = defineEmits<{ select: [slug: string] }>();
 
 const mapContainer = ref<HTMLDivElement | null>(null);
@@ -75,6 +78,7 @@ function initMap() {
     dragRotate: false,
     pitchWithRotate: false,
     touchPitch: false,
+    renderWorldCopies: false,
   });
 
   map.touchZoomRotate.disableRotation();
@@ -151,6 +155,7 @@ function initMap() {
 
     sourceReady = true;
     const pinned = updatePinData(props.rows) ?? [];
+    updateActivePin(props.selectedSlug);
 
     // If the container has real dimensions, fit now; otherwise defer until
     // the first resize when the flex layout resolves.
@@ -191,9 +196,24 @@ watch(
   (rows) => updatePinData(rows),
 );
 
+function updateActivePin(slug: string | null) {
+  if (!map || !sourceReady) return;
+  if (slug) {
+    map.setPaintProperty("restroom-pins", "circle-color", [
+      "case",
+      ["==", ["get", "slug"], slug],
+      "#e33",
+      "#ff0000",
+    ]);
+  } else {
+    map.setPaintProperty("restroom-pins", "circle-color", "#ff0000");
+  }
+}
+
 watch(
   () => props.selectedSlug,
   (slug) => {
+    updateActivePin(slug);
     if (!slug || !map || !sourceReady) return;
     const row = props.rows.find((r) => r.slug === slug);
     if (row?.lng != null && row?.lat != null) {

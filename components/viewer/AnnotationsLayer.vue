@@ -134,7 +134,8 @@ const pendingPos = computed(() => {
       <p class="bubble-body">{{ activeAnnotation.body }}</p>
       <span class="bubble-meta">
         {{
-          activeAnnotation.author.displayName ?? `@${activeAnnotation.author.username}`
+          activeAnnotation.author.displayName ??
+          `@${activeAnnotation.author.username}`
         }}
       </span>
     </div>
@@ -208,7 +209,7 @@ const pendingPos = computed(() => {
   padding: 0;
 }
 .annotation-dot.active {
-  background: rgb(255, 83, 83);
+  background: #e33;
 }
 .annotation-dot.pending {
   background: #e33;
