@@ -115,8 +115,8 @@ function focusInput() {
 }
 .tag-inner {
   border: 0;
-  outline: 0;
-  padding: 2px 0;
+  outline: none;
+  padding: 4px 6px;
   font: inherit;
   font-size: 12px;
   background: transparent;
@@ -124,4 +124,10 @@ function focusInput() {
   min-width: 80px;
   color: #000;
 }
+
+/* .tag-inner:focus {
+  outline: none;
+  box-shadow: none;
+  background: #ccc;
+} */
 </style>

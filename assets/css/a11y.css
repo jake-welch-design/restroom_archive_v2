@@ -1,15 +1,14 @@
-/* Focus indicators — restores outlines removed by component-level outline:none rules */
+/* Focus indicators — background highlight on focus */
 :focus-visible {
-  outline: 2px solid #000;
-  outline-offset: 2px;
+  outline: none;
+  background-color: #ebebeb;
 }
 
-/* Input/textarea focus ring as inset box-shadow so it doesn't affect layout */
 input:focus-visible,
 textarea:focus-visible,
 select:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px #000 inset;
+  background-color: #ebebeb;
 }
 
 /* Skip link — visually hidden until focused */
