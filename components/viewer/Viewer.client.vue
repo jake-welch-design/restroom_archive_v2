@@ -249,7 +249,9 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
             class="ctrl-toggle"
             :class="{ active: markersVisible }"
             title="Show annotations"
-            :aria-label="markersVisible ? 'Hide annotations' : 'Show annotations'"
+            :aria-label="
+              markersVisible ? 'Hide annotations' : 'Show annotations'
+            "
             :aria-pressed="markersVisible"
             @click="toggleMarkers"
           >
@@ -410,7 +412,7 @@ canvas {
   color: #fff;
 }
 .ctrl-add {
-  background: #000;
+  background: transparent;
   border: 1px solid #fff;
 }
 .ctrl-add:hover {
