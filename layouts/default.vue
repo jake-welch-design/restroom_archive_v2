@@ -45,7 +45,11 @@ function goPrev() {
     </button>
 
     <main id="main" class="viewer-panel">
-      <p v-show="!panelOpen" class="corner-title">The Restroom Archive</p>
+      <p v-show="!panelOpen" class="corner-title">
+        <a href="/" style="text-decoration: none; color: inherit"
+          >The Restroom Archive</a
+        >
+      </p>
       <Viewer
         :model-url="selected?.modelUrl ?? null"
         :slug="selected?.slug ?? null"
@@ -153,6 +157,9 @@ function goPrev() {
   /* mix-blend-mode: difference; */
   pointer-events: none;
   z-index: 1;
+}
+.corner-title a {
+  pointer-events: auto;
 }
 
 .bottom-gradient {

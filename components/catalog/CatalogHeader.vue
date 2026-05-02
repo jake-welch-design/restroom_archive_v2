@@ -7,7 +7,9 @@ const isHome = computed(() => route.path === "/");
 <template>
   <header class="catalog-head">
     <component :is="isHome ? 'h1' : 'p'" class="site-title">
-      The Restroom Archive
+      <a href="/" style="text-decoration: none; color: inherit"
+        >The Restroom Archive</a
+      >
     </component>
     <nav class="top-nav">
       <NuxtLink to="/about" :class="{ active: route.path === '/about' }"
