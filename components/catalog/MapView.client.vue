@@ -5,6 +5,7 @@ import type { RestroomSummary } from "~/types/restroom";
 const props = defineProps<{
   rows: RestroomSummary[];
   selectedSlug: string | null;
+  panelOpen: boolean;
 }>();
 const emit = defineEmits<{ select: [slug: string] }>();
 
@@ -107,10 +108,6 @@ function initMap() {
     map.on("click", "restroom-pins", (e) => {
       const slug = e.features?.[0]?.properties?.slug as string | undefined;
       if (!slug) return;
-      const row = props.rows.find((r) => r.slug === slug);
-      if (row?.lng != null && row?.lat != null) {
-        map!.flyTo({ center: [row.lng, row.lat], zoom: 14 });
-      }
       emit("select", slug);
     });
 
@@ -196,29 +193,53 @@ watch(
   (rows) => updatePinData(rows),
 );
 
+function getPanelPadding(): maplibregl.PaddingOptions {
+  if (!props.panelOpen) return { top: 0, bottom: 0, left: 0, right: 0 };
+  const isMobile = window.innerWidth <= 750;
+  if (isMobile) {
+    return { top: 0, bottom: 0, left: Math.round(window.innerWidth * 0.5), right: 0 };
+  }
+  const h = mapContainer.value?.clientHeight ?? 0;
+  return { top: 0, bottom: Math.round(h * 0.3333), left: 0, right: 0 };
+}
+
+function flyToSelected(slug: string | null) {
+  if (!slug || !map || !sourceReady) return;
+  const row = props.rows.find((r) => r.slug === slug);
+  if (row?.lng != null && row?.lat != null) {
+    map.flyTo({
+      center: [row.lng, row.lat],
+      zoom: 14,
+      padding: getPanelPadding(),
+    });
+  }
+}
+
 function updateActivePin(slug: string | null) {
   if (!map || !sourceReady) return;
   if (slug) {
     map.setPaintProperty("restroom-pins", "circle-color", [
       "case",
       ["==", ["get", "slug"], slug],
-      "#e33",
+      "#ff8a8a",
       "#ff0000",
     ]);
   } else {
-    map.setPaintProperty("restroom-pins", "circle-color", "#ff0000");
+    map.setPaintProperty("restroom-pins", "circle-color", "#ff8a8a");
   }
 }
-
 watch(
   () => props.selectedSlug,
   (slug) => {
     updateActivePin(slug);
-    if (!slug || !map || !sourceReady) return;
-    const row = props.rows.find((r) => r.slug === slug);
-    if (row?.lng != null && row?.lat != null) {
-      map.flyTo({ center: [row.lng, row.lat], zoom: 14 });
-    }
+    flyToSelected(slug);
+  },
+);
+
+watch(
+  () => props.panelOpen,
+  (open) => {
+    if (open) flyToSelected(props.selectedSlug);
   },
 );
 

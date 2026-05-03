@@ -13,8 +13,7 @@ const emit = defineEmits<{
 }>();
 
 const slug = computed(() => props.restroom.slug);
-const { data: annotations, refresh: refreshAnnotations } =
-  useAnnotations(slug);
+const { data: annotations, refresh: refreshAnnotations } = useAnnotations(slug);
 const annotationsOpen = ref(false);
 const { isAdmin, user } = useAuth();
 const { selectAnnotation } = useSelection();
@@ -67,9 +66,11 @@ function formatShortDate(iso: string) {
     <div class="panel-header">
       <div class="panel-info">
         <span class="panel-name">{{ restroom.name }}</span>
-        <span class="panel-meta"
-          >{{ restroom.location }} · {{ formatShortDate(restroom.isoDate) }}</span
-        >
+        <span class="panel-meta">
+          <span>{{ restroom.location }}</span>
+          <span class="panel-meta-sep"> · </span>
+          <span>{{ formatShortDate(restroom.isoDate) }}</span>
+        </span>
       </div>
       <button class="panel-close" aria-label="Close" @click="emit('close')">
         ×
@@ -148,7 +149,7 @@ function formatShortDate(iso: string) {
   background: #fff;
   border: 1px solid #000;
   padding: 8px 24px 20px;
-  max-height: 320px;
+  height: 33.33%;
   overflow-y: auto;
   font-family: Arial, Helvetica, sans-serif;
   font-size: 16px;
@@ -232,7 +233,9 @@ function formatShortDate(iso: string) {
   font-size: 12px;
   line-height: 1.2;
   cursor: pointer;
-  transition: background 0.1s, color 0.1s;
+  transition:
+    background 0.1s,
+    color 0.1s;
 }
 
 .tag-chip.active {
@@ -344,12 +347,25 @@ function formatShortDate(iso: string) {
 
 @media (max-width: 750px) {
   .map-panel {
+    top: 8px;
     bottom: 8px;
     left: 8px;
-    right: 8px;
+    right: auto;
+    height: auto;
+    box-sizing: border-box;
+    width: 50%;
+    max-height: none;
     padding: 8px 12px 16px;
-    max-height: 260px;
     font-size: 12px;
+  }
+
+  .panel-meta {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .panel-meta-sep {
+    display: none;
   }
 
   .panel-name {

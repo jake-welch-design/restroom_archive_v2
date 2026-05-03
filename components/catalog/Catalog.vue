@@ -339,7 +339,12 @@ watch(data, maybeAutoSelect);
     </div>
 
     <div v-if="viewMode === 'map'" class="map-area">
-      <MapView :rows="mapRows" :selected-slug="selectedSlug" @select="handleMapSelect" />
+      <MapView
+        :rows="mapRows"
+        :selected-slug="selectedSlug"
+        :panel-open="mapPanelVisible && !!selected"
+        @select="handleMapSelect"
+      />
       <Transition name="slide-up">
         <MapPanel
           v-if="mapPanelVisible && selected"
@@ -611,6 +616,13 @@ watch(data, maybeAutoSelect);
   transform: translateY(100%);
 }
 
+@media (max-width: 750px) {
+  .slide-up-enter-from,
+  .slide-up-leave-to {
+    transform: translateX(-100%);
+  }
+}
+
 .state {
   padding: 24px;
   color: #666;
@@ -645,6 +657,8 @@ watch(data, maybeAutoSelect);
   }
   .filter-panel {
     padding: 8px 8px;
+    max-height: 75px;
+    overflow: auto;
   }
 }
 </style>

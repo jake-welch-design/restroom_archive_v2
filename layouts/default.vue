@@ -239,17 +239,18 @@ function goPrev() {
   .panel {
     flex: 0 0 auto;
     width: auto;
-    height: calc(100dvh * 2 / 3);
+    height: calc(100dvh * 0.75); /* instead of 0.75 it was 2/3 */
     /* box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2); */
     transition: margin-top 0.35s ease;
   }
   .panel.closed {
     margin-left: 0;
-    margin-top: calc(-100dvh * 2 / 3);
+    margin-top: calc(-100dvh * 0.75); /* instead of 0.75 it was 2/3 */
   }
 
   .corner-title {
     padding: 8px 0;
+    left: 8px;
   }
 
   .viewer-panel {
@@ -263,7 +264,7 @@ function goPrev() {
     position: fixed;
     left: auto;
     right: 16px;
-    top: calc(100dvh * 2 / 3);
+    top: calc(100dvh * 0.75); /* instead of 0.75 it was 2/3 */
     width: 77.5px;
     height: 18px;
     border-radius: 0 0 8px 8px;
