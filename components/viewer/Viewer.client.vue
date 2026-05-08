@@ -317,6 +317,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
         :pending-screen-x="pendingScreenX"
         :pending-screen-y="pendingScreenY"
         :create-mode="createMode"
+        :restroom-slug="props.slug ?? ''"
         @select-annotation="selectAnnotation($event)"
         @close-active="selectAnnotation(null)"
         @submit-annotation="saveAnnotation($event)"

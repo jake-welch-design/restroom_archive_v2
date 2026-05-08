@@ -12,6 +12,7 @@ const props = defineProps<{
   pendingScreenX: number;
   pendingScreenY: number;
   createMode: boolean;
+  restroomSlug: string;
 }>();
 
 const emit = defineEmits<{
@@ -20,6 +21,40 @@ const emit = defineEmits<{
   submitAnnotation: [body: string];
   cancelCreate: [];
 }>();
+
+const { user, loggedIn } = useAuth();
+const confirmingReportId = ref<number | null>(null);
+const reportedIds = ref<Set<number>>(new Set());
+const reportError = ref("");
+
+function isOwnAnnotation(authorId: number): boolean {
+  const u = user.value as { id?: number } | null;
+  return !!u && u.id === authorId;
+}
+
+function startReport(id: number) {
+  reportError.value = "";
+  confirmingReportId.value = id;
+}
+
+function cancelReport() {
+  confirmingReportId.value = null;
+  reportError.value = "";
+}
+
+async function confirmReport(id: number) {
+  reportError.value = "";
+  try {
+    await $fetch(`/api/restrooms/${props.restroomSlug}/annotations/${id}/report`, {
+      method: "POST",
+    });
+    reportedIds.value.add(id);
+    confirmingReportId.value = null;
+  } catch (e: unknown) {
+    const err = e as { data?: { statusMessage?: string } };
+    reportError.value = err.data?.statusMessage ?? "Could not submit report.";
+  }
+}
 
 // Reactive projected positions — recomputed every animation frame
 const positions = ref<Map<number, { x: number; y: number; inFront: boolean }>>(
@@ -138,6 +173,52 @@ const pendingPos = computed(() => {
           `@${activeAnnotation.author.username}`
         }}
       </span>
+      <template v-if="loggedIn && !isOwnAnnotation(activeAnnotation.author.id)">
+        <div
+          v-if="confirmingReportId === activeAnnotation.id"
+          class="bubble-report-confirm"
+          @click.stop
+        >
+          <template v-if="reportError">
+            <span class="bubble-report-error">{{ reportError }}</span>
+            <button
+              type="button"
+              class="bubble-report-no"
+              @click.stop="cancelReport"
+            >
+              Close
+            </button>
+          </template>
+          <template v-else>
+            <span class="bubble-report-prompt">Report this?</span>
+            <button
+              type="button"
+              class="bubble-report-yes"
+              @click.stop="confirmReport(activeAnnotation.id)"
+            >
+              Yes
+            </button>
+            <button
+              type="button"
+              class="bubble-report-no"
+              @click.stop="cancelReport"
+            >
+              Cancel
+            </button>
+          </template>
+        </div>
+        <button
+          v-else-if="!reportedIds.has(activeAnnotation.id)"
+          type="button"
+          class="bubble-report-btn"
+          aria-label="Report this annotation"
+          title="Report this annotation"
+          @click.stop="startReport(activeAnnotation.id)"
+        >
+          !
+        </button>
+        <span v-else class="bubble-reported">Reported</span>
+      </template>
     </div>
 
     <!-- Pending point indicator -->
@@ -275,6 +356,72 @@ const pendingPos = computed(() => {
 .bubble-meta {
   font-size: 11px;
   color: #999;
+}
+.bubble-report-btn {
+  position: absolute;
+  bottom: 4px;
+  right: 6px;
+  background: transparent;
+  border: 1px solid #bbb;
+  border-radius: 50%;
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  font: inherit;
+  font-size: 8px;
+  line-height: 1;
+  color: #999;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.bubble-report-btn:hover {
+  color: #c33;
+  border-color: #c33;
+}
+.bubble-report-confirm {
+  position: absolute;
+  bottom: 4px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+}
+.bubble-report-prompt {
+  color: #666;
+}
+.bubble-report-error {
+  color: #c33;
+  font-size: 10px;
+  max-width: 110px;
+  white-space: normal;
+  line-height: 1.2;
+}
+.bubble-report-yes,
+.bubble-report-no {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.bubble-report-yes {
+  color: #c33;
+}
+.bubble-report-no {
+  color: #999;
+}
+.bubble-reported {
+  position: absolute;
+  bottom: 4px;
+  right: 6px;
+  font-size: 11px;
+  color: #999;
+  font-style: italic;
 }
 
 .compose-popup {

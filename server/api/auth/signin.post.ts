@@ -48,6 +48,7 @@ export default defineEventHandler(async (event) => {
       bannedAt: user.bannedAt ?? null,
       adminMessage: user.adminMessage ?? null,
       adminMessageAt: user.adminMessageAt ?? null,
+      emailVerifiedAt: user.emailVerifiedAt ?? null,
     },
   })
 

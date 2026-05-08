@@ -8,6 +8,7 @@ const {
   isMuted,
   mutedUntil,
   adminMessage,
+  emailVerified,
   refreshSession,
   signout,
 } = useAuth();
@@ -78,6 +79,26 @@ function switchTab(tab: "signin" | "signup") {
   if (tab === "signin") {
     username.value = "";
     displayName.value = "";
+  }
+}
+
+// -------------- Email verification banner --------------
+const resendLoading = ref(false);
+const resendSent = ref(false);
+const resendError = ref("");
+
+async function resendVerification() {
+  resendLoading.value = true;
+  resendError.value = "";
+  try {
+    await $fetch("/api/auth/resend-verification", { method: "POST" });
+    resendSent.value = true;
+  } catch (e: unknown) {
+    const err = e as { data?: { statusMessage?: string } };
+    resendError.value =
+      err.data?.statusMessage ?? "Could not resend verification email.";
+  } finally {
+    resendLoading.value = false;
   }
 }
 
@@ -439,6 +460,28 @@ const { data: removalRequests, refresh: refreshRemovalQueue } = await useFetch<
   default: () => [],
 });
 
+type AnnotationReport = {
+  reportId: number;
+  reportReason: string | null;
+  reportCreatedAt: string;
+  annotation: {
+    id: number;
+    body: string;
+    createdAt: string;
+    hiddenAt: string | null;
+  };
+  restroom: { slug: string; name: string };
+  reporter: { username: string; displayName: string | null } | null;
+  author: { username: string; displayName: string | null } | null;
+};
+
+const { data: annotationReports, refresh: refreshAnnotationReports } =
+  await useFetch<AnnotationReport[]>("/api/admin/annotations/reports", {
+    server: false,
+    immediate: false,
+    default: () => [],
+  });
+
 watch(
   isAdmin,
   async (v) => {
@@ -447,11 +490,46 @@ watch(
         refreshRestroomQueue(),
         refreshUserQueue(),
         refreshRemovalQueue(),
+        refreshAnnotationReports(),
       ]);
     }
   },
   { immediate: true },
 );
+
+async function hideReportedAnnotation(annotationId: number) {
+  const key = `ann-hide-${annotationId}`;
+  actionLoading.value = key;
+  actionError.value = "";
+  try {
+    await $fetch(`/api/admin/annotations/${annotationId}/hide`, {
+      method: "POST",
+    });
+    await refreshAnnotationReports();
+  } catch (e: unknown) {
+    const err = e as { data?: { statusMessage?: string } };
+    actionError.value = err.data?.statusMessage ?? "Could not hide annotation.";
+  } finally {
+    actionLoading.value = null;
+  }
+}
+
+async function dismissAnnotationReports(annotationId: number) {
+  const key = `ann-dismiss-${annotationId}`;
+  actionLoading.value = key;
+  actionError.value = "";
+  try {
+    await $fetch(`/api/admin/annotations/${annotationId}/dismiss-reports`, {
+      method: "POST",
+    });
+    await refreshAnnotationReports();
+  } catch (e: unknown) {
+    const err = e as { data?: { statusMessage?: string } };
+    actionError.value = err.data?.statusMessage ?? "Could not dismiss reports.";
+  } finally {
+    actionLoading.value = null;
+  }
+}
 
 const actionLoading = ref<string | null>(null);
 const actionError = ref("");
@@ -838,6 +916,17 @@ const roleLabel = computed(() => {
     <div v-else class="body-section">
       <div v-if="adminMessage" class="admin-message-banner">
         <strong>From admin:</strong> {{ adminMessage }}
+      </div>
+
+      <div v-if="!emailVerified" class="verify-email-banner">
+        <span>Your email address is not verified. Some actions require verification.</span>
+        <span v-if="resendSent" class="verify-sent">Verification email sent — check your inbox.</span>
+        <template v-else>
+          <span v-if="resendError" class="verify-error">{{ resendError }}</span>
+          <button class="verify-resend-btn" :disabled="resendLoading" @click="resendVerification">
+            {{ resendLoading ? "Sending…" : "Resend verification email" }}
+          </button>
+        </template>
       </div>
 
       <header class="account-header">
@@ -1637,6 +1726,79 @@ const roleLabel = computed(() => {
 
         <section class="section">
           <h2 class="section-title">
+            Reported annotations
+            <span v-if="annotationReports?.length" class="count">{{
+              annotationReports.length
+            }}</span>
+          </h2>
+
+          <div v-if="!annotationReports?.length" class="empty">
+            No reported annotations.
+          </div>
+
+          <ul v-else class="simple-list">
+            <li
+              v-for="r in annotationReports"
+              :key="r.reportId"
+              class="simple-row"
+            >
+              <div class="simple-main">
+                <NuxtLink
+                  class="simple-title link"
+                  :to="`/r/${r.restroom.slug}`"
+                >
+                  {{ r.restroom.name }}
+                </NuxtLink>
+                <span class="simple-meta annotation-body">{{
+                  r.annotation.body
+                }}</span>
+                <span class="simple-meta">
+                  By
+                  <UserAttribution :user="r.author" fallback="unknown" />
+                  · reported by
+                  <UserAttribution :user="r.reporter" fallback="unknown" />
+                  · {{ r.reportCreatedAt }}
+                </span>
+                <span v-if="r.reportReason" class="simple-meta reason"
+                  >Reason: {{ r.reportReason }}</span
+                >
+                <span v-if="r.annotation.hiddenAt" class="simple-meta dim"
+                  >Already hidden ({{ r.annotation.hiddenAt }})</span
+                >
+              </div>
+              <div class="simple-actions">
+                <button
+                  v-if="!r.annotation.hiddenAt"
+                  type="button"
+                  class="btn btn-reject"
+                  :disabled="actionLoading === `ann-hide-${r.annotation.id}`"
+                  @click="hideReportedAnnotation(r.annotation.id)"
+                >
+                  {{
+                    actionLoading === `ann-hide-${r.annotation.id}`
+                      ? "…"
+                      : "Hide annotation"
+                  }}
+                </button>
+                <button
+                  type="button"
+                  class="btn"
+                  :disabled="actionLoading === `ann-dismiss-${r.annotation.id}`"
+                  @click="dismissAnnotationReports(r.annotation.id)"
+                >
+                  {{
+                    actionLoading === `ann-dismiss-${r.annotation.id}`
+                      ? "…"
+                      : "Dismiss"
+                  }}
+                </button>
+              </div>
+            </li>
+          </ul>
+        </section>
+
+        <section class="section">
+          <h2 class="section-title">
             Removal requests
             <span v-if="removalRequests?.length" class="count">{{
               removalRequests.length
@@ -1839,6 +2001,31 @@ const roleLabel = computed(() => {
   font-weight: 700;
   margin-right: 4px;
 }
+
+.verify-email-banner {
+  background: #7a5a00;
+  color: #ffe;
+  padding: 12px 16px;
+  font-size: 13px;
+  line-height: 1.5;
+  margin-bottom: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.verify-resend-btn {
+  background: transparent;
+  border: 1px solid rgba(255,255,200,0.5);
+  color: #ffe;
+  font-size: 12px;
+  padding: 3px 10px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.verify-resend-btn:disabled { opacity: 0.5; cursor: default; }
+.verify-sent { font-style: italic; opacity: 0.85; }
+.verify-error { color: #ffaaaa; }
 
 /* Sign-up intro */
 .signup-intro {

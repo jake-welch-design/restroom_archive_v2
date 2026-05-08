@@ -1,10 +1,11 @@
 import { eq, or } from 'drizzle-orm'
 import { z } from 'zod'
 import { useDb, schema } from '~~/server/utils/db'
-import { hashPassword } from '~~/server/utils/hash'
+import { hashPassword, generateToken, hashToken } from '~~/server/utils/hash'
 import { verifyTurnstile } from '~~/server/utils/turnstile'
 import { validateUsername } from '~~/server/utils/username'
 import { rateLimitByIp } from '~~/server/utils/rateLimit'
+import { sendVerificationEmail } from '~~/server/utils/email'
 
 const Body = z.object({
   email: z.string().email(),
@@ -64,8 +65,28 @@ export default defineEventHandler(async (event) => {
       bannedAt: user.bannedAt ?? null,
       adminMessage: user.adminMessage ?? null,
       adminMessageAt: user.adminMessageAt ?? null,
+      emailVerifiedAt: null,
     },
   })
+
+  // Issue verification token and send email. Don't block signup if this fails.
+  try {
+    const db = useDb(event)
+    const token = generateToken()
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000)
+      .toISOString()
+      .replace('T', ' ')
+      .slice(0, 19)
+    await db.insert(schema.emailVerificationTokens).values({
+      userId: user.id,
+      tokenHash: hashToken(token),
+      expiresAt,
+    })
+    await sendVerificationEmail(user.email, token)
+  }
+  catch {
+    // Verification email failure is non-fatal; user can resend from account page.
+  }
 
   return { ok: true }
 })

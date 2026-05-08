@@ -12,6 +12,7 @@ declare module '#auth-utils' {
     bannedAt: string | null
     adminMessage: string | null
     adminMessageAt: string | null
+    emailVerifiedAt: string | null
   }
 }
 
@@ -30,6 +31,7 @@ declare module 'h3' {
       bannedAt: string | null
       adminMessage: string | null
       adminMessageAt: string | null
+      emailVerifiedAt: string | null
     }
   }
 }

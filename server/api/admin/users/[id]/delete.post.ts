@@ -31,6 +31,13 @@ export default defineEventHandler(async (event) => {
     .set({ removalRequestedBy: null })
     .where(eq(schema.restrooms.removalRequestedBy, id))
 
+  // Preserve report history made by this user; null out their reporter_id.
+  // (Reports they received cascade-delete with their annotations below.)
+  await db
+    .update(schema.annotationReports)
+    .set({ reporterId: null })
+    .where(eq(schema.annotationReports.reporterId, id))
+
   // Remove the user's annotations before deleting the account
   await db
     .delete(schema.annotations)

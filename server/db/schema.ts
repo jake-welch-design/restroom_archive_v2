@@ -14,6 +14,7 @@ export const users = sqliteTable('users', {
   bannedAt: text('banned_at'),
   adminMessage: text('admin_message'),
   adminMessageAt: text('admin_message_at'),
+  emailVerifiedAt: text('email_verified_at'),
   createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
 }, (t) => ({
   emailIdx: uniqueIndex('users_email_unique').on(t.email),
@@ -66,11 +67,39 @@ export const annotations = sqliteTable('annotations', {
   rotationX: real('rotation_x'),
   rotationY: real('rotation_y'),
   modelRotationY: real('model_rotation_y').default(0),
+  hiddenAt: text('hidden_at'),
+  hiddenBy: integer('hidden_by').references(() => users.id),
   createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
 }, (t) => ({
   restroomIdx: index('idx_annotations_restroom').on(t.restroomId),
 }))
 
+export const annotationReports = sqliteTable('annotation_reports', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  annotationId: integer('annotation_id').notNull().references(() => annotations.id, { onDelete: 'cascade' }),
+  reporterId: integer('reporter_id').references(() => users.id),
+  reason: text('reason'),
+  createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
+  resolvedAt: text('resolved_at'),
+  resolvedBy: integer('resolved_by').references(() => users.id),
+}, (t) => ({
+  uniquePerUser: uniqueIndex('annotation_reports_unique_per_user').on(t.annotationId, t.reporterId),
+  openIdx: index('idx_annotation_reports_open').on(t.resolvedAt),
+}))
+
+export const emailVerificationTokens = sqliteTable('email_verification_tokens', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  tokenHash: text('token_hash').notNull(),
+  expiresAt: text('expires_at').notNull(),
+  createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
+  usedAt: text('used_at'),
+}, (t) => ({
+  tokenHashIdx: index('idx_evt_token_hash').on(t.tokenHash),
+  userIdIdx: index('idx_evt_user_id').on(t.userId),
+}))
+
 export type User = typeof users.$inferSelect
 export type Restroom = typeof restrooms.$inferSelect
 export type Annotation = typeof annotations.$inferSelect
+export type AnnotationReport = typeof annotationReports.$inferSelect

@@ -41,6 +41,11 @@ export function useAuth() {
     return u?.adminMessage ?? null
   })
 
+  const emailVerified = computed(() => {
+    const u = user.value as { emailVerifiedAt?: string | null } | null
+    return !!u?.emailVerifiedAt
+  })
+
   return {
     user,
     loggedIn,
@@ -51,6 +56,7 @@ export function useAuth() {
     isMuted,
     mutedUntil,
     adminMessage,
+    emailVerified,
     signout,
     refreshSession,
   }

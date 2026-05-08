@@ -1,7 +1,7 @@
 import { eq, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { useDb, schema } from '~~/server/utils/db'
-import { requireActiveUser } from '~~/server/utils/requireActiveUser'
+import { requireVerifiedUser } from '~~/server/utils/requireActiveUser'
 import { rateLimitByUser } from '~~/server/utils/rateLimit'
 
 const Body = z.object({
@@ -9,7 +9,7 @@ const Body = z.object({
 })
 
 export default defineEventHandler(async (event) => {
-  const user = requireActiveUser(event)
+  const user = requireVerifiedUser(event)
   await rateLimitByUser(event, 'req-submission', { max: 3, windowSec: 86400 })
 
   await readValidatedBody(event, Body.parse)

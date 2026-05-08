@@ -1,4 +1,4 @@
-import { asc, eq } from 'drizzle-orm'
+import { and, asc, eq, isNull } from 'drizzle-orm'
 import { useDb, schema } from '~~/server/utils/db'
 
 export default defineEventHandler(async (event) => {
@@ -42,7 +42,10 @@ export default defineEventHandler(async (event) => {
     })
     .from(schema.annotations)
     .leftJoin(schema.users, eq(schema.annotations.authorId, schema.users.id))
-    .where(eq(schema.annotations.restroomId, restroom.id))
+    .where(and(
+      eq(schema.annotations.restroomId, restroom.id),
+      isNull(schema.annotations.hiddenAt),
+    ))
     .orderBy(asc(schema.annotations.createdAt))
     .all()
 

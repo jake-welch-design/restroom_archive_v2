@@ -1,5 +1,13 @@
-import { scrypt, randomBytes, timingSafeEqual } from 'crypto'
+import { scrypt, randomBytes, timingSafeEqual, createHash } from 'crypto'
 import { promisify } from 'util'
+
+export function generateToken(): string {
+  return randomBytes(32).toString('hex')
+}
+
+export function hashToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex')
+}
 
 const scryptAsync = promisify(scrypt)
 
