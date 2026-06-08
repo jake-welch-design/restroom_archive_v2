@@ -239,13 +239,13 @@ function goPrev() {
   .panel {
     flex: 0 0 auto;
     width: auto;
-    height: calc(100dvh * 0.75); /* instead of 0.75 it was 2/3 */
+    height: calc(100dvh * 0.55); /* instead of 0.75 it was 2/3 */
     /* box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2); */
     transition: margin-top 0.35s ease;
   }
   .panel.closed {
     margin-left: 0;
-    margin-top: calc(-100dvh * 0.75); /* instead of 0.75 it was 2/3 */
+    margin-top: calc(-100dvh * 0.55); /* instead of 0.75 it was 2/3 */
   }
 
   .corner-title {
@@ -264,7 +264,7 @@ function goPrev() {
     position: fixed;
     left: auto;
     right: 16px;
-    top: calc(100dvh * 0.75); /* instead of 0.75 it was 2/3 */
+    top: calc(100dvh * 0.55); /* instead of 0.75 it was 2/3 */
     width: 77.5px;
     height: 18px;
     border-radius: 0 0 8px 8px;
@@ -276,11 +276,11 @@ function goPrev() {
     left: auto;
   }
   .caret {
-    transform: rotate(-90deg);
+    transform: rotate(90deg);
   }
   .caret.flip {
     display: inline-block;
-    transform: rotate(90deg);
+    transform: rotate(-90deg);
   }
   .bottom-nav {
     bottom: 0.75rem;

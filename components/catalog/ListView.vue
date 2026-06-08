@@ -420,6 +420,9 @@ function formatShortDate(iso: string) {
   line-height: 1;
   color: #000;
 }
+.col-name { order: 1; }
+.col-date { order: 2; }
+.col-loc  { order: 3; }
 .tbody {
   list-style: none;
   margin: 0;

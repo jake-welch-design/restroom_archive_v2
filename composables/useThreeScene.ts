@@ -506,8 +506,8 @@ export function useThreeScene(
     if (!povState.dragging) return;
     const dx = e.clientX - povState.lastX;
     const dy = e.clientY - povState.lastY;
-    povState.rotationY -= dx * 0.005;
-    povState.rotationX -= dy * 0.005;
+    povState.rotationY += dx * 0.005;
+    povState.rotationX += dy * 0.005;
     povState.rotationX = Math.max(
       -Math.PI / 2,
       Math.min(Math.PI / 2, povState.rotationX),

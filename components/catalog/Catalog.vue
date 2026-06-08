@@ -505,6 +505,7 @@ watch(data, maybeAutoSelect);
   align-items: center;
   cursor: pointer;
   color: #000;
+  isolation: isolate;
 }
 
 .date-icon-wrap:hover {
@@ -637,13 +638,19 @@ watch(data, maybeAutoSelect);
     font-size: 12px;
   }
   .controls {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 6px;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
     padding: 6px 8px;
   }
+  .controls-left {
+    gap: 12px;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
   .view-mode {
-    padding: 8px 0 0 0;
+    flex-shrink: 0;
+    gap: 12px;
   }
   .sub-header {
     padding: 6px 8px;
@@ -653,7 +660,7 @@ watch(data, maybeAutoSelect);
   }
   .search input {
     font-size: 12px;
-    width: 140px;
+    width: 60px;
   }
   .filter-panel {
     padding: 8px 8px;
