@@ -102,6 +102,112 @@ async function resendVerification() {
   }
 }
 
+// -------------- Change password --------------
+const changingPassword = ref(false);
+const currentPasswordDraft = ref("");
+const newPasswordDraft = ref("");
+const confirmPasswordDraft = ref("");
+const passwordLoading = ref(false);
+const passwordError = ref("");
+const passwordSuccess = ref(false);
+
+function startChangePassword() {
+  changingPassword.value = true;
+  currentPasswordDraft.value = "";
+  newPasswordDraft.value = "";
+  confirmPasswordDraft.value = "";
+  passwordError.value = "";
+  passwordSuccess.value = false;
+}
+
+function cancelChangePassword() {
+  changingPassword.value = false;
+  currentPasswordDraft.value = "";
+  newPasswordDraft.value = "";
+  confirmPasswordDraft.value = "";
+  passwordError.value = "";
+}
+
+// -------------- Delete account --------------
+const deletingAccount = ref(false);
+const deletePasswordDraft = ref("");
+const deleteUsernameConfirm = ref("");
+const deleteLoading = ref(false);
+const deleteError = ref("");
+
+function startDeleteAccount() {
+  deletingAccount.value = true;
+  deletePasswordDraft.value = "";
+  deleteUsernameConfirm.value = "";
+  deleteError.value = "";
+}
+
+function cancelDeleteAccount() {
+  deletingAccount.value = false;
+  deletePasswordDraft.value = "";
+  deleteUsernameConfirm.value = "";
+  deleteError.value = "";
+}
+
+async function confirmDeleteAccount() {
+  const expectedUsername = (user.value as { username?: string } | null)
+    ?.username;
+  if (!expectedUsername) return;
+  if (deleteUsernameConfirm.value !== expectedUsername) {
+    deleteError.value = "Username doesn't match.";
+    return;
+  }
+  deleteLoading.value = true;
+  deleteError.value = "";
+  try {
+    await $fetch("/api/me", {
+      method: "DELETE",
+      body: { password: deletePasswordDraft.value },
+    });
+    await refreshSession();
+    await navigateTo("/");
+  } catch (e: unknown) {
+    const err = e as { data?: { statusMessage?: string } };
+    deleteError.value =
+      err.data?.statusMessage ?? "Could not delete account.";
+  } finally {
+    deleteLoading.value = false;
+  }
+}
+
+async function saveNewPassword() {
+  if (newPasswordDraft.value.length < 8) {
+    passwordError.value = "Password must be at least 8 characters.";
+    return;
+  }
+  if (newPasswordDraft.value !== confirmPasswordDraft.value) {
+    passwordError.value = "Passwords do not match.";
+    return;
+  }
+  passwordLoading.value = true;
+  passwordError.value = "";
+  try {
+    await $fetch("/api/me/password", {
+      method: "PATCH",
+      body: {
+        currentPassword: currentPasswordDraft.value,
+        newPassword: newPasswordDraft.value,
+      },
+    });
+    passwordSuccess.value = true;
+    changingPassword.value = false;
+    currentPasswordDraft.value = "";
+    newPasswordDraft.value = "";
+    confirmPasswordDraft.value = "";
+  } catch (e: unknown) {
+    const err = e as { data?: { statusMessage?: string } };
+    passwordError.value =
+      err.data?.statusMessage ?? "Could not update password.";
+  } finally {
+    passwordLoading.value = false;
+  }
+}
+
 // -------------- Display name editor --------------
 const editingDisplayName = ref(false);
 const displayNameDraft = ref("");
@@ -482,6 +588,25 @@ const { data: annotationReports, refresh: refreshAnnotationReports } =
     default: () => [],
   });
 
+type AuditLogEntry = {
+  id: number;
+  action: string;
+  targetType: string;
+  targetId: number | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+  actor: { id: number; username: string; displayName: string | null } | null;
+};
+
+const auditLogOpen = ref(false);
+const { data: auditLog, refresh: refreshAuditLog } = await useFetch<
+  AuditLogEntry[]
+>("/api/admin/audit-log", {
+  server: false,
+  immediate: false,
+  default: () => [],
+});
+
 watch(
   isAdmin,
   async (v) => {
@@ -496,6 +621,41 @@ watch(
   },
   { immediate: true },
 );
+
+watch(auditLogOpen, async (v) => {
+  if (v && isAdmin.value) await refreshAuditLog();
+});
+
+const AUDIT_ACTION_LABEL: Record<string, string> = {
+  "user.approve": "approved user",
+  "user.reject": "rejected user request",
+  "user.ban": "banned user",
+  "user.mute": "muted user",
+  "user.unmute": "unmuted user",
+  "user.promote": "promoted user to admin",
+  "user.delete": "deleted user",
+  "user.rename": "renamed user",
+  "user.revoke-submission": "revoked submission access",
+  "restroom.publish": "published restroom",
+  "restroom.reject": "rejected restroom",
+  "restroom.dismiss-removal": "dismissed removal request",
+  "annotation.hide": "hid annotation",
+  "annotation.dismiss-reports": "dismissed annotation reports",
+};
+
+function auditActionLabel(action: string) {
+  return AUDIT_ACTION_LABEL[action] ?? action;
+}
+
+function auditMetadataSummary(metadata: Record<string, unknown> | null) {
+  if (!metadata) return "";
+  const parts: string[] = [];
+  if (typeof metadata.days === "number") parts.push(`${metadata.days}d`);
+  if (typeof metadata.username === "string") parts.push(`→ @${metadata.username}`);
+  if (typeof metadata.message === "string" && metadata.message)
+    parts.push(`"${metadata.message}"`);
+  return parts.join(" · ");
+}
 
 async function hideReportedAnnotation(annotationId: number) {
   const key = `ann-hide-${annotationId}`;
@@ -909,6 +1069,14 @@ const roleLabel = computed(() => {
                   : "Create account"
           }}
         </button>
+
+        <NuxtLink
+          v-if="authTab === 'signin'"
+          to="/forgot-password"
+          class="forgot-password-link"
+        >
+          Forgot your password?
+        </NuxtLink>
       </form>
     </div>
 
@@ -919,11 +1087,20 @@ const roleLabel = computed(() => {
       </div>
 
       <div v-if="!emailVerified" class="verify-email-banner">
-        <span>Your email address is not verified. Some actions require verification.</span>
-        <span v-if="resendSent" class="verify-sent">Verification email sent — check your inbox.</span>
+        <span
+          >Your email address is not verified. Some actions require
+          verification.</span
+        >
+        <span v-if="resendSent" class="verify-sent"
+          >Verification email sent — check your inbox.</span
+        >
         <template v-else>
           <span v-if="resendError" class="verify-error">{{ resendError }}</span>
-          <button class="verify-resend-btn" :disabled="resendLoading" @click="resendVerification">
+          <button
+            class="verify-resend-btn"
+            :disabled="resendLoading"
+            @click="resendVerification"
+          >
             {{ resendLoading ? "Sending…" : "Resend verification email" }}
           </button>
         </template>
@@ -997,6 +1174,75 @@ const roleLabel = computed(() => {
       <p v-if="myActionError" class="form-error action-error">
         {{ myActionError }}
       </p>
+
+      <div v-if="!changingPassword" class="change-password-collapsed">
+        <button
+          type="button"
+          class="link-btn change-password-btn"
+          @click="startChangePassword"
+        >
+          Change password
+        </button>
+        <span v-if="passwordSuccess" class="password-success"
+          >Password updated.</span
+        >
+      </div>
+      <section v-else class="section">
+        <form class="form" @submit.prevent="saveNewPassword">
+          <h2 class="section-title">Change password</h2>
+          <label class="field">
+            <span class="field-label">Current password</span>
+            <input
+              v-model="currentPasswordDraft"
+              type="password"
+              autocomplete="current-password"
+              required
+              class="field-input"
+            />
+          </label>
+          <label class="field">
+            <span class="field-label">New password</span>
+            <input
+              v-model="newPasswordDraft"
+              type="password"
+              autocomplete="new-password"
+              required
+              minlength="8"
+              class="field-input"
+            />
+            <span class="field-hint">Minimum 8 characters.</span>
+          </label>
+          <label class="field">
+            <span class="field-label">Confirm new password</span>
+            <input
+              v-model="confirmPasswordDraft"
+              type="password"
+              autocomplete="new-password"
+              required
+              minlength="8"
+              class="field-input"
+            />
+          </label>
+          <p v-if="passwordError" class="form-error">{{ passwordError }}</p>
+          <div class="change-password-actions">
+            <button
+              type="submit"
+              class="primary-btn"
+              :disabled="passwordLoading"
+            >
+              {{ passwordLoading ? "Saving…" : "Update password" }}
+            </button>
+            <button
+              type="button"
+              class="link-btn"
+              :disabled="passwordLoading"
+              @click="cancelChangePassword"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </section>
 
       <!-- Approved: submit form -->
       <section v-if="canSubmit" class="section">
@@ -1334,6 +1580,60 @@ const roleLabel = computed(() => {
             </li>
           </ul>
         </template>
+      </section>
+
+      <!-- Delete account -->
+      <section v-if="!isAdmin" class="section danger-section">
+        <div v-if="!deletingAccount" class="delete-collapsed">
+          <button type="button" class="link-btn delete-link" @click="startDeleteAccount">
+            Delete account
+          </button>
+        </div>
+        <form v-else class="form delete-form" @submit.prevent="confirmDeleteAccount">
+          <h2 class="section-title danger-title">Delete your account</h2>
+          <p class="danger-warning">
+            This will permanently remove your account, your annotations, and any
+            pending submissions. Published restrooms you submitted will stay in
+            the archive but will no longer show your name.
+            <strong>This cannot be undone.</strong>
+          </p>
+          <label class="field">
+            <span class="field-label">
+              Type your username <code class="confirm-code">{{ (user as { username?: string } | null)?.username }}</code> to confirm
+            </span>
+            <input
+              v-model="deleteUsernameConfirm"
+              type="text"
+              autocomplete="off"
+              required
+              class="field-input"
+            />
+          </label>
+          <label class="field">
+            <span class="field-label">Current password</span>
+            <input
+              v-model="deletePasswordDraft"
+              type="password"
+              autocomplete="current-password"
+              required
+              class="field-input"
+            />
+          </label>
+          <p v-if="deleteError" class="form-error">{{ deleteError }}</p>
+          <div class="delete-actions">
+            <button type="submit" class="danger-btn" :disabled="deleteLoading">
+              {{ deleteLoading ? "Deleting…" : "Permanently delete account" }}
+            </button>
+            <button
+              type="button"
+              class="link-btn"
+              :disabled="deleteLoading"
+              @click="cancelDeleteAccount"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
       </section>
 
       <!-- Admin queues -->
@@ -1846,6 +2146,51 @@ const roleLabel = computed(() => {
             </li>
           </ul>
         </section>
+
+        <section class="section">
+          <button
+            type="button"
+            class="section-title section-toggle"
+            :aria-expanded="auditLogOpen"
+            @click="auditLogOpen = !auditLogOpen"
+          >
+            <span class="caret">{{ auditLogOpen ? "▾" : "▸" }}</span>
+            Audit log
+          </button>
+
+          <template v-if="auditLogOpen">
+            <div v-if="!auditLog?.length" class="empty">
+              No admin actions recorded yet.
+            </div>
+            <ul v-else class="simple-list audit-list">
+              <li v-for="entry in auditLog" :key="entry.id" class="simple-row audit-row">
+                <div class="simple-main">
+                  <span class="simple-title">
+                    <UserAttribution
+                      v-if="entry.actor"
+                      :user="entry.actor"
+                      fallback="deleted admin"
+                    />
+                    <span v-else class="dim">deleted admin</span>
+                    <span class="audit-action"> {{ auditActionLabel(entry.action) }}</span>
+                    <span v-if="entry.targetId" class="audit-target">
+                      #{{ entry.targetId }}
+                    </span>
+                  </span>
+                  <span class="simple-meta">
+                    {{ entry.createdAt }}
+                    <span
+                      v-if="auditMetadataSummary(entry.metadata)"
+                      class="audit-meta-summary"
+                    >
+                      · {{ auditMetadataSummary(entry.metadata) }}
+                    </span>
+                  </span>
+                </div>
+              </li>
+            </ul>
+          </template>
+        </section>
       </template>
     </div>
   </div>
@@ -2003,29 +2348,66 @@ const roleLabel = computed(() => {
 }
 
 .verify-email-banner {
-  background: #7a5a00;
-  color: #ffe;
+  background: #f4f4f4;
+  color: #000;
   padding: 12px 16px;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.5;
   margin-bottom: 16px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 12px;
+  border-left: 3px solid #000;
 }
 .verify-resend-btn {
   background: transparent;
-  border: 1px solid rgba(255,255,200,0.5);
-  color: #ffe;
-  font-size: 12px;
-  padding: 3px 10px;
+  border: 1px solid #000;
+  color: #000;
+  font-size: 13px;
+  padding: 4px 10px;
   cursor: pointer;
   font-family: inherit;
 }
-.verify-resend-btn:disabled { opacity: 0.5; cursor: default; }
-.verify-sent { font-style: italic; opacity: 0.85; }
-.verify-error { color: #ffaaaa; }
+.verify-resend-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.verify-sent {
+  font-style: italic;
+  color: #666;
+}
+.verify-error {
+  color: #c33;
+}
+
+.forgot-password-link {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: 14px;
+  color: #000;
+  text-decoration: underline;
+  align-self: flex-start;
+}
+
+.change-password-collapsed {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+.change-password-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.password-success {
+  font-size: 14px;
+  color: #666;
+  font-style: italic;
+}
 
 /* Sign-up intro */
 .signup-intro {
@@ -2205,6 +2587,65 @@ const roleLabel = computed(() => {
   text-decoration: underline;
   align-self: flex-start;
 }
+.change-password-btn {
+  padding: 0;
+}
+.audit-action {
+  color: #000;
+}
+.audit-target {
+  color: #888;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 13px;
+  margin-left: 4px;
+}
+.audit-meta-summary {
+  color: #666;
+  word-break: break-word;
+}
+.delete-link {
+  padding: 0;
+  color: #c33;
+}
+.danger-section {
+  margin-top: 40px;
+}
+.danger-title {
+  color: #c33;
+  border-bottom-color: #c33;
+}
+.danger-warning {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #000;
+  background: #fbeaea;
+  border-left: 3px solid #c33;
+  padding: 10px 12px;
+}
+.confirm-code {
+  font-family: ui-monospace, Menlo, monospace;
+  background: #f4f4f4;
+  padding: 1px 6px;
+  font-size: 13px;
+}
+.delete-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.danger-btn {
+  background: #c33;
+  color: #fff;
+  border: 0;
+  padding: 10px 24px;
+  font: inherit;
+  font-size: 16px;
+  cursor: pointer;
+  align-self: flex-start;
+}
+.danger-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.danger-btn:hover:not(:disabled) { background: #a22; }
 
 /* Admin sections */
 .section {

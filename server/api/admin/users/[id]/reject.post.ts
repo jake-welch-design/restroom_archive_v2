@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { useDb, schema } from '~~/server/utils/db'
 import { requireRole } from '~~/server/utils/requireRole'
 import { adminMessagePatch } from '~~/server/utils/adminMessage'
+import { recordAdminAction } from '~~/server/utils/auditLog'
 
 const Body = z.object({
   message: z.string().max(500).optional(),
@@ -35,6 +36,8 @@ export default defineEventHandler(async (event) => {
     .get()
 
   if (!row) throw createError({ statusCode: 404, statusMessage: 'User not found or already approved' })
+
+  await recordAdminAction(event, 'user.reject', 'user', id, body.message ? { message: body.message } : undefined)
 
   return { ok: true }
 })

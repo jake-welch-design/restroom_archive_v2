@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { useDb, schema } from '~~/server/utils/db'
 import { requireRole } from '~~/server/utils/requireRole'
 import { validateUsername } from '~~/server/utils/username'
+import { recordAdminAction } from '~~/server/utils/auditLog'
 
 const Body = z.object({
   username: z.string().min(1).max(40),
@@ -38,6 +39,8 @@ export default defineEventHandler(async (event) => {
     .update(schema.users)
     .set({ username: v.value })
     .where(eq(schema.users.id, id))
+
+  await recordAdminAction(event, 'user.rename', 'user', id, { username: v.value })
 
   return { ok: true, username: v.value }
 })

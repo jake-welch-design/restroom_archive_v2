@@ -11,7 +11,7 @@ async function send(to: string, subject: string, html: string) {
     throw createError({ statusCode: 500, statusMessage: 'Email service is not configured.' })
   }
 
-  const res = await fetch('https://api.useplunk.com/v1/send', {
+  const res = await fetch('https://next-api.useplunk.com/v1/send', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

@@ -99,6 +99,32 @@ export const emailVerificationTokens = sqliteTable('email_verification_tokens', 
   userIdIdx: index('idx_evt_user_id').on(t.userId),
 }))
 
+export const passwordResetTokens = sqliteTable('password_reset_tokens', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  tokenHash: text('token_hash').notNull(),
+  expiresAt: text('expires_at').notNull(),
+  createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
+  usedAt: text('used_at'),
+}, (t) => ({
+  tokenHashIdx: index('idx_prt_token_hash').on(t.tokenHash),
+  userIdIdx: index('idx_prt_user_id').on(t.userId),
+}))
+
+export const adminAuditLog = sqliteTable('admin_audit_log', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  actorId: integer('actor_id').references(() => users.id, { onDelete: 'set null' }),
+  action: text('action').notNull(),
+  targetType: text('target_type').notNull(),
+  targetId: integer('target_id'),
+  metadata: text('metadata'),
+  createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
+}, (t) => ({
+  createdAtIdx: index('idx_audit_log_created_at').on(t.createdAt),
+  actorIdx: index('idx_audit_log_actor').on(t.actorId),
+  targetIdx: index('idx_audit_log_target').on(t.targetType, t.targetId),
+}))
+
 export type User = typeof users.$inferSelect
 export type Restroom = typeof restrooms.$inferSelect
 export type Annotation = typeof annotations.$inferSelect

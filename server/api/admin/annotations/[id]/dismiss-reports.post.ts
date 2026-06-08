@@ -1,6 +1,7 @@
 import { eq, isNull, and, sql } from 'drizzle-orm'
 import { useDb, schema } from '~~/server/utils/db'
 import { requireRole } from '~~/server/utils/requireRole'
+import { recordAdminAction } from '~~/server/utils/auditLog'
 
 export default defineEventHandler(async (event) => {
   const actor = requireRole(event, 'admin')
@@ -25,6 +26,8 @@ export default defineEventHandler(async (event) => {
       eq(schema.annotationReports.annotationId, id),
       isNull(schema.annotationReports.resolvedAt),
     ))
+
+  await recordAdminAction(event, 'annotation.dismiss-reports', 'annotation', id)
 
   return { ok: true }
 })

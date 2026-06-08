@@ -2,6 +2,7 @@ import { eq, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { useDb, schema } from '~~/server/utils/db'
 import { requireRole } from '~~/server/utils/requireRole'
+import { recordAdminAction } from '~~/server/utils/auditLog'
 
 const Body = z.object({
   message: z.string().trim().max(500).optional(),
@@ -40,6 +41,8 @@ export default defineEventHandler(async (event) => {
     env?.MODELS?.delete(row.file),
     row.thumbKey ? env?.THUMBS?.delete(row.thumbKey) : Promise.resolve(),
   ])
+
+  await recordAdminAction(event, 'restroom.reject', 'restroom', id, message ? { message } : undefined)
 
   return { ok: true }
 })

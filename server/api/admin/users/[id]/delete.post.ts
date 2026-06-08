@@ -1,6 +1,7 @@
 import { eq, sql } from 'drizzle-orm'
 import { useDb, schema } from '~~/server/utils/db'
 import { requireRole } from '~~/server/utils/requireRole'
+import { recordAdminAction } from '~~/server/utils/auditLog'
 
 export default defineEventHandler(async (event) => {
   const actor = requireRole(event, 'admin')
@@ -46,6 +47,8 @@ export default defineEventHandler(async (event) => {
   await db
     .delete(schema.users)
     .where(eq(schema.users.id, id))
+
+  await recordAdminAction(event, 'user.delete', 'user', id)
 
   return { ok: true }
 })

@@ -1,6 +1,7 @@
 import { eq, sql } from 'drizzle-orm'
 import { useDb, schema } from '~~/server/utils/db'
 import { requireRole } from '~~/server/utils/requireRole'
+import { recordAdminAction } from '~~/server/utils/auditLog'
 
 export default defineEventHandler(async (event) => {
   requireRole(event, 'admin')
@@ -18,6 +19,8 @@ export default defineEventHandler(async (event) => {
     .get()
 
   if (!row) throw createError({ statusCode: 404, statusMessage: 'Restroom not found' })
+
+  await recordAdminAction(event, 'restroom.publish', 'restroom', id)
 
   return { ok: true, slug: row.slug }
 })

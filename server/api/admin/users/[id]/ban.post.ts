@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { useDb, schema } from '~~/server/utils/db'
 import { requireRole } from '~~/server/utils/requireRole'
 import { adminMessagePatch } from '~~/server/utils/adminMessage'
+import { recordAdminAction } from '~~/server/utils/auditLog'
 
 const Body = z.object({
   message: z.string().max(500).optional(),
@@ -43,6 +44,8 @@ export default defineEventHandler(async (event) => {
     .update(schema.restrooms)
     .set({ status: 'hidden', updatedAt: sql`(datetime('now'))` })
     .where(eq(schema.restrooms.submittedBy, id))
+
+  await recordAdminAction(event, 'user.ban', 'user', id, body.message ? { message: body.message } : undefined)
 
   return { ok: true }
 })

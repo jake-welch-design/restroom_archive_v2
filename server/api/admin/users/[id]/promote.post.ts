@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { useDb, schema } from '~~/server/utils/db'
 import { requireRole } from '~~/server/utils/requireRole'
 import { adminMessagePatch } from '~~/server/utils/adminMessage'
+import { recordAdminAction } from '~~/server/utils/auditLog'
 
 const Body = z.object({
   message: z.string().max(500).optional(),
@@ -35,6 +36,8 @@ export default defineEventHandler(async (event) => {
       ...adminMessagePatch(body.message),
     })
     .where(eq(schema.users.id, id))
+
+  await recordAdminAction(event, 'user.promote', 'user', id, body.message ? { message: body.message } : undefined)
 
   return { ok: true }
 })

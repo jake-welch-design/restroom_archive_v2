@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { useDb, schema } from '~~/server/utils/db'
 import { requireRole } from '~~/server/utils/requireRole'
 import { adminMessagePatch } from '~~/server/utils/adminMessage'
+import { recordAdminAction } from '~~/server/utils/auditLog'
 
 const Body = z.object({
   days: z.number().int().positive().max(3650),
@@ -36,6 +37,8 @@ export default defineEventHandler(async (event) => {
       ...adminMessagePatch(body.message),
     })
     .where(eq(schema.users.id, id))
+
+  await recordAdminAction(event, 'user.mute', 'user', id, { days: body.days, ...(body.message ? { message: body.message } : {}) })
 
   return { ok: true }
 })

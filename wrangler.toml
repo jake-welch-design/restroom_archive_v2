@@ -21,7 +21,7 @@ bucket_name = "restroom-archive-thumbs"
 # Public base URLs override nuxt runtimeConfig.public.* at build time via env vars.
 # Until the custom domain is attached these can stay pointed at R2's public dev URL
 # or a Pages worker route; set via `wrangler pages secret` / dashboard for prod.
-NUXT_PUBLIC_SITE_URL = ""
+NUXT_PUBLIC_SITE_URL = "https://restroom-archive-v2.pages.dev"
 NUXT_PUBLIC_MODELS_BASE_URL = ""
 NUXT_PUBLIC_THUMBS_BASE_URL = ""
 
