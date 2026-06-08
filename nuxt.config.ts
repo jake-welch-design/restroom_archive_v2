@@ -46,6 +46,7 @@ export default defineNuxtConfig({
 
   runtimeConfig: {
     turnstileSecretKey: "",
+    plunkApiKey: "", // overridden by NUXT_PLUNK_API_KEY env var
     session: {
       password: "", // overridden by NUXT_SESSION_PASSWORD env var
       maxAge: 60 * 60 * 24 * 30, // 30 days

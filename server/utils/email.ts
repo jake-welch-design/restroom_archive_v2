@@ -1,25 +1,33 @@
-const FROM = { email: 'noreply@restroomarchive.com', name: 'The Restroom Archive' }
+const FROM_EMAIL = 'noreply@restroomarchive.com'
+const FROM_NAME = 'The Restroom Archive'
 
 function siteUrl() {
   return useRuntimeConfig().public.siteUrl || 'https://restroomarchive.com'
 }
 
-async function send(to: string, subject: string, html: string, text: string) {
-  const res = await fetch('https://api.mailchannels.net/tx/v1/send', {
+async function send(to: string, subject: string, html: string) {
+  const apiKey = useRuntimeConfig().plunkApiKey
+  if (!apiKey) {
+    throw createError({ statusCode: 500, statusMessage: 'Email service is not configured.' })
+  }
+
+  const res = await fetch('https://api.useplunk.com/v1/send', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
     body: JSON.stringify({
-      from: FROM,
+      to,
       subject,
-      content: [
-        { type: 'text/plain', value: text },
-        { type: 'text/html', value: html },
-      ],
-      personalizations: [{ to: [{ email: to }] }],
+      body: html,
+      subscribed: true,
+      name: FROM_NAME,
+      from: FROM_EMAIL,
     }),
   })
 
-  if (!res.ok && res.status !== 202) {
+  if (!res.ok) {
     const body = await res.text().catch(() => '')
     throw createError({ statusCode: 500, statusMessage: `Email send failed: ${res.status} ${body}` })
   }
@@ -34,7 +42,6 @@ export async function sendVerificationEmail(to: string, token: string) {
 <p>Click the link below to verify your email address. The link expires in 24 hours.</p>
 <p><a href="${link}">${link}</a></p>
 <p style="color:#999;font-size:12px">If you didn't create this account, you can ignore this email.</p>`,
-    `Verify your Restroom Archive account\n\nClick the link below to verify your email. Expires in 24 hours.\n\n${link}\n\nIf you didn't create this account, ignore this email.`,
   )
 }
 
@@ -47,6 +54,5 @@ export async function sendPasswordResetEmail(to: string, token: string) {
 <p>Click the link below to set a new password. The link expires in 1 hour.</p>
 <p><a href="${link}">${link}</a></p>
 <p style="color:#999;font-size:12px">If you didn't request this, ignore this email — your password won't change.</p>`,
-    `Reset your Restroom Archive password\n\nClick the link below to set a new password. Expires in 1 hour.\n\n${link}\n\nIf you didn't request this, ignore this email.`,
   )
 }
