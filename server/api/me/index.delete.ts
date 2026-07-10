@@ -51,6 +51,16 @@ export default defineEventHandler(async (event) => {
     .where(eq(schema.annotationReports.reporterId, user.id))
 
   await db
+    .update(schema.annotationReports)
+    .set({ resolvedBy: null })
+    .where(eq(schema.annotationReports.resolvedBy, user.id))
+
+  await db
+    .update(schema.annotations)
+    .set({ hiddenBy: null })
+    .where(eq(schema.annotations.hiddenBy, user.id))
+
+  await db
     .delete(schema.annotations)
     .where(eq(schema.annotations.authorId, user.id))
 

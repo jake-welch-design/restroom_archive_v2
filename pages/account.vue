@@ -8,7 +8,6 @@ const {
   isMuted,
   mutedUntil,
   adminMessage,
-  emailVerified,
   refreshSession,
   signout,
 } = useAuth();
@@ -24,43 +23,42 @@ const SUBMISSION_AGREEMENTS = [
 ];
 
 // -------------- Auth form (logged-out) --------------
-const authTab = ref<"signin" | "signup">("signin");
+// Sign-ups are invite-only during the beta: the second tab is an access
+// application, not an account form. Approved applicants finish signing up via
+// the emailed invite link (/join).
+const authTab = ref<"signin" | "apply">("signin");
 const email = ref("");
 const password = ref("");
-const username = ref("");
-const displayName = ref("");
 const turnstileToken = ref("");
 const authError = ref("");
 const authLoading = ref(false);
 
+// Turnstile sometimes paints its "success" UI a beat before the token reaches
+// the v-model ref. Wait briefly so a fast Enter-key submit (or password manager
+// autofill) doesn't race past it. Returns false if no token ever arrives.
+async function waitForToken(tokenRef: Ref<string>) {
+  for (let i = 0; i < 20 && !tokenRef.value; i++) {
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  return !!tokenRef.value;
+}
+
 async function submitAuth() {
-  if (!turnstileToken.value) {
-    // Turnstile sometimes paints its "success" UI a beat before the token
-    // reaches the v-model ref. Wait briefly so a fast Enter-key submit
-    // (or password manager autofill) doesn't race past it.
-    for (let i = 0; i < 20 && !turnstileToken.value; i++) {
-      await new Promise((r) => setTimeout(r, 100));
-    }
-    if (!turnstileToken.value) {
-      authError.value = "Still verifying — please wait a moment and try again.";
-      return;
-    }
+  if (!(await waitForToken(turnstileToken))) {
+    authError.value = "Still verifying — please wait a moment and try again.";
+    return;
   }
   authError.value = "";
   authLoading.value = true;
   try {
-    const endpoint =
-      authTab.value === "signin" ? "/api/auth/signin" : "/api/auth/signup";
-    const body: Record<string, string> = {
-      email: email.value,
-      password: password.value,
-      turnstileToken: turnstileToken.value,
-    };
-    if (authTab.value === "signup") {
-      body.username = username.value;
-      if (displayName.value) body.displayName = displayName.value;
-    }
-    await $fetch(endpoint, { method: "POST", body });
+    await $fetch("/api/auth/signin", {
+      method: "POST",
+      body: {
+        email: email.value,
+        password: password.value,
+        turnstileToken: turnstileToken.value,
+      },
+    });
     await refreshSession();
   } catch (e: unknown) {
     const err = e as { data?: { statusMessage?: string }; message?: string };
@@ -72,34 +70,59 @@ async function submitAuth() {
   }
 }
 
-function switchTab(tab: "signin" | "signup") {
-  authTab.value = tab;
-  authError.value = "";
-  turnstileToken.value = "";
-  if (tab === "signin") {
-    username.value = "";
-    displayName.value = "";
+// -------------- Beta-archivist access application --------------
+const applyEmail = ref("");
+const applyDisplayName = ref("");
+const applySocials = ref("");
+const applyFoundVia = ref("");
+const applyReason = ref("");
+const applyAgree = ref(false);
+const applyToken = ref("");
+const applyError = ref("");
+const applyLoading = ref(false);
+const applySubmitted = ref(false);
+
+async function submitApplication() {
+  if (!applyAgree.value) {
+    applyError.value = "Please agree to the archivist terms to apply.";
+    return;
+  }
+  if (!(await waitForToken(applyToken))) {
+    applyError.value = "Still verifying — please wait a moment and try again.";
+    return;
+  }
+  applyError.value = "";
+  applyLoading.value = true;
+  try {
+    await $fetch("/api/beta/apply", {
+      method: "POST",
+      body: {
+        email: applyEmail.value,
+        displayName: applyDisplayName.value,
+        socials: applySocials.value || undefined,
+        foundVia: applyFoundVia.value,
+        reason: applyReason.value,
+        agreeTerms: applyAgree.value,
+        turnstileToken: applyToken.value,
+      },
+    });
+    applySubmitted.value = true;
+  } catch (e: unknown) {
+    const err = e as { data?: { statusMessage?: string }; message?: string };
+    applyError.value =
+      err.data?.statusMessage ?? err.message ?? "Something went wrong.";
+    applyToken.value = "";
+  } finally {
+    applyLoading.value = false;
   }
 }
 
-// -------------- Email verification banner --------------
-const resendLoading = ref(false);
-const resendSent = ref(false);
-const resendError = ref("");
-
-async function resendVerification() {
-  resendLoading.value = true;
-  resendError.value = "";
-  try {
-    await $fetch("/api/auth/resend-verification", { method: "POST" });
-    resendSent.value = true;
-  } catch (e: unknown) {
-    const err = e as { data?: { statusMessage?: string } };
-    resendError.value =
-      err.data?.statusMessage ?? "Could not resend verification email.";
-  } finally {
-    resendLoading.value = false;
-  }
+function switchTab(tab: "signin" | "apply") {
+  authTab.value = tab;
+  authError.value = "";
+  applyError.value = "";
+  turnstileToken.value = "";
+  applyToken.value = "";
 }
 
 // -------------- Change password --------------
@@ -168,8 +191,7 @@ async function confirmDeleteAccount() {
     await navigateTo("/");
   } catch (e: unknown) {
     const err = e as { data?: { statusMessage?: string } };
-    deleteError.value =
-      err.data?.statusMessage ?? "Could not delete account.";
+    deleteError.value = err.data?.statusMessage ?? "Could not delete account.";
   } finally {
     deleteLoading.value = false;
   }
@@ -558,6 +580,23 @@ const { data: pendingUsers, refresh: refreshUserQueue } = await useFetch<
   default: () => [],
 });
 
+type BetaApplication = {
+  id: number;
+  email: string;
+  displayName: string | null;
+  socials: string | null;
+  foundVia: string | null;
+  reason: string;
+  createdAt: string;
+};
+
+const { data: betaApplications, refresh: refreshBetaApplications } =
+  await useFetch<BetaApplication[]>("/api/admin/beta-applications", {
+    server: false,
+    immediate: false,
+    default: () => [],
+  });
+
 const { data: removalRequests, refresh: refreshRemovalQueue } = await useFetch<
   RemovalRequest[]
 >("/api/admin/restrooms/removals", {
@@ -614,6 +653,7 @@ watch(
       await Promise.all([
         refreshRestroomQueue(),
         refreshUserQueue(),
+        refreshBetaApplications(),
         refreshRemovalQueue(),
         refreshAnnotationReports(),
       ]);
@@ -636,6 +676,8 @@ const AUDIT_ACTION_LABEL: Record<string, string> = {
   "user.delete": "deleted user",
   "user.rename": "renamed user",
   "user.revoke-submission": "revoked submission access",
+  "beta.approve": "approved beta application",
+  "beta.reject": "rejected beta application",
   "restroom.publish": "published restroom",
   "restroom.reject": "rejected restroom",
   "restroom.dismiss-removal": "dismissed removal request",
@@ -651,7 +693,8 @@ function auditMetadataSummary(metadata: Record<string, unknown> | null) {
   if (!metadata) return "";
   const parts: string[] = [];
   if (typeof metadata.days === "number") parts.push(`${metadata.days}d`);
-  if (typeof metadata.username === "string") parts.push(`→ @${metadata.username}`);
+  if (typeof metadata.username === "string")
+    parts.push(`→ @${metadata.username}`);
   if (typeof metadata.message === "string" && metadata.message)
     parts.push(`"${metadata.message}"`);
   return parts.join(" · ");
@@ -725,6 +768,18 @@ const rejectUser = (id: number) =>
   runAction(`u-reject-${id}`, `/api/admin/users/${id}/reject`, async () => {
     await Promise.all([refreshUserQueue(), refreshAccounts()]);
   });
+const approveBetaApplication = (id: number) =>
+  runAction(
+    `beta-approve-${id}`,
+    `/api/admin/beta-applications/${id}/approve`,
+    refreshBetaApplications,
+  );
+const rejectBetaApplication = (id: number) =>
+  runAction(
+    `beta-reject-${id}`,
+    `/api/admin/beta-applications/${id}/reject`,
+    refreshBetaApplications,
+  );
 const removeRestroom = (id: number) =>
   runAction(
     `rm-reject-${id}`,
@@ -981,19 +1036,19 @@ const roleLabel = computed(() => {
         <button
           type="button"
           class="tab-btn"
-          :class="{ active: authTab === 'signup' }"
-          @click="switchTab('signup')"
+          :class="{ active: authTab === 'apply' }"
+          @click="switchTab('apply')"
         >
-          Create account
+          Request access
         </button>
       </div>
 
-      <div v-if="authTab === 'signup'" class="signup-intro">
-        <h2 class="signup-intro-title">Become an archivist</h2>
-        <p>Leave annotations and submit restrooms to be part of the archive.</p>
-      </div>
-
-      <form class="form" @submit.prevent="submitAuth">
+      <!-- Sign in -->
+      <form
+        v-if="authTab === 'signin'"
+        class="form"
+        @submit.prevent="submitAuth"
+      >
         <label class="field">
           <span class="field-label">Email</span>
           <input
@@ -1005,50 +1060,16 @@ const roleLabel = computed(() => {
           />
         </label>
 
-        <label v-if="authTab === 'signup'" class="field">
-          <span class="field-label">Username</span>
-          <input
-            v-model="username"
-            type="text"
-            required
-            autocomplete="username"
-            minlength="3"
-            maxlength="20"
-            pattern="[a-z0-9_]+"
-            class="field-input"
-          />
-          <span class="field-hint"
-            >3–20 lowercase letters, numbers, or underscores. Cannot be
-            changed.</span
-          >
-        </label>
-
-        <label v-if="authTab === 'signup'" class="field">
-          <span class="field-label">Display name (optional)</span>
-          <input
-            v-model="displayName"
-            type="text"
-            autocomplete="name"
-            maxlength="25"
-            class="field-input"
-          />
-        </label>
-
         <label class="field">
           <span class="field-label">Password</span>
           <input
             v-model="password"
             type="password"
             required
-            :autocomplete="
-              authTab === 'signup' ? 'new-password' : 'current-password'
-            "
+            autocomplete="current-password"
             class="field-input"
           />
         </label>
-        <p v-if="authTab === 'signup'" class="field-hint">
-          Minimum 8 characters.
-        </p>
 
         <NuxtTurnstile v-model="turnstileToken" class="turnstile" />
 
@@ -1059,51 +1080,141 @@ const roleLabel = computed(() => {
           class="primary-btn"
           :disabled="authLoading || !turnstileToken"
         >
-          {{
-            authLoading
-              ? "…"
-              : !turnstileToken
-                ? "Verifying…"
-                : authTab === "signin"
-                  ? "Sign in"
-                  : "Create account"
-          }}
+          {{ authLoading ? "…" : !turnstileToken ? "Verifying…" : "Sign in" }}
         </button>
 
-        <NuxtLink
-          v-if="authTab === 'signin'"
-          to="/forgot-password"
-          class="forgot-password-link"
-        >
+        <NuxtLink to="/forgot-password" class="forgot-password-link">
           Forgot your password?
         </NuxtLink>
       </form>
+
+      <!-- Request access (beta-archivist application) -->
+      <template v-else>
+        <div class="signup-intro">
+          <h2 class="signup-intro-title">
+            Request access to be a beta-archivist!
+          </h2>
+          <p>
+            The archive is invite-only while we build out sign-up. Tell us a
+            little about yourself and we'll email you an invite if you're
+            approved.
+          </p>
+        </div>
+
+        <div v-if="applySubmitted" class="apply-success">
+          <p>
+            <strong>Application received.</strong> If you're approved, we'll
+            email you a link to finish setting up your account.
+          </p>
+        </div>
+
+        <form v-else class="form" @submit.prevent="submitApplication">
+          <label class="field">
+            <span class="field-label">Email</span>
+            <input
+              v-model="applyEmail"
+              type="email"
+              required
+              autocomplete="email"
+              class="field-input"
+            />
+          </label>
+
+          <label class="field">
+            <span class="field-label">Name</span>
+            <input
+              v-model="applyDisplayName"
+              type="text"
+              autocomplete="name"
+              required
+              maxlength="25"
+              class="field-input"
+            />
+          </label>
+
+          <label class="field">
+            <span class="field-label">Socials (optional)</span>
+            <input
+              v-model="applySocials"
+              type="text"
+              maxlength="300"
+              class="field-input"
+            />
+            <span class="field-hint"
+              >Instagram, website, wherever we can find you.</span
+            >
+          </label>
+
+          <label class="field">
+            <span class="field-label"
+              >How did you find the Restroom Archive?</span
+            >
+            <textarea
+              v-model="applyFoundVia"
+              required
+              maxlength="500"
+              rows="2"
+              class="field-input field-textarea"
+            />
+          </label>
+
+          <label class="field">
+            <span class="field-label">Why do you want to be an archivist?</span>
+            <textarea
+              v-model="applyReason"
+              required
+              maxlength="1000"
+              rows="4"
+              class="field-input field-textarea"
+            />
+          </label>
+
+          <div class="apply-terms">
+            <p class="apply-terms-title">The Archivist Agreement</p>
+            <p class="apply-terms-intro">
+              The mission of the The Restroom Archive is to carefully and
+              faithfully document restrooms captured as they are. As an
+              archivist, I agree to abide by the submission rules:
+            </p>
+            <ul class="apply-terms-list">
+              <li v-for="(rule, i) in SUBMISSION_AGREEMENTS" :key="i">
+                {{ rule }}
+              </li>
+            </ul>
+            <label class="apply-terms-check">
+              <input v-model="applyAgree" type="checkbox" required />
+              <span
+                >I agree to abide by the submission rules and to uphold the
+                Restroom Archive's mission.</span
+              >
+            </label>
+          </div>
+
+          <NuxtTurnstile v-model="applyToken" class="turnstile" />
+
+          <p v-if="applyError" class="form-error">{{ applyError }}</p>
+
+          <button
+            type="submit"
+            class="primary-btn"
+            :disabled="applyLoading || !applyToken"
+          >
+            {{
+              applyLoading
+                ? "…"
+                : !applyToken
+                  ? "Verifying…"
+                  : "Submit application"
+            }}
+          </button>
+        </form>
+      </template>
     </div>
 
     <!-- Logged-in -->
     <div v-else class="body-section">
       <div v-if="adminMessage" class="admin-message-banner">
         <strong>From admin:</strong> {{ adminMessage }}
-      </div>
-
-      <div v-if="!emailVerified" class="verify-email-banner">
-        <span
-          >Your email address is not verified. Some actions require
-          verification.</span
-        >
-        <span v-if="resendSent" class="verify-sent"
-          >Verification email sent — check your inbox.</span
-        >
-        <template v-else>
-          <span v-if="resendError" class="verify-error">{{ resendError }}</span>
-          <button
-            class="verify-resend-btn"
-            :disabled="resendLoading"
-            @click="resendVerification"
-          >
-            {{ resendLoading ? "Sending…" : "Resend verification email" }}
-          </button>
-        </template>
       </div>
 
       <header class="account-header">
@@ -1585,11 +1696,19 @@ const roleLabel = computed(() => {
       <!-- Delete account -->
       <section v-if="!isAdmin" class="section danger-section">
         <div v-if="!deletingAccount" class="delete-collapsed">
-          <button type="button" class="link-btn delete-link" @click="startDeleteAccount">
+          <button
+            type="button"
+            class="link-btn delete-link"
+            @click="startDeleteAccount"
+          >
             Delete account
           </button>
         </div>
-        <form v-else class="form delete-form" @submit.prevent="confirmDeleteAccount">
+        <form
+          v-else
+          class="form delete-form"
+          @submit.prevent="confirmDeleteAccount"
+        >
           <h2 class="section-title danger-title">Delete your account</h2>
           <p class="danger-warning">
             This will permanently remove your account, your annotations, and any
@@ -1599,7 +1718,11 @@ const roleLabel = computed(() => {
           </p>
           <label class="field">
             <span class="field-label">
-              Type your username <code class="confirm-code">{{ (user as { username?: string } | null)?.username }}</code> to confirm
+              Type your username
+              <code class="confirm-code">{{
+                (user as { username?: string } | null)?.username
+              }}</code>
+              to confirm
             </span>
             <input
               v-model="deleteUsernameConfirm"
@@ -1764,6 +1887,68 @@ const roleLabel = computed(() => {
               </template>
             </div>
           </div>
+        </section>
+
+        <section class="section">
+          <h2 class="section-title">
+            Beta applications
+            <span v-if="betaApplications?.length" class="count">{{
+              betaApplications.length
+            }}</span>
+          </h2>
+
+          <div v-if="!betaApplications?.length" class="empty">
+            No applications pending.
+          </div>
+
+          <ul v-else class="simple-list">
+            <li
+              v-for="a in betaApplications"
+              :key="a.id"
+              class="simple-row beta-row"
+            >
+              <div class="simple-main">
+                <span class="simple-title">{{ a.displayName || a.email }}</span>
+                <span class="simple-meta"
+                  >{{ a.email }} · applied {{ a.createdAt }}</span
+                >
+                <dl class="beta-answers">
+                  <template v-if="a.socials">
+                    <dt>Socials</dt>
+                    <dd>{{ a.socials }}</dd>
+                  </template>
+                  <template v-if="a.foundVia">
+                    <dt>Found us via</dt>
+                    <dd>{{ a.foundVia }}</dd>
+                  </template>
+                  <dt>Why an archivist</dt>
+                  <dd>{{ a.reason }}</dd>
+                </dl>
+              </div>
+              <div class="simple-actions">
+                <button
+                  type="button"
+                  class="btn btn-publish"
+                  :disabled="actionLoading === `beta-approve-${a.id}`"
+                  @click="approveBetaApplication(a.id)"
+                >
+                  {{
+                    actionLoading === `beta-approve-${a.id}`
+                      ? "…"
+                      : "Approve & invite"
+                  }}
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-reject"
+                  :disabled="actionLoading === `beta-reject-${a.id}`"
+                  @click="rejectBetaApplication(a.id)"
+                >
+                  {{ actionLoading === `beta-reject-${a.id}` ? "…" : "Reject" }}
+                </button>
+              </div>
+            </li>
+          </ul>
         </section>
 
         <section class="section">
@@ -2163,7 +2348,11 @@ const roleLabel = computed(() => {
               No admin actions recorded yet.
             </div>
             <ul v-else class="simple-list audit-list">
-              <li v-for="entry in auditLog" :key="entry.id" class="simple-row audit-row">
+              <li
+                v-for="entry in auditLog"
+                :key="entry.id"
+                class="simple-row audit-row"
+              >
                 <div class="simple-main">
                   <span class="simple-title">
                     <UserAttribution
@@ -2172,7 +2361,9 @@ const roleLabel = computed(() => {
                       fallback="deleted admin"
                     />
                     <span v-else class="dim">deleted admin</span>
-                    <span class="audit-action"> {{ auditActionLabel(entry.action) }}</span>
+                    <span class="audit-action">
+                      {{ auditActionLabel(entry.action) }}</span
+                    >
                     <span v-if="entry.targetId" class="audit-target">
                       #{{ entry.targetId }}
                     </span>
@@ -2347,40 +2538,6 @@ const roleLabel = computed(() => {
   margin-right: 4px;
 }
 
-.verify-email-banner {
-  background: #f4f4f4;
-  color: #000;
-  padding: 12px 16px;
-  font-size: 14px;
-  line-height: 1.5;
-  margin-bottom: 16px;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 12px;
-  border-left: 3px solid #000;
-}
-.verify-resend-btn {
-  background: transparent;
-  border: 1px solid #000;
-  color: #000;
-  font-size: 13px;
-  padding: 4px 10px;
-  cursor: pointer;
-  font-family: inherit;
-}
-.verify-resend-btn:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-.verify-sent {
-  font-style: italic;
-  color: #666;
-}
-.verify-error {
-  color: #c33;
-}
-
 .forgot-password-link {
   background: transparent;
   border: 0;
@@ -2423,6 +2580,66 @@ const roleLabel = computed(() => {
   margin: 0;
   font-size: 14px;
   color: #666;
+}
+.apply-success {
+  background: #f4f4f4;
+  padding: 16px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #000;
+  max-width: 380px;
+  border-left: 3px solid #000;
+}
+.apply-success p {
+  margin: 0;
+}
+.apply-terms {
+  border: 1px solid #000;
+  padding: 12px 16px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #000;
+}
+.apply-terms-title {
+  margin: 0 0 6px;
+  font-weight: 700;
+}
+.apply-terms-intro {
+  margin: 0 0 8px;
+}
+.apply-terms-list {
+  margin: 0 0 12px;
+  padding-left: 18px;
+}
+.apply-terms-list li {
+  margin-bottom: 4px;
+}
+.apply-terms-check {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  cursor: pointer;
+}
+.apply-terms-check input {
+  margin: 2px 0 0;
+  flex-shrink: 0;
+}
+.beta-row {
+  align-items: flex-start;
+}
+.beta-answers {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #333;
+}
+.beta-answers dt {
+  font-weight: 700;
+  margin-top: 6px;
+}
+.beta-answers dd {
+  margin: 0;
+  white-space: pre-wrap;
 }
 
 /* Submission access request */
@@ -2644,8 +2861,13 @@ const roleLabel = computed(() => {
   cursor: pointer;
   align-self: flex-start;
 }
-.danger-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.danger-btn:hover:not(:disabled) { background: #a22; }
+.danger-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.danger-btn:hover:not(:disabled) {
+  background: #a22;
+}
 
 /* Admin sections */
 .section {

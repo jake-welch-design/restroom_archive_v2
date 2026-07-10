@@ -20,7 +20,6 @@ export default defineNitroPlugin(() => {
           bannedAt: schema.users.bannedAt,
           adminMessage: schema.users.adminMessage,
           adminMessageAt: schema.users.adminMessageAt,
-          emailVerifiedAt: schema.users.emailVerifiedAt,
         })
         .from(schema.users)
         .where(eq(schema.users.id, session.user.id))

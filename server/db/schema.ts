@@ -87,18 +87,6 @@ export const annotationReports = sqliteTable('annotation_reports', {
   openIdx: index('idx_annotation_reports_open').on(t.resolvedAt),
 }))
 
-export const emailVerificationTokens = sqliteTable('email_verification_tokens', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
-  userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  tokenHash: text('token_hash').notNull(),
-  expiresAt: text('expires_at').notNull(),
-  createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
-  usedAt: text('used_at'),
-}, (t) => ({
-  tokenHashIdx: index('idx_evt_token_hash').on(t.tokenHash),
-  userIdIdx: index('idx_evt_user_id').on(t.userId),
-}))
-
 export const passwordResetTokens = sqliteTable('password_reset_tokens', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
@@ -109,6 +97,29 @@ export const passwordResetTokens = sqliteTable('password_reset_tokens', {
 }, (t) => ({
   tokenHashIdx: index('idx_prt_token_hash').on(t.tokenHash),
   userIdIdx: index('idx_prt_user_id').on(t.userId),
+}))
+
+export const betaApplications = sqliteTable('beta_applications', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  email: text('email').notNull(),
+  displayName: text('display_name'),
+  socials: text('socials'),
+  foundVia: text('found_via'),
+  reason: text('reason').notNull(),
+  termsAcceptedAt: text('terms_accepted_at'),
+  status: text('status').notNull().default('pending'),
+  reviewedAt: text('reviewed_at'),
+  reviewedBy: integer('reviewed_by').references(() => users.id, { onDelete: 'set null' }),
+  inviteTokenHash: text('invite_token_hash'),
+  inviteExpiresAt: text('invite_expires_at'),
+  invitedAt: text('invited_at'),
+  claimedAt: text('claimed_at'),
+  userId: integer('user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
+}, (t) => ({
+  emailIdx: index('idx_beta_applications_email').on(t.email),
+  statusIdx: index('idx_beta_applications_status').on(t.status),
+  tokenHashIdx: index('idx_beta_applications_token_hash').on(t.inviteTokenHash),
 }))
 
 export const adminAuditLog = sqliteTable('admin_audit_log', {
@@ -129,3 +140,4 @@ export type User = typeof users.$inferSelect
 export type Restroom = typeof restrooms.$inferSelect
 export type Annotation = typeof annotations.$inferSelect
 export type AnnotationReport = typeof annotationReports.$inferSelect
+export type BetaApplication = typeof betaApplications.$inferSelect

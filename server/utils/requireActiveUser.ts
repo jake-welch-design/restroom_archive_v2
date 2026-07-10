@@ -16,13 +16,3 @@ export function requireActiveUser(event: H3Event, minimum: Role = 'archivist') {
 
   return user
 }
-
-export function requireVerifiedUser(event: H3Event, minimum: Role = 'archivist') {
-  const user = requireActiveUser(event, minimum)
-
-  if (!user.emailVerifiedAt) {
-    throw createError({ statusCode: 403, statusMessage: 'Please verify your email address before performing this action.' })
-  }
-
-  return user
-}
