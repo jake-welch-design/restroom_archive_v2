@@ -888,9 +888,9 @@ function accountStatusLabel(account: AccountRow): string {
   if (account.bannedAt) return "Banned";
   if (isAccountMuted(account)) return `Muted until ${account.mutedUntil}`;
   if (account.role === "admin") return "Admin";
-  if (account.approvedAt) return "Submission access";
-  if (account.submissionRequestedAt) return "Submission access requested";
-  return "Archivist";
+  if (account.approvedAt) return "Archivist";
+  if (account.submissionRequestedAt) return "Annotator · requested archivist access";
+  return "Annotator";
 }
 
 async function runAccountAction(
@@ -1014,7 +1014,8 @@ async function submitRename(a: AccountRow) {
 const roleLabel = computed(() => {
   if (!user.value) return "";
   if (isAdmin.value) return "Admin";
-  return "Archivist";
+  if (canSubmit.value) return "Archivist";
+  return "Annotator";
 });
 </script>
 
