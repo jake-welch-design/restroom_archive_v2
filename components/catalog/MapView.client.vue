@@ -18,6 +18,35 @@ let hoverPopup: maplibregl.Popup | null = null;
 let needsInitialFit = false;
 let initialPins: RestroomSummary[] = [];
 
+// Pins the user has already opened, persisted so the "already looked at"
+// state survives reloads. Viewed pins render dimmed + desaturated.
+const VIEWED_KEY = "ra:viewedPins";
+const viewedSlugs = new Set<string>();
+
+function loadViewedSlugs() {
+  try {
+    const raw = localStorage.getItem(VIEWED_KEY);
+    if (!raw) return;
+    const arr = JSON.parse(raw);
+    if (Array.isArray(arr)) {
+      for (const s of arr) if (typeof s === "string") viewedSlugs.add(s);
+    }
+  } catch {
+    // Ignore malformed / unavailable storage — viewed state is best-effort.
+  }
+}
+
+function markViewed(slug: string) {
+  if (viewedSlugs.has(slug)) return;
+  viewedSlugs.add(slug);
+  try {
+    localStorage.setItem(VIEWED_KEY, JSON.stringify([...viewedSlugs]));
+  } catch {
+    // Ignore storage write failures (private mode / quota).
+  }
+  updatePinData(props.rows);
+}
+
 function updatePinData(rows: RestroomSummary[]) {
   if (!map || !sourceReady) return;
   const pinned = rows.filter((r) => r.lat != null && r.lng != null);
@@ -26,7 +55,12 @@ function updatePinData(rows: RestroomSummary[]) {
     features: pinned.map((r) => ({
       type: "Feature" as const,
       geometry: { type: "Point" as const, coordinates: [r.lng!, r.lat!] },
-      properties: { slug: r.slug, name: r.name, date: r.date },
+      properties: {
+        slug: r.slug,
+        name: r.name,
+        date: r.date,
+        viewed: viewedSlugs.has(r.slug),
+      },
     })),
   });
   return pinned;
@@ -108,6 +142,7 @@ function initMap() {
     map.on("click", "restroom-pins", (e) => {
       const slug = e.features?.[0]?.properties?.slug as string | undefined;
       if (!slug) return;
+      markViewed(slug);
       emit("select", slug);
     });
 
@@ -183,6 +218,7 @@ function initMap() {
 }
 
 onMounted(() => {
+  loadViewedSlugs();
   nextTick(initMap);
 });
 
@@ -215,18 +251,39 @@ function flyToSelected(slug: string | null) {
   }
 }
 
+// Colour + opacity are property-driven so already-viewed pins read as dimmed
+// and desaturated, while the currently selected pin stays highlighted at full
+// strength. `selected` is a single slug, so it wins over the viewed state.
 function updateActivePin(slug: string | null) {
   if (!map || !sourceReady) return;
-  if (slug) {
-    map.setPaintProperty("restroom-pins", "circle-color", [
-      "case",
-      ["==", ["get", "slug"], slug],
-      "#ff8a8a",
-      "#ff0000",
-    ]);
-  } else {
-    map.setPaintProperty("restroom-pins", "circle-color", "#ff8a8a");
-  }
+  const isSelected: maplibregl.ExpressionSpecification = slug
+    ? ["==", ["get", "slug"], slug]
+    : ["literal", false];
+
+  map.setPaintProperty("restroom-pins", "circle-color", [
+    "case",
+    isSelected,
+    "#ff8a8a",
+    ["get", "viewed"],
+    "#c98f8f",
+    "#ff0000",
+  ]);
+  map.setPaintProperty("restroom-pins", "circle-opacity", [
+    "case",
+    isSelected,
+    1,
+    ["get", "viewed"],
+    0.45,
+    1,
+  ]);
+  map.setPaintProperty("restroom-pins", "circle-stroke-opacity", [
+    "case",
+    isSelected,
+    1,
+    ["get", "viewed"],
+    0.5,
+    1,
+  ]);
 }
 watch(
   () => props.selectedSlug,

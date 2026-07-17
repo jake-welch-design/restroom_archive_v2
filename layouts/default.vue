@@ -4,6 +4,14 @@ const { selected, selectedSlug, select } = useSelection();
 const randomPick = useRandomRestroom();
 const panelOpen = ref(true);
 
+// Measured by Catalog.vue so the tab lines up with the header strip exactly,
+// instead of relying on pixel constants that drift across platforms/fonts.
+const stripGeom = useStripGeom();
+const tabStyle = computed(() => ({
+  "--tab-top": `${stripGeom.value.top}px`,
+  "--tab-height": `${stripGeom.value.height}px`,
+}));
+
 function togglePanel() {
   panelOpen.value = !panelOpen.value;
 }
@@ -38,6 +46,7 @@ function goPrev() {
       type="button"
       class="expand-tab"
       :class="{ closed: !panelOpen }"
+      :style="tabStyle"
       :aria-label="panelOpen ? 'Hide catalog' : 'Show catalog'"
       @click="togglePanel"
     >
@@ -107,9 +116,12 @@ function goPrev() {
 .expand-tab {
   position: absolute;
   left: calc(clamp(360px, 50%, 864px) - 4px);
-  top: 61.5px;
+  /* Borderless tab that pokes past the panel edge: sit just under the controls'
+     top border and end just above the sub-header's bottom border (hence -1px).
+     Both borders belong to the panel and stop at its right edge. */
+  top: var(--tab-top, 61.5px);
   width: 22px;
-  height: 69px;
+  height: calc(var(--tab-height, 69px) - 1px);
   background: #fff;
   border: none;
   border-radius: 0 8px 8px 0;

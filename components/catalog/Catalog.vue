@@ -148,13 +148,63 @@ function maybeAutoSelect() {
 
 onMounted(maybeAutoSelect);
 watch(data, maybeAutoSelect);
+
+// --- Header-strip geometry ----------------------------------------------
+// The layout's `.expand-tab` must line up with the header strip (`.controls`
+// through the sub-header / list `.thead`). Rather than matching hand-tuned
+// pixel constants — which drift across platforms because of font metrics and
+// native control sizing — we measure the real rendered strip and publish it so
+// the tab derives its top/height from the same source of truth.
+const stripGeom = useStripGeom();
+const catalogEl = ref<HTMLElement | null>(null);
+const controlsEl = ref<HTMLElement | null>(null);
+
+function measureStrip() {
+  const cat = catalogEl.value;
+  const controls = controlsEl.value;
+  if (!cat || !controls) return;
+  const catTop = cat.getBoundingClientRect().top;
+  const cRect = controls.getBoundingClientRect();
+  // First strip element in document order: Catalog's own `.sub-header`
+  // (grid/map) or the ListView's `.thead` (list). Falls back to `.controls`.
+  const bottomEl = cat.querySelector<HTMLElement>(".sub-header, .thead");
+  const bottom = (bottomEl ?? controls).getBoundingClientRect().bottom;
+  const top = cRect.top - catTop;
+  const height = bottom - cRect.top;
+  if (height > 0) stripGeom.value = { top, height };
+}
+
+let ro: ResizeObserver | null = null;
+
+onMounted(() => {
+  nextTick(measureStrip);
+  ro = new ResizeObserver(() => measureStrip());
+  if (catalogEl.value) ro.observe(catalogEl.value);
+  if (controlsEl.value) ro.observe(controlsEl.value);
+  // Web-font swap is a primary source of cross-platform drift — re-measure once
+  // fonts are ready.
+  document.fonts?.ready.then(measureStrip).catch(() => {});
+});
+
+onBeforeUnmount(() => {
+  ro?.disconnect();
+  ro = null;
+});
+
+// The strip's bottom element swaps between views (thead ↔ sub-header), the
+// filter panel inserts a row, and in list view the `.thead` only mounts once
+// rows exist — re-measure after the DOM settles for any of these.
+watch(
+  [viewMode, filterOpen, pending, () => rows.value.length],
+  () => nextTick(measureStrip),
+);
 </script>
 
 <template>
-  <div class="catalog">
+  <div ref="catalogEl" class="catalog">
     <CatalogHeader />
 
-    <div class="controls">
+    <div ref="controlsEl" class="controls">
       <div class="controls-left">
         <label class="search">
           <button

@@ -25,6 +25,23 @@ function isTagActive(tag: string) {
   return props.activeTags.some((t) => t.toLowerCase() === lower);
 }
 
+// Previously-used descriptors across all loaded restrooms, ordered by
+// frequency — feeds the tag suggestion dropdown when editing an entry.
+const descriptorSuggestions = computed(() => {
+  const counts = new Map<string, { display: string; count: number }>();
+  for (const r of props.rows) {
+    for (const tag of r.descriptors ?? []) {
+      const key = tag.toLowerCase();
+      const existing = counts.get(key);
+      if (existing) existing.count++;
+      else counts.set(key, { display: tag, count: 1 });
+    }
+  }
+  return [...counts.values()]
+    .sort((a, b) => b.count - a.count || a.display.localeCompare(b.display))
+    .map((e) => e.display);
+});
+
 const { isAdmin, user } = useAuth();
 const { selectAnnotation } = useSelection();
 
@@ -265,7 +282,10 @@ function formatShortDate(iso: string) {
               </label>
               <div class="edit-field edit-field-full" @click.stop>
                 <span class="edit-label">Descriptors</span>
-                <TagInput v-model="editForm.descriptors" />
+                <TagInput
+                  v-model="editForm.descriptors"
+                  :suggestions="descriptorSuggestions"
+                />
               </div>
             </div>
             <p v-if="editError" class="edit-error">{{ editError }}</p>

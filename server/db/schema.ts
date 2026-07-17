@@ -99,29 +99,6 @@ export const passwordResetTokens = sqliteTable('password_reset_tokens', {
   userIdIdx: index('idx_prt_user_id').on(t.userId),
 }))
 
-export const betaApplications = sqliteTable('beta_applications', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
-  email: text('email').notNull(),
-  displayName: text('display_name'),
-  socials: text('socials'),
-  foundVia: text('found_via'),
-  reason: text('reason').notNull(),
-  termsAcceptedAt: text('terms_accepted_at'),
-  status: text('status').notNull().default('pending'),
-  reviewedAt: text('reviewed_at'),
-  reviewedBy: integer('reviewed_by').references(() => users.id, { onDelete: 'set null' }),
-  inviteTokenHash: text('invite_token_hash'),
-  inviteExpiresAt: text('invite_expires_at'),
-  invitedAt: text('invited_at'),
-  claimedAt: text('claimed_at'),
-  userId: integer('user_id').references(() => users.id, { onDelete: 'set null' }),
-  createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
-}, (t) => ({
-  emailIdx: index('idx_beta_applications_email').on(t.email),
-  statusIdx: index('idx_beta_applications_status').on(t.status),
-  tokenHashIdx: index('idx_beta_applications_token_hash').on(t.inviteTokenHash),
-}))
-
 export const adminAuditLog = sqliteTable('admin_audit_log', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   actorId: integer('actor_id').references(() => users.id, { onDelete: 'set null' }),
@@ -140,4 +117,3 @@ export type User = typeof users.$inferSelect
 export type Restroom = typeof restrooms.$inferSelect
 export type Annotation = typeof annotations.$inferSelect
 export type AnnotationReport = typeof annotationReports.$inferSelect
-export type BetaApplication = typeof betaApplications.$inferSelect

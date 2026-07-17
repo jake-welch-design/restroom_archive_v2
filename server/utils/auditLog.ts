@@ -1,7 +1,7 @@
 import type { H3Event } from 'h3'
 import { useDb, schema } from '~~/server/utils/db'
 
-export type AuditTargetType = 'user' | 'restroom' | 'annotation' | 'beta_application'
+export type AuditTargetType = 'user' | 'restroom' | 'annotation'
 
 export async function recordAdminAction(
   event: H3Event,

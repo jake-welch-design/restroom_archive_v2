@@ -23,12 +23,13 @@ const SUBMISSION_AGREEMENTS = [
 ];
 
 // -------------- Auth form (logged-out) --------------
-// Sign-ups are invite-only during the beta: the second tab is an access
-// application, not an account form. Approved applicants finish signing up via
-// the emailed invite link (/join).
-const authTab = ref<"signin" | "apply">("signin");
+// Sign in, or create a new account. New accounts start as Annotators and can
+// request submission access ("Archivist") from their account page afterwards.
+const authTab = ref<"signin" | "signup">("signin");
 const email = ref("");
 const password = ref("");
+const username = ref("");
+const displayName = ref("");
 const turnstileToken = ref("");
 const authError = ref("");
 const authLoading = ref(false);
@@ -51,14 +52,18 @@ async function submitAuth() {
   authError.value = "";
   authLoading.value = true;
   try {
-    await $fetch("/api/auth/signin", {
-      method: "POST",
-      body: {
-        email: email.value,
-        password: password.value,
-        turnstileToken: turnstileToken.value,
-      },
-    });
+    const url =
+      authTab.value === "signin" ? "/api/auth/signin" : "/api/auth/signup";
+    const body: Record<string, unknown> = {
+      email: email.value,
+      password: password.value,
+      turnstileToken: turnstileToken.value,
+    };
+    if (authTab.value === "signup") {
+      body.username = username.value;
+      if (displayName.value) body.displayName = displayName.value;
+    }
+    await $fetch(url, { method: "POST", body });
     await refreshSession();
   } catch (e: unknown) {
     const err = e as { data?: { statusMessage?: string }; message?: string };
@@ -70,59 +75,13 @@ async function submitAuth() {
   }
 }
 
-// -------------- Beta-archivist access application --------------
-const applyEmail = ref("");
-const applyDisplayName = ref("");
-const applySocials = ref("");
-const applyFoundVia = ref("");
-const applyReason = ref("");
-const applyAgree = ref(false);
-const applyToken = ref("");
-const applyError = ref("");
-const applyLoading = ref(false);
-const applySubmitted = ref(false);
-
-async function submitApplication() {
-  if (!applyAgree.value) {
-    applyError.value = "Please agree to the archivist terms to apply.";
-    return;
-  }
-  if (!(await waitForToken(applyToken))) {
-    applyError.value = "Still verifying — please wait a moment and try again.";
-    return;
-  }
-  applyError.value = "";
-  applyLoading.value = true;
-  try {
-    await $fetch("/api/beta/apply", {
-      method: "POST",
-      body: {
-        email: applyEmail.value,
-        displayName: applyDisplayName.value,
-        socials: applySocials.value || undefined,
-        foundVia: applyFoundVia.value,
-        reason: applyReason.value,
-        agreeTerms: applyAgree.value,
-        turnstileToken: applyToken.value,
-      },
-    });
-    applySubmitted.value = true;
-  } catch (e: unknown) {
-    const err = e as { data?: { statusMessage?: string }; message?: string };
-    applyError.value =
-      err.data?.statusMessage ?? err.message ?? "Something went wrong.";
-    applyToken.value = "";
-  } finally {
-    applyLoading.value = false;
-  }
-}
-
-function switchTab(tab: "signin" | "apply") {
+function switchTab(tab: "signin" | "signup") {
   authTab.value = tab;
   authError.value = "";
-  applyError.value = "";
-  turnstileToken.value = "";
-  applyToken.value = "";
+  if (tab === "signin") {
+    username.value = "";
+    displayName.value = "";
+  }
 }
 
 // -------------- Change password --------------
@@ -149,6 +108,52 @@ function cancelChangePassword() {
   newPasswordDraft.value = "";
   confirmPasswordDraft.value = "";
   passwordError.value = "";
+}
+
+// -------------- Change email --------------
+const changingEmail = ref(false);
+const emailDraft = ref("");
+const emailPasswordDraft = ref("");
+const emailLoading = ref(false);
+const emailError = ref("");
+const emailSuccess = ref(false);
+
+function startChangeEmail() {
+  changingEmail.value = true;
+  emailDraft.value = (user.value as { email?: string } | null)?.email ?? "";
+  emailPasswordDraft.value = "";
+  emailError.value = "";
+  emailSuccess.value = false;
+}
+
+function cancelChangeEmail() {
+  changingEmail.value = false;
+  emailDraft.value = "";
+  emailPasswordDraft.value = "";
+  emailError.value = "";
+}
+
+async function saveNewEmail() {
+  emailLoading.value = true;
+  emailError.value = "";
+  try {
+    await $fetch("/api/me/email", {
+      method: "PATCH",
+      body: {
+        email: emailDraft.value,
+        currentPassword: emailPasswordDraft.value,
+      },
+    });
+    await refreshSession();
+    changingEmail.value = false;
+    emailPasswordDraft.value = "";
+    emailSuccess.value = true;
+  } catch (e: unknown) {
+    const err = e as { data?: { statusMessage?: string } };
+    emailError.value = err.data?.statusMessage ?? "Could not update email.";
+  } finally {
+    emailLoading.value = false;
+  }
 }
 
 // -------------- Delete account --------------
@@ -308,6 +313,7 @@ const uploadLat = ref("");
 const uploadLng = ref("");
 const uploadDescription = ref("");
 const uploadDescriptors = ref<string[]>([]);
+const { data: descriptorSuggestions } = useDescriptorSuggestions();
 const uploadFile = ref<File | null>(null);
 const uploadError = ref("");
 const uploadLoading = ref(false);
@@ -424,11 +430,6 @@ function submissionStatusLabel(status: string) {
   if (status === "removal_requested") return "Removal requested";
   return status;
 }
-
-// Lists default to collapsed; click the section header to expand.
-const mySubmissionsOpen = ref(false);
-const pendingSubmissionsOpen = ref(false);
-const myAnnotationsOpen = ref(false);
 
 const publishedSubmissions = computed(() =>
   (mySubmissions.value ?? []).filter(
@@ -580,23 +581,6 @@ const { data: pendingUsers, refresh: refreshUserQueue } = await useFetch<
   default: () => [],
 });
 
-type BetaApplication = {
-  id: number;
-  email: string;
-  displayName: string | null;
-  socials: string | null;
-  foundVia: string | null;
-  reason: string;
-  createdAt: string;
-};
-
-const { data: betaApplications, refresh: refreshBetaApplications } =
-  await useFetch<BetaApplication[]>("/api/admin/beta-applications", {
-    server: false,
-    immediate: false,
-    default: () => [],
-  });
-
 const { data: removalRequests, refresh: refreshRemovalQueue } = await useFetch<
   RemovalRequest[]
 >("/api/admin/restrooms/removals", {
@@ -627,6 +611,24 @@ const { data: annotationReports, refresh: refreshAnnotationReports } =
     default: () => [],
   });
 
+type AdminAnnotation = {
+  id: number;
+  body: string;
+  createdAt: string;
+  hiddenAt: string | null;
+  openReportCount: number;
+  restroom: { slug: string; name: string; location: string; date: string };
+  author: { username: string; displayName: string | null } | null;
+};
+
+const { data: allAnnotations, refresh: refreshAllAnnotations } = await useFetch<
+  AdminAnnotation[]
+>("/api/admin/annotations", {
+  server: false,
+  immediate: false,
+  default: () => [],
+});
+
 type AuditLogEntry = {
   id: number;
   action: string;
@@ -637,7 +639,6 @@ type AuditLogEntry = {
   actor: { id: number; username: string; displayName: string | null } | null;
 };
 
-const auditLogOpen = ref(false);
 const { data: auditLog, refresh: refreshAuditLog } = await useFetch<
   AuditLogEntry[]
 >("/api/admin/audit-log", {
@@ -653,7 +654,6 @@ watch(
       await Promise.all([
         refreshRestroomQueue(),
         refreshUserQueue(),
-        refreshBetaApplications(),
         refreshRemovalQueue(),
         refreshAnnotationReports(),
       ]);
@@ -661,10 +661,6 @@ watch(
   },
   { immediate: true },
 );
-
-watch(auditLogOpen, async (v) => {
-  if (v && isAdmin.value) await refreshAuditLog();
-});
 
 const AUDIT_ACTION_LABEL: Record<string, string> = {
   "user.approve": "approved user",
@@ -676,12 +672,11 @@ const AUDIT_ACTION_LABEL: Record<string, string> = {
   "user.delete": "deleted user",
   "user.rename": "renamed user",
   "user.revoke-submission": "revoked submission access",
-  "beta.approve": "approved beta application",
-  "beta.reject": "rejected beta application",
   "restroom.publish": "published restroom",
   "restroom.reject": "rejected restroom",
   "restroom.dismiss-removal": "dismissed removal request",
   "annotation.hide": "hid annotation",
+  "annotation.unhide": "unhid annotation",
   "annotation.dismiss-reports": "dismissed annotation reports",
 };
 
@@ -734,6 +729,41 @@ async function dismissAnnotationReports(annotationId: number) {
   }
 }
 
+// Hide/unhide from the "All annotations" browse list. Hiding also resolves any
+// open reports, so keep the reports queue in sync.
+async function hideAnnotation(annotationId: number) {
+  actionLoading.value = `ann-hide-${annotationId}`;
+  actionError.value = "";
+  try {
+    await $fetch(`/api/admin/annotations/${annotationId}/hide`, {
+      method: "POST",
+    });
+    await Promise.all([refreshAllAnnotations(), refreshAnnotationReports()]);
+  } catch (e: unknown) {
+    const err = e as { data?: { statusMessage?: string } };
+    actionError.value = err.data?.statusMessage ?? "Could not hide annotation.";
+  } finally {
+    actionLoading.value = null;
+  }
+}
+
+async function unhideAnnotation(annotationId: number) {
+  actionLoading.value = `ann-unhide-${annotationId}`;
+  actionError.value = "";
+  try {
+    await $fetch(`/api/admin/annotations/${annotationId}/unhide`, {
+      method: "POST",
+    });
+    await refreshAllAnnotations();
+  } catch (e: unknown) {
+    const err = e as { data?: { statusMessage?: string } };
+    actionError.value =
+      err.data?.statusMessage ?? "Could not unhide annotation.";
+  } finally {
+    actionLoading.value = null;
+  }
+}
+
 const actionLoading = ref<string | null>(null);
 const actionError = ref("");
 
@@ -768,18 +798,6 @@ const rejectUser = (id: number) =>
   runAction(`u-reject-${id}`, `/api/admin/users/${id}/reject`, async () => {
     await Promise.all([refreshUserQueue(), refreshAccounts()]);
   });
-const approveBetaApplication = (id: number) =>
-  runAction(
-    `beta-approve-${id}`,
-    `/api/admin/beta-applications/${id}/approve`,
-    refreshBetaApplications,
-  );
-const rejectBetaApplication = (id: number) =>
-  runAction(
-    `beta-reject-${id}`,
-    `/api/admin/beta-applications/${id}/reject`,
-    refreshBetaApplications,
-  );
 const removeRestroom = (id: number) =>
   runAction(
     `rm-reject-${id}`,
@@ -889,7 +907,8 @@ function accountStatusLabel(account: AccountRow): string {
   if (isAccountMuted(account)) return `Muted until ${account.mutedUntil}`;
   if (account.role === "admin") return "Admin";
   if (account.approvedAt) return "Archivist";
-  if (account.submissionRequestedAt) return "Annotator · requested archivist access";
+  if (account.submissionRequestedAt)
+    return "Annotator · requested archivist access";
   return "Annotator";
 }
 
@@ -1017,6 +1036,62 @@ const roleLabel = computed(() => {
   if (canSubmit.value) return "Archivist";
   return "Annotator";
 });
+
+// -------------- Account tabs --------------
+type AccountTab = "admin" | "profile" | "submissions" | "annotations";
+const route = useRoute();
+const router = useRouter();
+
+function isValidTab(v: unknown): v is AccountTab {
+  return (
+    v === "profile" ||
+    v === "submissions" ||
+    v === "annotations" ||
+    (v === "admin" && isAdmin.value)
+  );
+}
+
+const accountTab = ref<AccountTab>(
+  isValidTab(route.query.tab) ? route.query.tab : "profile",
+);
+
+function setTab(tab: AccountTab) {
+  accountTab.value = tab;
+  router.replace({ query: { ...route.query, tab } });
+}
+
+// The session resolves client-side, so `?tab=admin` looks invalid on first
+// render; re-apply it once admin status is known.
+watch(isAdmin, (v) => {
+  if (v && route.query.tab === "admin") accountTab.value = "admin";
+});
+
+// Only the Review queues carry an actionable badge on the Admin tab.
+const adminQueueCount = computed(
+  () =>
+    (pendingRestrooms.value?.length ?? 0) +
+    (pendingUsers.value?.length ?? 0) +
+    (annotationReports.value?.length ?? 0) +
+    (removalRequests.value?.length ?? 0),
+);
+
+// -------------- Admin subtabs --------------
+const adminSubtab = ref<"review" | "manage">("review");
+
+// The Manage lists (all annotations, audit log) can be large, so fetch them
+// only when the Manage subtab is first opened.
+const manageLoaded = ref(false);
+watch([isAdmin, () => accountTab.value, adminSubtab], async () => {
+  if (
+    isAdmin.value &&
+    accountTab.value === "admin" &&
+    adminSubtab.value === "manage" &&
+    !manageLoaded.value
+  ) {
+    manageLoaded.value = true;
+    await Promise.all([refreshAllAnnotations(), refreshAuditLog()]);
+  }
+});
 </script>
 
 <template>
@@ -1037,19 +1112,19 @@ const roleLabel = computed(() => {
         <button
           type="button"
           class="tab-btn"
-          :class="{ active: authTab === 'apply' }"
-          @click="switchTab('apply')"
+          :class="{ active: authTab === 'signup' }"
+          @click="switchTab('signup')"
         >
-          Request access
+          Create account
         </button>
       </div>
 
-      <!-- Sign in -->
-      <form
-        v-if="authTab === 'signin'"
-        class="form"
-        @submit.prevent="submitAuth"
-      >
+      <div v-if="authTab === 'signup'" class="signup-intro">
+        <h2 class="signup-intro-title">Become an archivist</h2>
+        <p>Leave annotations and submit restrooms to be part of the archive.</p>
+      </div>
+
+      <form class="form" @submit.prevent="submitAuth">
         <label class="field">
           <span class="field-label">Email</span>
           <input
@@ -1061,16 +1136,50 @@ const roleLabel = computed(() => {
           />
         </label>
 
+        <label v-if="authTab === 'signup'" class="field">
+          <span class="field-label">Username</span>
+          <input
+            v-model="username"
+            type="text"
+            required
+            autocomplete="username"
+            minlength="3"
+            maxlength="20"
+            pattern="[a-z0-9_]+"
+            class="field-input"
+          />
+          <span class="field-hint"
+            >3–20 lowercase letters, numbers, or underscores. Cannot be
+            changed.</span
+          >
+        </label>
+
+        <label v-if="authTab === 'signup'" class="field">
+          <span class="field-label">Display name (optional)</span>
+          <input
+            v-model="displayName"
+            type="text"
+            autocomplete="name"
+            maxlength="25"
+            class="field-input"
+          />
+        </label>
+
         <label class="field">
           <span class="field-label">Password</span>
           <input
             v-model="password"
             type="password"
             required
-            autocomplete="current-password"
+            :autocomplete="
+              authTab === 'signup' ? 'new-password' : 'current-password'
+            "
             class="field-input"
           />
         </label>
+        <p v-if="authTab === 'signup'" class="field-hint">
+          Minimum 8 characters.
+        </p>
 
         <NuxtTurnstile v-model="turnstileToken" class="turnstile" />
 
@@ -1081,135 +1190,25 @@ const roleLabel = computed(() => {
           class="primary-btn"
           :disabled="authLoading || !turnstileToken"
         >
-          {{ authLoading ? "…" : !turnstileToken ? "Verifying…" : "Sign in" }}
+          {{
+            authLoading
+              ? "…"
+              : !turnstileToken
+                ? "Verifying…"
+                : authTab === "signin"
+                  ? "Sign in"
+                  : "Create account"
+          }}
         </button>
 
-        <NuxtLink to="/forgot-password" class="forgot-password-link">
+        <NuxtLink
+          v-if="authTab === 'signin'"
+          to="/forgot-password"
+          class="forgot-password-link"
+        >
           Forgot your password?
         </NuxtLink>
       </form>
-
-      <!-- Request access (beta-archivist application) -->
-      <template v-else>
-        <div class="signup-intro">
-          <h2 class="signup-intro-title">
-            Request access to be a beta-archivist!
-          </h2>
-          <p>
-            The archive is invite-only while we build out sign-up. Tell us a
-            little about yourself and we'll email you an invite if you're
-            approved.
-          </p>
-        </div>
-
-        <div v-if="applySubmitted" class="apply-success">
-          <p>
-            <strong>Application received.</strong> If you're approved, we'll
-            email you a link to finish setting up your account.
-          </p>
-        </div>
-
-        <form v-else class="form" @submit.prevent="submitApplication">
-          <label class="field">
-            <span class="field-label">Email</span>
-            <input
-              v-model="applyEmail"
-              type="email"
-              required
-              autocomplete="email"
-              class="field-input"
-            />
-          </label>
-
-          <label class="field">
-            <span class="field-label">Name</span>
-            <input
-              v-model="applyDisplayName"
-              type="text"
-              autocomplete="name"
-              required
-              maxlength="25"
-              class="field-input"
-            />
-          </label>
-
-          <label class="field">
-            <span class="field-label">Socials (optional)</span>
-            <input
-              v-model="applySocials"
-              type="text"
-              maxlength="300"
-              class="field-input"
-            />
-            <span class="field-hint"
-              >Instagram, website, wherever we can find you.</span
-            >
-          </label>
-
-          <label class="field">
-            <span class="field-label"
-              >How did you find the Restroom Archive?</span
-            >
-            <textarea
-              v-model="applyFoundVia"
-              required
-              maxlength="500"
-              rows="2"
-              class="field-input field-textarea"
-            />
-          </label>
-
-          <label class="field">
-            <span class="field-label">Why do you want to be an archivist?</span>
-            <textarea
-              v-model="applyReason"
-              required
-              maxlength="1000"
-              rows="4"
-              class="field-input field-textarea"
-            />
-          </label>
-
-          <div class="apply-terms">
-            <p class="apply-terms-title">The Archivist Agreement</p>
-            <p class="apply-terms-intro">
-              The mission of the The Restroom Archive is to carefully and
-              faithfully document restrooms captured as they are. As an
-              archivist, I agree to abide by the submission rules:
-            </p>
-            <ul class="apply-terms-list">
-              <li v-for="(rule, i) in SUBMISSION_AGREEMENTS" :key="i">
-                {{ rule }}
-              </li>
-            </ul>
-            <label class="apply-terms-check">
-              <input v-model="applyAgree" type="checkbox" required />
-              <span
-                >I agree to abide by the submission rules and to uphold the
-                Restroom Archive's mission.</span
-              >
-            </label>
-          </div>
-
-          <NuxtTurnstile v-model="applyToken" class="turnstile" />
-
-          <p v-if="applyError" class="form-error">{{ applyError }}</p>
-
-          <button
-            type="submit"
-            class="primary-btn"
-            :disabled="applyLoading || !applyToken"
-          >
-            {{
-              applyLoading
-                ? "…"
-                : !applyToken
-                  ? "Verifying…"
-                  : "Submit application"
-            }}
-          </button>
-        </form>
-      </template>
     </div>
 
     <!-- Logged-in -->
@@ -1220,53 +1219,14 @@ const roleLabel = computed(() => {
 
       <header class="account-header">
         <div class="account-identity">
-          <template v-if="editingDisplayName">
-            <form class="dn-inline-form" @submit.prevent="saveDisplayName">
-              <input
-                ref="dnInput"
-                v-model="displayNameDraft"
-                type="text"
-                maxlength="25"
-                class="dn-input"
-                placeholder="Display name (blank to clear)"
-                @keydown.esc="editingDisplayName = false"
-              />
-              <button
-                type="submit"
-                class="dn-btn"
-                :disabled="displayNameLoading"
-              >
-                {{ displayNameLoading ? "…" : "Save" }}
-              </button>
-              <button
-                type="button"
-                class="dn-btn dn-cancel"
-                @click="editingDisplayName = false"
-              >
-                Cancel
-              </button>
-            </form>
-            <p v-if="displayNameError" class="form-error dn-error">
-              {{ displayNameError }}
-            </p>
-          </template>
-          <template v-else>
-            <UserAttribution
-              v-if="user"
-              class="account-email"
-              :user="{
-                username: (user as any).username,
-                displayName: (user as any).displayName,
-              }"
-            />
-            <button
-              type="button"
-              class="dn-edit-btn"
-              @click="startEditDisplayName"
-            >
-              edit
-            </button>
-          </template>
+          <UserAttribution
+            v-if="user"
+            class="account-email"
+            :user="{
+              username: (user as any).username,
+              displayName: (user as any).displayName,
+            }"
+          />
         </div>
         <div class="account-header-right">
           <span class="account-role">{{ roleLabel }}</span>
@@ -1283,259 +1243,527 @@ const roleLabel = computed(() => {
         </p>
       </div>
 
-      <p v-if="myActionError" class="form-error action-error">
-        {{ myActionError }}
-      </p>
-
-      <div v-if="!changingPassword" class="change-password-collapsed">
+      <nav class="account-tabs" role="tablist">
         <button
+          v-if="isAdmin"
           type="button"
-          class="link-btn change-password-btn"
-          @click="startChangePassword"
+          class="tab-btn"
+          role="tab"
+          :class="{ active: accountTab === 'admin' }"
+          :aria-selected="accountTab === 'admin'"
+          @click="setTab('admin')"
         >
-          Change password
-        </button>
-        <span v-if="passwordSuccess" class="password-success"
-          >Password updated.</span
-        >
-      </div>
-      <section v-else class="section">
-        <form class="form" @submit.prevent="saveNewPassword">
-          <h2 class="section-title">Change password</h2>
-          <label class="field">
-            <span class="field-label">Current password</span>
-            <input
-              v-model="currentPasswordDraft"
-              type="password"
-              autocomplete="current-password"
-              required
-              class="field-input"
-            />
-          </label>
-          <label class="field">
-            <span class="field-label">New password</span>
-            <input
-              v-model="newPasswordDraft"
-              type="password"
-              autocomplete="new-password"
-              required
-              minlength="8"
-              class="field-input"
-            />
-            <span class="field-hint">Minimum 8 characters.</span>
-          </label>
-          <label class="field">
-            <span class="field-label">Confirm new password</span>
-            <input
-              v-model="confirmPasswordDraft"
-              type="password"
-              autocomplete="new-password"
-              required
-              minlength="8"
-              class="field-input"
-            />
-          </label>
-          <p v-if="passwordError" class="form-error">{{ passwordError }}</p>
-          <div class="change-password-actions">
-            <button
-              type="submit"
-              class="primary-btn"
-              :disabled="passwordLoading"
-            >
-              {{ passwordLoading ? "Saving…" : "Update password" }}
-            </button>
-            <button
-              type="button"
-              class="link-btn"
-              :disabled="passwordLoading"
-              @click="cancelChangePassword"
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
-      </section>
-
-      <!-- Approved: submit form -->
-      <section v-if="canSubmit" class="section">
-        <h2 class="section-title">New submission</h2>
-        <div v-if="uploadSuccess" class="success-message">
-          <p>{{ isAdmin ? "Published." : "Submitted — awaiting approval." }}</p>
-          <button type="button" class="link-btn" @click="resetUpload">
-            Submit another
-          </button>
-        </div>
-        <form v-else class="form" @submit.prevent="submitUpload">
-          <label class="field">
-            <span class="field-label">Name <span class="req">*</span></span>
-            <input
-              v-model="uploadName"
-              type="text"
-              required
-              class="field-input"
-            />
-          </label>
-          <label class="field">
-            <span class="field-label">Location <span class="req">*</span></span>
-            <input
-              v-model="uploadLocation"
-              type="text"
-              required
-              placeholder="City, State"
-              class="field-input"
-            />
-          </label>
-          <label class="field">
-            <span class="field-label">Date <span class="req">*</span></span>
-            <input
-              v-model="uploadDate"
-              type="date"
-              required
-              class="field-input"
-            />
-          </label>
-          <div class="field-row">
-            <label class="field">
-              <span class="field-label">Latitude</span>
-              <input
-                v-model="uploadLat"
-                type="number"
-                step="any"
-                min="-90"
-                max="90"
-                class="field-input"
-              />
-            </label>
-            <label class="field">
-              <span class="field-label">Longitude</span>
-              <input
-                v-model="uploadLng"
-                type="number"
-                step="any"
-                min="-180"
-                max="180"
-                class="field-input"
-              />
-            </label>
-          </div>
-          <label class="field">
-            <span class="field-label">Description</span>
-            <textarea
-              v-model="uploadDescription"
-              class="field-input field-textarea"
-              maxlength="1000"
-              rows="4"
-            />
-            <span class="char-count">{{ uploadDescription.length }}/1000</span>
-          </label>
-          <div class="field">
-            <span class="field-label">Descriptors</span>
-            <TagInput v-model="uploadDescriptors" />
-          </div>
-          <label class="field">
-            <span class="field-label">GLB file <span class="req">*</span></span>
-            <input
-              type="file"
-              accept=".glb"
-              required
-              class="field-input"
-              @change="onFileChange"
-            />
-          </label>
-
-          <p v-if="uploadError" class="form-error">{{ uploadError }}</p>
-
-          <button type="submit" class="primary-btn" :disabled="uploadLoading">
-            {{
-              uploadLoading
-                ? "Uploading…"
-                : isAdmin
-                  ? "Submit"
-                  : "Submit for review"
-            }}
-          </button>
-        </form>
-      </section>
-
-      <!-- Awaiting submission approval -->
-      <div v-else-if="submissionRequested" class="awaiting">
-        <p>
-          Your request to submit restrooms is awaiting admin review. You can
-          leave annotations on any restroom in the meantime.
-        </p>
-      </div>
-
-      <!-- Submission access request flow -->
-      <section v-else class="section">
-        <div v-if="!showAgreementForm" class="request-cta">
-          <p class="request-cta-copy">
-            You can leave annotations on any restroom. To submit your own
-            restroom scans, request access below.
-          </p>
-          <button type="button" class="primary-btn" @click="openAgreementForm">
-            Request access to submit restroom scans
-          </button>
-        </div>
-
-        <form v-else class="agreement-form" @submit.prevent="submitAgreement">
-          <p class="agreement-intro">
-            I agree to abide by the following guidelines when submitting
-            restrooms:
-          </p>
-          <label
-            v-for="(text, i) in SUBMISSION_AGREEMENTS"
-            :key="i"
-            class="agreement-row"
-          >
-            <input
-              v-model="agreementChecks[i]"
-              type="checkbox"
-              class="agreement-check"
-            />
-            <span>{{ text }}</span>
-          </label>
-          <p class="agreement-note">
-            Admins reserve the right to deny, remove, and edit any submissions
-            as they see fit, without notice. By submitting this request, you
-            agree to these terms.
-          </p>
-
-          <p v-if="agreementError" class="form-error">{{ agreementError }}</p>
-
-          <div class="agreement-actions">
-            <button
-              type="button"
-              class="link-btn"
-              @click="showAgreementForm = false"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              class="primary-btn"
-              :disabled="!allAgreementsChecked || agreementLoading"
-            >
-              {{ agreementLoading ? "…" : "Submit request" }}
-            </button>
-          </div>
-        </form>
-      </section>
-
-      <!-- My submissions (published) -->
-      <section class="section">
-        <button
-          type="button"
-          class="section-title section-toggle"
-          :aria-expanded="mySubmissionsOpen"
-          @click="mySubmissionsOpen = !mySubmissionsOpen"
-        >
-          <span class="caret">{{ mySubmissionsOpen ? "▾" : "▸" }}</span>
-          My submissions
-          <span v-if="publishedSubmissions.length" class="count">{{
-            publishedSubmissions.length
+          Admin
+          <span v-if="adminQueueCount" class="count">{{
+            adminQueueCount
           }}</span>
         </button>
-        <template v-if="mySubmissionsOpen">
+        <button
+          type="button"
+          class="tab-btn"
+          role="tab"
+          :class="{ active: accountTab === 'profile' }"
+          :aria-selected="accountTab === 'profile'"
+          @click="setTab('profile')"
+        >
+          Profile
+        </button>
+        <button
+          type="button"
+          class="tab-btn"
+          role="tab"
+          :class="{ active: accountTab === 'submissions' }"
+          :aria-selected="accountTab === 'submissions'"
+          @click="setTab('submissions')"
+        >
+          Submissions
+        </button>
+        <button
+          type="button"
+          class="tab-btn"
+          role="tab"
+          :class="{ active: accountTab === 'annotations' }"
+          :aria-selected="accountTab === 'annotations'"
+          @click="setTab('annotations')"
+        >
+          Annotations
+        </button>
+      </nav>
+
+      <!-- Profile -->
+      <div v-if="accountTab === 'profile'" class="tab-panel" role="tabpanel">
+        <AccountSection title="Account">
+          <div class="settings-list">
+            <!-- Name -->
+            <div class="settings-row">
+              <span class="settings-label">Name</span>
+              <template v-if="!editingDisplayName">
+                <span class="settings-value">
+                  <template v-if="(user as any)?.displayName">{{
+                    (user as any).displayName
+                  }}</template>
+                  <span v-else class="dim">Not set</span>
+                </span>
+                <button
+                  type="button"
+                  class="btn settings-change"
+                  @click="startEditDisplayName"
+                >
+                  Change
+                </button>
+              </template>
+              <form
+                v-else
+                class="settings-edit"
+                @submit.prevent="saveDisplayName"
+              >
+                <label class="field">
+                  <span class="field-label">Display name</span>
+                  <input
+                    ref="dnInput"
+                    v-model="displayNameDraft"
+                    type="text"
+                    maxlength="25"
+                    class="field-input"
+                    placeholder="Blank to clear"
+                    @keydown.esc="editingDisplayName = false"
+                  />
+                  <span class="field-hint"
+                    >Shown instead of @{{ (user as any)?.username }}.</span
+                  >
+                </label>
+                <p v-if="displayNameError" class="form-error">
+                  {{ displayNameError }}
+                </p>
+                <div class="settings-edit-actions">
+                  <button
+                    type="submit"
+                    class="primary-btn btn-sm"
+                    :disabled="displayNameLoading"
+                  >
+                    {{ displayNameLoading ? "…" : "Save" }}
+                  </button>
+                  <button
+                    type="button"
+                    class="link-btn"
+                    @click="editingDisplayName = false"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <!-- Email -->
+            <div class="settings-row">
+              <span class="settings-label">Email</span>
+              <template v-if="!changingEmail">
+                <span class="settings-value">{{ (user as any)?.email }}</span>
+                <span v-if="emailSuccess" class="password-success"
+                  >Updated.</span
+                >
+                <button
+                  type="button"
+                  class="btn settings-change"
+                  @click="startChangeEmail"
+                >
+                  Change
+                </button>
+              </template>
+              <form v-else class="settings-edit" @submit.prevent="saveNewEmail">
+                <label class="field">
+                  <span class="field-label">New email</span>
+                  <input
+                    v-model="emailDraft"
+                    type="email"
+                    required
+                    autocomplete="email"
+                    class="field-input"
+                  />
+                </label>
+                <label class="field">
+                  <span class="field-label">Current password</span>
+                  <input
+                    v-model="emailPasswordDraft"
+                    type="password"
+                    required
+                    autocomplete="current-password"
+                    class="field-input"
+                  />
+                  <span class="field-hint"
+                    >Confirm it's you before changing your email.</span
+                  >
+                </label>
+                <p v-if="emailError" class="form-error">{{ emailError }}</p>
+                <div class="settings-edit-actions">
+                  <button
+                    type="submit"
+                    class="primary-btn btn-sm"
+                    :disabled="emailLoading"
+                  >
+                    {{ emailLoading ? "Saving…" : "Update email" }}
+                  </button>
+                  <button
+                    type="button"
+                    class="link-btn"
+                    :disabled="emailLoading"
+                    @click="cancelChangeEmail"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <!-- Password -->
+            <div class="settings-row">
+              <span class="settings-label">Password</span>
+              <template v-if="!changingPassword">
+                <span class="settings-value settings-dots">••••••••••</span>
+                <span v-if="passwordSuccess" class="password-success"
+                  >Updated.</span
+                >
+                <button
+                  type="button"
+                  class="btn settings-change"
+                  @click="startChangePassword"
+                >
+                  Change
+                </button>
+              </template>
+              <form
+                v-else
+                class="settings-edit"
+                @submit.prevent="saveNewPassword"
+              >
+                <label class="field">
+                  <span class="field-label">Current password</span>
+                  <input
+                    v-model="currentPasswordDraft"
+                    type="password"
+                    autocomplete="current-password"
+                    required
+                    class="field-input"
+                  />
+                </label>
+                <label class="field">
+                  <span class="field-label">New password</span>
+                  <input
+                    v-model="newPasswordDraft"
+                    type="password"
+                    autocomplete="new-password"
+                    required
+                    minlength="8"
+                    class="field-input"
+                  />
+                  <span class="field-hint">Minimum 8 characters.</span>
+                </label>
+                <label class="field">
+                  <span class="field-label">Confirm new password</span>
+                  <input
+                    v-model="confirmPasswordDraft"
+                    type="password"
+                    autocomplete="new-password"
+                    required
+                    minlength="8"
+                    class="field-input"
+                  />
+                </label>
+                <p v-if="passwordError" class="form-error">
+                  {{ passwordError }}
+                </p>
+                <div class="settings-edit-actions">
+                  <button
+                    type="submit"
+                    class="primary-btn btn-sm"
+                    :disabled="passwordLoading"
+                  >
+                    {{ passwordLoading ? "Saving…" : "Update password" }}
+                  </button>
+                  <button
+                    type="button"
+                    class="link-btn"
+                    :disabled="passwordLoading"
+                    @click="cancelChangePassword"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <!-- Request deletion -->
+            <div v-if="!isAdmin" class="settings-row settings-row-danger">
+              <span class="settings-label">Delete</span>
+              <template v-if="!deletingAccount">
+                <span class="settings-value dim"
+                  >Permanently remove your account</span
+                >
+                <button
+                  type="button"
+                  class="btn btn-danger-outline settings-change"
+                  @click="startDeleteAccount"
+                >
+                  Request deletion
+                </button>
+              </template>
+              <form
+                v-else
+                class="settings-edit"
+                @submit.prevent="confirmDeleteAccount"
+              >
+                <p class="danger-warning">
+                  This will permanently remove your account, your annotations,
+                  and any pending submissions. Published restrooms you submitted
+                  will stay in the archive but will no longer show your name.
+                  <strong>This cannot be undone.</strong>
+                </p>
+                <label class="field">
+                  <span class="field-label">
+                    Type your username
+                    <code class="confirm-code">{{
+                      (user as { username?: string } | null)?.username
+                    }}</code>
+                    to confirm
+                  </span>
+                  <input
+                    v-model="deleteUsernameConfirm"
+                    type="text"
+                    autocomplete="off"
+                    required
+                    class="field-input"
+                  />
+                </label>
+                <label class="field">
+                  <span class="field-label">Current password</span>
+                  <input
+                    v-model="deletePasswordDraft"
+                    type="password"
+                    autocomplete="current-password"
+                    required
+                    class="field-input"
+                  />
+                </label>
+                <p v-if="deleteError" class="form-error">{{ deleteError }}</p>
+                <div class="settings-edit-actions">
+                  <button
+                    type="submit"
+                    class="danger-btn btn-sm"
+                    :disabled="deleteLoading"
+                  >
+                    {{
+                      deleteLoading ? "Deleting…" : "Permanently delete account"
+                    }}
+                  </button>
+                  <button
+                    type="button"
+                    class="link-btn"
+                    :disabled="deleteLoading"
+                    @click="cancelDeleteAccount"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </AccountSection>
+      </div>
+
+      <!-- Submissions -->
+      <div
+        v-if="accountTab === 'submissions'"
+        class="tab-panel"
+        role="tabpanel"
+      >
+        <p v-if="myActionError" class="form-error action-error">
+          {{ myActionError }}
+        </p>
+
+        <!-- Approved: submit form -->
+        <AccountSection v-if="canSubmit" title="New submission">
+          <div v-if="uploadSuccess" class="success-message">
+            <p>
+              {{ isAdmin ? "Published." : "Submitted — awaiting approval." }}
+            </p>
+            <button type="button" class="link-btn" @click="resetUpload">
+              Submit another
+            </button>
+          </div>
+          <form v-else class="form" @submit.prevent="submitUpload">
+            <label class="field">
+              <span class="field-label">Name <span class="req">*</span></span>
+              <input
+                v-model="uploadName"
+                type="text"
+                required
+                class="field-input"
+              />
+            </label>
+            <label class="field">
+              <span class="field-label"
+                >Location <span class="req">*</span></span
+              >
+              <input
+                v-model="uploadLocation"
+                type="text"
+                required
+                placeholder="City, State"
+                class="field-input"
+              />
+            </label>
+            <label class="field">
+              <span class="field-label">Date <span class="req">*</span></span>
+              <input
+                v-model="uploadDate"
+                type="date"
+                required
+                class="field-input"
+              />
+            </label>
+            <div class="field-row">
+              <label class="field">
+                <span class="field-label">Latitude</span>
+                <input
+                  v-model="uploadLat"
+                  type="number"
+                  step="any"
+                  min="-90"
+                  max="90"
+                  class="field-input"
+                />
+              </label>
+              <label class="field">
+                <span class="field-label">Longitude</span>
+                <input
+                  v-model="uploadLng"
+                  type="number"
+                  step="any"
+                  min="-180"
+                  max="180"
+                  class="field-input"
+                />
+              </label>
+            </div>
+            <label class="field">
+              <span class="field-label">Description</span>
+              <textarea
+                v-model="uploadDescription"
+                class="field-input field-textarea"
+                maxlength="1000"
+                rows="4"
+              />
+              <span class="char-count"
+                >{{ uploadDescription.length }}/1000</span
+              >
+            </label>
+            <div class="field">
+              <span class="field-label">Descriptors</span>
+              <TagInput
+                v-model="uploadDescriptors"
+                :suggestions="descriptorSuggestions ?? []"
+              />
+            </div>
+            <label class="field">
+              <span class="field-label"
+                >GLB file <span class="req">*</span></span
+              >
+              <input
+                type="file"
+                accept=".glb"
+                required
+                class="field-input"
+                @change="onFileChange"
+              />
+            </label>
+
+            <p v-if="uploadError" class="form-error">{{ uploadError }}</p>
+
+            <button type="submit" class="primary-btn" :disabled="uploadLoading">
+              {{
+                uploadLoading
+                  ? "Uploading…"
+                  : isAdmin
+                    ? "Submit"
+                    : "Submit for review"
+              }}
+            </button>
+          </form>
+        </AccountSection>
+
+        <!-- Awaiting submission approval -->
+        <div v-else-if="submissionRequested" class="awaiting">
+          <p>
+            Your request to submit restrooms is awaiting admin review. You can
+            leave annotations on any restroom in the meantime.
+          </p>
+        </div>
+
+        <!-- Submission access request flow -->
+        <section v-else class="section">
+          <div v-if="!showAgreementForm" class="request-cta">
+            <p class="request-cta-copy">
+              You can leave annotations on any restroom. To submit your own
+              restroom scans, request access below.
+            </p>
+            <button
+              type="button"
+              class="primary-btn"
+              @click="openAgreementForm"
+            >
+              Request access to submit restroom scans
+            </button>
+          </div>
+
+          <form v-else class="agreement-form" @submit.prevent="submitAgreement">
+            <p class="agreement-intro">
+              I agree to abide by the following guidelines when submitting
+              restrooms:
+            </p>
+            <label
+              v-for="(text, i) in SUBMISSION_AGREEMENTS"
+              :key="i"
+              class="agreement-row"
+            >
+              <input
+                v-model="agreementChecks[i]"
+                type="checkbox"
+                class="agreement-check"
+              />
+              <span>{{ text }}</span>
+            </label>
+            <p class="agreement-note">
+              Admins reserve the right to deny, remove, and edit any submissions
+              as they see fit, without notice. By submitting this request, you
+              agree to these terms.
+            </p>
+
+            <p v-if="agreementError" class="form-error">{{ agreementError }}</p>
+
+            <div class="agreement-actions">
+              <button
+                type="button"
+                class="link-btn"
+                @click="showAgreementForm = false"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                class="primary-btn"
+                :disabled="!allAgreementsChecked || agreementLoading"
+              >
+                {{ agreementLoading ? "…" : "Submit request" }}
+              </button>
+            </div>
+          </form>
+        </section>
+
+        <!-- My submissions (published) -->
+        <AccountSection
+          title="My submissions"
+          :count="publishedSubmissions.length"
+        >
           <div v-if="!publishedSubmissions.length" class="empty">
             No approved submissions yet.
           </div>
@@ -1595,22 +1823,14 @@ const roleLabel = computed(() => {
               </div>
             </li>
           </ul>
-        </template>
-      </section>
+        </AccountSection>
 
-      <!-- Pending submissions -->
-      <section v-if="pendingAndRejectedSubmissions.length" class="section">
-        <button
-          type="button"
-          class="section-title section-toggle"
-          :aria-expanded="pendingSubmissionsOpen"
-          @click="pendingSubmissionsOpen = !pendingSubmissionsOpen"
+        <!-- Pending submissions -->
+        <AccountSection
+          v-if="pendingAndRejectedSubmissions.length"
+          title="Pending submissions"
+          :count="pendingAndRejectedSubmissions.length"
         >
-          <span class="caret">{{ pendingSubmissionsOpen ? "▾" : "▸" }}</span>
-          Pending submissions
-          <span class="count">{{ pendingAndRejectedSubmissions.length }}</span>
-        </button>
-        <template v-if="pendingSubmissionsOpen">
           <ul class="simple-list">
             <li
               v-for="r in pendingAndRejectedSubmissions"
@@ -1644,24 +1864,21 @@ const roleLabel = computed(() => {
               </div>
             </li>
           </ul>
-        </template>
-      </section>
+        </AccountSection>
+      </div>
 
-      <!-- My annotations -->
-      <section class="section">
-        <button
-          type="button"
-          class="section-title section-toggle"
-          :aria-expanded="myAnnotationsOpen"
-          @click="myAnnotationsOpen = !myAnnotationsOpen"
-        >
-          <span class="caret">{{ myAnnotationsOpen ? "▾" : "▸" }}</span>
-          My annotations
-          <span v-if="myAnnotations?.length" class="count">{{
-            myAnnotations.length
-          }}</span>
-        </button>
-        <template v-if="myAnnotationsOpen">
+      <!-- Annotations -->
+      <div
+        v-if="accountTab === 'annotations'"
+        class="tab-panel"
+        role="tabpanel"
+      >
+        <p v-if="myActionError" class="form-error action-error">
+          {{ myActionError }}
+        </p>
+
+        <!-- My annotations -->
+        <AccountSection title="My annotations" :count="myAnnotations?.length">
           <div v-if="!myAnnotations?.length" class="empty">
             No annotations yet.
           </div>
@@ -1691,89 +1908,50 @@ const roleLabel = computed(() => {
               </div>
             </li>
           </ul>
-        </template>
-      </section>
+        </AccountSection>
+      </div>
 
-      <!-- Delete account -->
-      <section v-if="!isAdmin" class="section danger-section">
-        <div v-if="!deletingAccount" class="delete-collapsed">
-          <button
-            type="button"
-            class="link-btn delete-link"
-            @click="startDeleteAccount"
-          >
-            Delete account
-          </button>
-        </div>
-        <form
-          v-else
-          class="form delete-form"
-          @submit.prevent="confirmDeleteAccount"
-        >
-          <h2 class="section-title danger-title">Delete your account</h2>
-          <p class="danger-warning">
-            This will permanently remove your account, your annotations, and any
-            pending submissions. Published restrooms you submitted will stay in
-            the archive but will no longer show your name.
-            <strong>This cannot be undone.</strong>
-          </p>
-          <label class="field">
-            <span class="field-label">
-              Type your username
-              <code class="confirm-code">{{
-                (user as { username?: string } | null)?.username
-              }}</code>
-              to confirm
-            </span>
-            <input
-              v-model="deleteUsernameConfirm"
-              type="text"
-              autocomplete="off"
-              required
-              class="field-input"
-            />
-          </label>
-          <label class="field">
-            <span class="field-label">Current password</span>
-            <input
-              v-model="deletePasswordDraft"
-              type="password"
-              autocomplete="current-password"
-              required
-              class="field-input"
-            />
-          </label>
-          <p v-if="deleteError" class="form-error">{{ deleteError }}</p>
-          <div class="delete-actions">
-            <button type="submit" class="danger-btn" :disabled="deleteLoading">
-              {{ deleteLoading ? "Deleting…" : "Permanently delete account" }}
-            </button>
-            <button
-              type="button"
-              class="link-btn"
-              :disabled="deleteLoading"
-              @click="cancelDeleteAccount"
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
-      </section>
-
-      <!-- Admin queues -->
-      <template v-if="isAdmin">
+      <!-- Admin -->
+      <div
+        v-if="isAdmin && accountTab === 'admin'"
+        class="tab-panel"
+        role="tabpanel"
+      >
         <p v-if="actionError" class="form-error action-error">
           {{ actionError }}
         </p>
 
-        <section class="section">
-          <h2 class="section-title">
-            Pending submissions
-            <span v-if="pendingRestrooms?.length" class="count">{{
-              pendingRestrooms.length
+        <nav class="admin-subtabs" role="tablist">
+          <button
+            type="button"
+            class="subtab-btn"
+            role="tab"
+            :class="{ active: adminSubtab === 'review' }"
+            :aria-selected="adminSubtab === 'review'"
+            @click="adminSubtab = 'review'"
+          >
+            Review
+            <span v-if="adminQueueCount" class="count">{{
+              adminQueueCount
             }}</span>
-          </h2>
+          </button>
+          <button
+            type="button"
+            class="subtab-btn"
+            role="tab"
+            :class="{ active: adminSubtab === 'manage' }"
+            :aria-selected="adminSubtab === 'manage'"
+            @click="adminSubtab = 'manage'"
+          >
+            Manage
+          </button>
+        </nav>
 
+        <AccountSection
+          v-show="adminSubtab === 'review'"
+          title="Pending submissions"
+          :count="pendingRestrooms?.length"
+        >
           <div v-if="!pendingRestrooms?.length" class="empty">
             No submissions pending.
           </div>
@@ -1888,78 +2066,13 @@ const roleLabel = computed(() => {
               </template>
             </div>
           </div>
-        </section>
+        </AccountSection>
 
-        <section class="section">
-          <h2 class="section-title">
-            Beta applications
-            <span v-if="betaApplications?.length" class="count">{{
-              betaApplications.length
-            }}</span>
-          </h2>
-
-          <div v-if="!betaApplications?.length" class="empty">
-            No applications pending.
-          </div>
-
-          <ul v-else class="simple-list">
-            <li
-              v-for="a in betaApplications"
-              :key="a.id"
-              class="simple-row beta-row"
-            >
-              <div class="simple-main">
-                <span class="simple-title">{{ a.displayName || a.email }}</span>
-                <span class="simple-meta"
-                  >{{ a.email }} · applied {{ a.createdAt }}</span
-                >
-                <dl class="beta-answers">
-                  <template v-if="a.socials">
-                    <dt>Socials</dt>
-                    <dd>{{ a.socials }}</dd>
-                  </template>
-                  <template v-if="a.foundVia">
-                    <dt>Found us via</dt>
-                    <dd>{{ a.foundVia }}</dd>
-                  </template>
-                  <dt>Why an archivist</dt>
-                  <dd>{{ a.reason }}</dd>
-                </dl>
-              </div>
-              <div class="simple-actions">
-                <button
-                  type="button"
-                  class="btn btn-publish"
-                  :disabled="actionLoading === `beta-approve-${a.id}`"
-                  @click="approveBetaApplication(a.id)"
-                >
-                  {{
-                    actionLoading === `beta-approve-${a.id}`
-                      ? "…"
-                      : "Approve & invite"
-                  }}
-                </button>
-                <button
-                  type="button"
-                  class="btn btn-reject"
-                  :disabled="actionLoading === `beta-reject-${a.id}`"
-                  @click="rejectBetaApplication(a.id)"
-                >
-                  {{ actionLoading === `beta-reject-${a.id}` ? "…" : "Reject" }}
-                </button>
-              </div>
-            </li>
-          </ul>
-        </section>
-
-        <section class="section">
-          <h2 class="section-title">
-            Pending accounts
-            <span v-if="pendingUsers?.length" class="count">{{
-              pendingUsers.length
-            }}</span>
-          </h2>
-
+        <AccountSection
+          v-show="adminSubtab === 'review'"
+          title="Pending Upgrades"
+          :count="pendingUsers?.length"
+        >
           <div v-if="!pendingUsers?.length" class="empty">
             No accounts pending.
           </div>
@@ -1997,16 +2110,13 @@ const roleLabel = computed(() => {
               </div>
             </li>
           </ul>
-        </section>
+        </AccountSection>
 
-        <section class="section">
-          <h2 class="section-title">
-            Accounts
-            <span v-if="accounts?.length" class="count">{{
-              accounts.length
-            }}</span>
-          </h2>
-
+        <AccountSection
+          v-show="adminSubtab === 'manage'"
+          title="Accounts"
+          :count="accounts?.length"
+        >
           <div v-if="!accounts?.length" class="empty">No accounts.</div>
 
           <ul v-else class="simple-list">
@@ -2208,16 +2318,74 @@ const roleLabel = computed(() => {
               </div>
             </li>
           </ul>
-        </section>
+        </AccountSection>
 
-        <section class="section">
-          <h2 class="section-title">
-            Reported annotations
-            <span v-if="annotationReports?.length" class="count">{{
-              annotationReports.length
-            }}</span>
-          </h2>
+        <AccountSection
+          v-show="adminSubtab === 'manage'"
+          title="All annotations"
+          :count="allAnnotations?.length"
+        >
+          <div v-if="!allAnnotations?.length" class="empty">
+            No annotations yet.
+          </div>
 
+          <ul v-else class="simple-list">
+            <li
+              v-for="a in allAnnotations"
+              :key="a.id"
+              class="simple-row"
+              :class="{ 'is-hidden': a.hiddenAt }"
+            >
+              <div class="simple-main">
+                <NuxtLink
+                  class="simple-title link"
+                  :to="`/r/${a.restroom.slug}`"
+                >
+                  {{ a.restroom.name }}
+                </NuxtLink>
+                <span class="simple-meta annotation-body">{{ a.body }}</span>
+                <span class="simple-meta">
+                  By
+                  <UserAttribution :user="a.author" fallback="deleted user" />
+                  · {{ a.createdAt }}
+                </span>
+                <span class="simple-meta">
+                  <span v-if="a.hiddenAt" class="pill pill-hidden">Hidden</span>
+                  <span v-if="a.openReportCount" class="pill pill-reported"
+                    >{{ a.openReportCount }} open
+                    {{ a.openReportCount === 1 ? "report" : "reports" }}</span
+                  >
+                </span>
+              </div>
+              <div class="simple-actions">
+                <button
+                  v-if="!a.hiddenAt"
+                  type="button"
+                  class="btn btn-reject"
+                  :disabled="actionLoading === `ann-hide-${a.id}`"
+                  @click="hideAnnotation(a.id)"
+                >
+                  {{ actionLoading === `ann-hide-${a.id}` ? "…" : "Hide" }}
+                </button>
+                <button
+                  v-else
+                  type="button"
+                  class="btn"
+                  :disabled="actionLoading === `ann-unhide-${a.id}`"
+                  @click="unhideAnnotation(a.id)"
+                >
+                  {{ actionLoading === `ann-unhide-${a.id}` ? "…" : "Unhide" }}
+                </button>
+              </div>
+            </li>
+          </ul>
+        </AccountSection>
+
+        <AccountSection
+          v-show="adminSubtab === 'review'"
+          title="Reported annotations"
+          :count="annotationReports?.length"
+        >
           <div v-if="!annotationReports?.length" class="empty">
             No reported annotations.
           </div>
@@ -2281,16 +2449,13 @@ const roleLabel = computed(() => {
               </div>
             </li>
           </ul>
-        </section>
+        </AccountSection>
 
-        <section class="section">
-          <h2 class="section-title">
-            Removal requests
-            <span v-if="removalRequests?.length" class="count">{{
-              removalRequests.length
-            }}</span>
-          </h2>
-
+        <AccountSection
+          v-show="adminSubtab === 'review'"
+          title="Removal requests"
+          :count="removalRequests?.length"
+        >
           <div v-if="!removalRequests?.length" class="empty">
             No removal requests.
           </div>
@@ -2331,59 +2496,51 @@ const roleLabel = computed(() => {
               </div>
             </li>
           </ul>
-        </section>
+        </AccountSection>
 
-        <section class="section">
-          <button
-            type="button"
-            class="section-title section-toggle"
-            :aria-expanded="auditLogOpen"
-            @click="auditLogOpen = !auditLogOpen"
-          >
-            <span class="caret">{{ auditLogOpen ? "▾" : "▸" }}</span>
-            Audit log
-          </button>
-
-          <template v-if="auditLogOpen">
-            <div v-if="!auditLog?.length" class="empty">
-              No admin actions recorded yet.
-            </div>
-            <ul v-else class="simple-list audit-list">
-              <li
-                v-for="entry in auditLog"
-                :key="entry.id"
-                class="simple-row audit-row"
-              >
-                <div class="simple-main">
-                  <span class="simple-title">
-                    <UserAttribution
-                      v-if="entry.actor"
-                      :user="entry.actor"
-                      fallback="deleted admin"
-                    />
-                    <span v-else class="dim">deleted admin</span>
-                    <span class="audit-action">
-                      {{ auditActionLabel(entry.action) }}</span
-                    >
-                    <span v-if="entry.targetId" class="audit-target">
-                      #{{ entry.targetId }}
-                    </span>
+        <AccountSection
+          v-show="adminSubtab === 'manage'"
+          title="Audit log"
+          :default-open="false"
+        >
+          <div v-if="!auditLog?.length" class="empty">
+            No admin actions recorded yet.
+          </div>
+          <ul v-else class="simple-list audit-list">
+            <li
+              v-for="entry in auditLog"
+              :key="entry.id"
+              class="simple-row audit-row"
+            >
+              <div class="simple-main">
+                <span class="simple-title">
+                  <UserAttribution
+                    v-if="entry.actor"
+                    :user="entry.actor"
+                    fallback="deleted admin"
+                  />
+                  <span v-else class="dim">deleted admin</span>
+                  <span class="audit-action">
+                    {{ auditActionLabel(entry.action) }}</span
+                  >
+                  <span v-if="entry.targetId" class="audit-target">
+                    #{{ entry.targetId }}
                   </span>
-                  <span class="simple-meta">
-                    {{ entry.createdAt }}
-                    <span
-                      v-if="auditMetadataSummary(entry.metadata)"
-                      class="audit-meta-summary"
-                    >
-                      · {{ auditMetadataSummary(entry.metadata) }}
-                    </span>
+                </span>
+                <span class="simple-meta">
+                  {{ entry.createdAt }}
+                  <span
+                    v-if="auditMetadataSummary(entry.metadata)"
+                    class="audit-meta-summary"
+                  >
+                    · {{ auditMetadataSummary(entry.metadata) }}
                   </span>
-                </div>
-              </li>
-            </ul>
-          </template>
-        </section>
-      </template>
+                </span>
+              </div>
+            </li>
+          </ul>
+        </AccountSection>
+      </div>
     </div>
   </div>
 </template>
@@ -2438,58 +2595,6 @@ const roleLabel = computed(() => {
   color: #fff;
   padding: 3px 8px;
   border-radius: 3px;
-}
-.dn-edit-btn {
-  background: transparent;
-  border: 0;
-  padding: 0;
-  font: inherit;
-  font-size: 12px;
-  color: #999;
-  cursor: pointer;
-  line-height: 0.1;
-  text-decoration: underline;
-}
-.dn-edit-btn:hover {
-  color: #000;
-}
-.dn-inline-form {
-  display: flex;
-  align-items: last baseline;
-  gap: 6px;
-}
-.dn-input {
-  font: inherit;
-  font-size: 15px;
-  border: 0;
-  border-bottom: 1px solid #000;
-  outline: none;
-  padding: 1px 0;
-  width: 160px;
-  background: transparent;
-}
-.dn-btn {
-  background: transparent;
-  border: 0;
-  padding: 0;
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-  color: #000;
-}
-.dn-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-.dn-cancel {
-  color: #999;
-}
-.dn-cancel:hover {
-  color: #000;
-}
-.dn-error {
-  margin: 2px 0 0;
-  font-size: 11px;
 }
 .dim {
   color: #999;
@@ -2550,17 +2655,6 @@ const roleLabel = computed(() => {
   align-self: flex-start;
 }
 
-.change-password-collapsed {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 4px;
-}
-.change-password-actions {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-}
 .password-success {
   font-size: 14px;
   color: #666;
@@ -2581,66 +2675,6 @@ const roleLabel = computed(() => {
   margin: 0;
   font-size: 14px;
   color: #666;
-}
-.apply-success {
-  background: #f4f4f4;
-  padding: 16px;
-  font-size: 14px;
-  line-height: 1.5;
-  color: #000;
-  max-width: 380px;
-  border-left: 3px solid #000;
-}
-.apply-success p {
-  margin: 0;
-}
-.apply-terms {
-  border: 1px solid #000;
-  padding: 12px 16px;
-  font-size: 13px;
-  line-height: 1.5;
-  color: #000;
-}
-.apply-terms-title {
-  margin: 0 0 6px;
-  font-weight: 700;
-}
-.apply-terms-intro {
-  margin: 0 0 8px;
-}
-.apply-terms-list {
-  margin: 0 0 12px;
-  padding-left: 18px;
-}
-.apply-terms-list li {
-  margin-bottom: 4px;
-}
-.apply-terms-check {
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-  cursor: pointer;
-}
-.apply-terms-check input {
-  margin: 2px 0 0;
-  flex-shrink: 0;
-}
-.beta-row {
-  align-items: flex-start;
-}
-.beta-answers {
-  margin: 6px 0 0;
-  font-size: 13px;
-  line-height: 1.5;
-  color: #333;
-}
-.beta-answers dt {
-  font-weight: 700;
-  margin-top: 6px;
-}
-.beta-answers dd {
-  margin: 0;
-  white-space: pre-wrap;
 }
 
 /* Submission access request */
@@ -2708,6 +2742,159 @@ const roleLabel = computed(() => {
 .tab-btn.active {
   color: #000;
   border-bottom-color: #000;
+}
+
+/* Account tabs (logged-in) */
+.account-tabs {
+  display: flex;
+  margin-bottom: 24px;
+  border-bottom: 1px solid #000;
+  overflow-x: auto;
+}
+.account-tabs .tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.account-tabs .count {
+  font-size: 11px;
+  padding: 1px 7px;
+}
+.tab-panel > .section:first-of-type,
+.tab-panel > .account-section:first-of-type {
+  margin-top: 0;
+}
+.tab-panel > .account-section {
+  margin-top: 28px;
+}
+
+/* Profile settings rows */
+.settings-list {
+  display: flex;
+  flex-direction: column;
+}
+.settings-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid #ccc;
+}
+.settings-row:last-child {
+  border-bottom: 0;
+}
+.settings-label {
+  flex: 0 0 80px;
+  font-size: 13px;
+  color: #666;
+}
+.settings-value {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 15px;
+  word-break: break-word;
+}
+.settings-dots {
+  letter-spacing: 2px;
+}
+.settings-change {
+  flex: 0 0 auto;
+  margin-left: auto;
+  align-self: center;
+}
+.settings-edit {
+  flex: 1 1 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 6px;
+  max-width: 380px;
+}
+.settings-edit-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.btn-sm {
+  padding: 6px 16px;
+  font-size: 14px;
+}
+.btn-danger-outline {
+  border: 1px solid #c33;
+  color: #c33;
+  background: transparent;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.btn-danger-outline:hover {
+  background: #c33;
+  color: #fff;
+}
+
+/* Admin subtabs — segmented control, subordinate to the main tabs */
+.admin-subtabs {
+  display: inline-flex;
+  border: 1px solid #000;
+  margin-bottom: 20px;
+  max-width: 100%;
+}
+.subtab-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  background: transparent;
+  border: 0;
+  border-right: 1px solid #000;
+  padding: 6px 18px;
+  font: inherit;
+  font-size: 14px;
+  color: #666;
+  cursor: pointer;
+}
+.subtab-btn:last-child {
+  border-right: 0;
+}
+.subtab-btn:hover:not(.active) {
+  background: #f4f4f4;
+  color: #000;
+}
+.subtab-btn.active {
+  background: #000;
+  color: #fff;
+}
+.subtab-btn .count {
+  font-size: 11px;
+  padding: 1px 7px;
+}
+.subtab-btn.active .count {
+  background: #fff;
+  color: #000;
+}
+
+/* Status pills (all-annotations list) */
+.pill {
+  display: inline-block;
+  font-size: 11px;
+  line-height: 1.4;
+  padding: 1px 7px;
+  border-radius: 3px;
+  margin-right: 6px;
+  color: #fff;
+}
+.pill-hidden {
+  background: #666;
+}
+.pill-reported {
+  background: #c33;
+}
+.simple-row.is-hidden .simple-main {
+  opacity: 0.55;
 }
 
 /* Shared form */
@@ -2805,9 +2992,6 @@ const roleLabel = computed(() => {
   text-decoration: underline;
   align-self: flex-start;
 }
-.change-password-btn {
-  padding: 0;
-}
 .audit-action {
   color: #000;
 }
@@ -2820,17 +3004,6 @@ const roleLabel = computed(() => {
 .audit-meta-summary {
   color: #666;
   word-break: break-word;
-}
-.delete-link {
-  padding: 0;
-  color: #c33;
-}
-.danger-section {
-  margin-top: 40px;
-}
-.danger-title {
-  color: #c33;
-  border-bottom-color: #c33;
 }
 .danger-warning {
   margin: 0;
@@ -2846,11 +3019,6 @@ const roleLabel = computed(() => {
   background: #f4f4f4;
   padding: 1px 6px;
   font-size: 13px;
-}
-.delete-actions {
-  display: flex;
-  gap: 12px;
-  align-items: center;
 }
 .danger-btn {
   background: #c33;
@@ -2870,33 +3038,8 @@ const roleLabel = computed(() => {
   background: #a22;
 }
 
-/* Admin sections */
 .section {
   margin-top: 40px;
-}
-.section-title {
-  margin: 0 0 16px;
-  font-size: 18px;
-  font-weight: 400;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border-bottom: 1px solid #000;
-  padding-bottom: 4px;
-}
-.section-toggle {
-  width: 100%;
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid #000;
-  text-align: left;
-  font: inherit;
-  font-size: 18px;
-  cursor: pointer;
-  color: inherit;
-}
-.section-toggle:hover {
-  background: #f4f4f4;
 }
 .caret {
   display: inline-block;
