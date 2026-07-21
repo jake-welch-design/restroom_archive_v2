@@ -306,71 +306,11 @@ async function submitAgreement() {
 }
 
 // -------------- Submit form --------------
-const uploadName = ref("");
-const uploadLocation = ref("");
-const uploadDate = ref("");
-const uploadLat = ref("");
-const uploadLng = ref("");
-const uploadDescription = ref("");
-const uploadDescriptors = ref<string[]>([]);
-const { data: descriptorSuggestions } = useDescriptorSuggestions();
-const uploadFile = ref<File | null>(null);
-const uploadError = ref("");
-const uploadLoading = ref(false);
-const uploadSuccess = ref(false);
-
-function onFileChange(e: Event) {
-  const input = e.target as HTMLInputElement;
-  uploadFile.value = input.files?.[0] ?? null;
-}
-
-async function submitUpload() {
-  if (!uploadFile.value) {
-    uploadError.value = "Please select a .glb file.";
-    return;
+async function onUploadSubmitted() {
+  await refreshMySubmissions();
+  if (isAdmin.value) {
+    await Promise.all([refreshRestroomQueue(), refreshNuxtData("restrooms")]);
   }
-  uploadError.value = "";
-  uploadLoading.value = true;
-  try {
-    const fd = new FormData();
-    fd.append("file", uploadFile.value);
-    fd.append("name", uploadName.value);
-    fd.append("location", uploadLocation.value);
-    fd.append("isoDate", uploadDate.value);
-    if (uploadLat.value) fd.append("lat", uploadLat.value);
-    if (uploadLng.value) fd.append("lng", uploadLng.value);
-    if (uploadDescription.value)
-      fd.append("description", uploadDescription.value);
-    if (uploadDescriptors.value.length)
-      fd.append("descriptors", JSON.stringify(uploadDescriptors.value));
-
-    await $fetch("/api/restrooms/submit", { method: "POST", body: fd });
-    uploadSuccess.value = true;
-    await refreshMySubmissions();
-    if (isAdmin.value) {
-      await Promise.all([refreshRestroomQueue(), refreshNuxtData("restrooms")]);
-      setTimeout(() => resetUpload(), 2000);
-    }
-  } catch (e: unknown) {
-    const err = e as { data?: { statusMessage?: string }; message?: string };
-    uploadError.value =
-      err.data?.statusMessage ?? err.message ?? "Upload failed.";
-  } finally {
-    uploadLoading.value = false;
-  }
-}
-
-function resetUpload() {
-  uploadName.value = "";
-  uploadLocation.value = "";
-  uploadDate.value = "";
-  uploadLat.value = "";
-  uploadLng.value = "";
-  uploadDescription.value = "";
-  uploadDescriptors.value = [];
-  uploadFile.value = null;
-  uploadError.value = "";
-  uploadSuccess.value = false;
 }
 
 // -------------- My submissions / annotations --------------
@@ -1582,113 +1522,7 @@ watch([isAdmin, () => accountTab.value, adminSubtab], async () => {
 
         <!-- Approved: submit form -->
         <AccountSection v-if="canSubmit" title="New submission">
-          <div v-if="uploadSuccess" class="success-message">
-            <p>
-              {{ isAdmin ? "Published." : "Submitted — awaiting approval." }}
-            </p>
-            <button type="button" class="link-btn" @click="resetUpload">
-              Submit another
-            </button>
-          </div>
-          <form v-else class="form" @submit.prevent="submitUpload">
-            <label class="field">
-              <span class="field-label">Name <span class="req">*</span></span>
-              <input
-                v-model="uploadName"
-                type="text"
-                required
-                class="field-input"
-              />
-            </label>
-            <label class="field">
-              <span class="field-label"
-                >Location <span class="req">*</span></span
-              >
-              <input
-                v-model="uploadLocation"
-                type="text"
-                required
-                placeholder="City, State"
-                class="field-input"
-              />
-            </label>
-            <label class="field">
-              <span class="field-label">Date <span class="req">*</span></span>
-              <input
-                v-model="uploadDate"
-                type="date"
-                required
-                class="field-input"
-              />
-            </label>
-            <div class="field-row">
-              <label class="field">
-                <span class="field-label">Latitude</span>
-                <input
-                  v-model="uploadLat"
-                  type="number"
-                  step="any"
-                  min="-90"
-                  max="90"
-                  class="field-input"
-                />
-              </label>
-              <label class="field">
-                <span class="field-label">Longitude</span>
-                <input
-                  v-model="uploadLng"
-                  type="number"
-                  step="any"
-                  min="-180"
-                  max="180"
-                  class="field-input"
-                />
-              </label>
-            </div>
-            <label class="field">
-              <span class="field-label">Description</span>
-              <textarea
-                v-model="uploadDescription"
-                class="field-input field-textarea"
-                maxlength="1000"
-                rows="4"
-              />
-              <span class="char-count"
-                >{{ uploadDescription.length }}/1000</span
-              >
-            </label>
-            <div class="field">
-              <span class="field-label">Descriptors</span>
-              <TagInput
-                v-model="uploadDescriptors"
-                :suggestions="descriptorSuggestions ?? []"
-              />
-            </div>
-            <label class="field">
-              <span class="field-label"
-                >GLB file <span class="req">*</span></span
-              >
-              <input
-                type="file"
-                accept=".glb"
-                required
-                class="field-input"
-                @change="onFileChange"
-              />
-            </label>
-
-            <p v-if="uploadError" class="form-error">{{ uploadError }}</p>
-
-            <button type="submit" class="primary-btn" :disabled="uploadLoading">
-              {{
-                uploadLoading
-                  ? "Uploading…"
-                  : isAdmin
-                    ? "Submit"
-                    : "Submit for review"
-              }}
-            </button>
-          </form>
+          <SubmitWizard @submitted="onUploadSubmitted" />
         </AccountSection>
 
         <!-- Awaiting submission approval -->
