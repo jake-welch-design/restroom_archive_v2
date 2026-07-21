@@ -12,6 +12,7 @@ const {
   signout,
 } = useAuth();
 const { select } = useSelection();
+const { previewModelUrl } = useSubmissionPreview();
 
 const SUBMISSION_AGREEMENTS = [
   "Scans will be complete and without too many holes (excluding mirrored surfaces).",
@@ -995,10 +996,29 @@ const accountTab = ref<AccountTab>(
   isValidTab(route.query.tab) ? route.query.tab : "profile",
 );
 
+const LEAVE_SUBMISSION_WARNING =
+  "Leaving will lose your in-progress submission. Continue?";
+
 function setTab(tab: AccountTab) {
+  if (
+    accountTab.value === "submissions" &&
+    tab !== "submissions" &&
+    previewModelUrl.value &&
+    !confirm(LEAVE_SUBMISSION_WARNING)
+  ) {
+    return;
+  }
   accountTab.value = tab;
   router.replace({ query: { ...route.query, tab } });
 }
+
+// Warn before navigating away from the account page entirely (nav links,
+// browser back/forward, programmatic navigateTo) while a scan is loaded.
+onBeforeRouteLeave(() => {
+  if (previewModelUrl.value && !confirm(LEAVE_SUBMISSION_WARNING)) {
+    return false;
+  }
+});
 
 // The session resolves client-side, so `?tab=admin` looks invalid on first
 // render; re-apply it once admin status is known.

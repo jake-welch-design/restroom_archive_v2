@@ -4,6 +4,12 @@ const { selected, selectedSlug, select } = useSelection();
 const randomPick = useRandomRestroom();
 const panelOpen = ref(true);
 
+// While the submission wizard has a scan loaded, it takes over this panel:
+// shown in place of the normal catalog selection, forced open, toggle hidden.
+const { previewModelUrl } = useSubmissionPreview();
+const inProgress = computed(() => !!previewModelUrl.value);
+const isClosed = computed(() => !panelOpen.value && !inProgress.value);
+
 // Measured by Catalog.vue so the tab lines up with the header strip exactly,
 // instead of relying on pixel constants that drift across platforms/fonts.
 const stripGeom = useStripGeom();
@@ -38,14 +44,15 @@ function goPrev() {
   <div class="shell">
     <a href="#main" class="skip-link">Skip to main content</a>
 
-    <aside class="panel" :class="{ closed: !panelOpen }">
+    <aside class="panel" :class="{ closed: isClosed }">
       <slot />
     </aside>
 
     <button
+      v-if="!inProgress"
       type="button"
       class="expand-tab"
-      :class="{ closed: !panelOpen }"
+      :class="{ closed: isClosed }"
       :style="tabStyle"
       :aria-label="panelOpen ? 'Hide catalog' : 'Show catalog'"
       @click="togglePanel"
@@ -54,23 +61,23 @@ function goPrev() {
     </button>
 
     <main id="main" class="viewer-panel">
-      <p v-show="!panelOpen" class="corner-title">
+      <p v-show="isClosed" class="corner-title">
         <a href="/" style="text-decoration: none; color: inherit"
           >The Restroom Archive</a
         >
       </p>
       <Viewer
-        :model-url="selected?.modelUrl ?? null"
-        :slug="selected?.slug ?? null"
-        :thumb-url="selected?.thumbUrl ?? null"
+        :model-url="previewModelUrl ?? selected?.modelUrl ?? null"
+        :slug="previewModelUrl ? null : (selected?.slug ?? null)"
+        :thumb-url="previewModelUrl ? null : (selected?.thumbUrl ?? null)"
       />
 
       <Transition name="fade">
-        <div v-if="!panelOpen" class="bottom-gradient" />
+        <div v-if="isClosed" class="bottom-gradient" />
       </Transition>
 
       <Transition name="fade">
-        <div v-if="!panelOpen && selected" class="bottom-nav">
+        <div v-if="isClosed && selected" class="bottom-nav">
           <p class="bottom-nav-info">
             <span>{{ selected.name }}</span>
             <span>{{ selected.date }}</span>

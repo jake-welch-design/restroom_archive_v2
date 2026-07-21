@@ -243,8 +243,10 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
           </button>
         </div>
 
-        <!-- Annotation controls: toggle always visible; add button signed-in users only -->
-        <div class="ctrl-group">
+        <!-- Annotation controls: hidden without a slug (e.g. an in-progress
+        submission preview, which has nothing to annotate yet). Otherwise
+        toggle always visible; add button signed-in users only. -->
+        <div v-if="props.slug" class="ctrl-group">
           <button
             class="ctrl-toggle"
             :class="{ active: markersVisible }"
