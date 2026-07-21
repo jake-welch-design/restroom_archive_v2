@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import type { Ref } from "vue";
 import type { CameraMode } from "~/types/annotation";
 
@@ -83,6 +84,14 @@ export function useThreeScene(
 
     const ambient = new THREE.AmbientLight(0xffffff, 3);
     scene.add(ambient);
+
+    // Neutral image-based lighting so PBR materials render regardless of their
+    // metallicFactor. Some uploaded scans omit metallicFactor, which per the
+    // glTF spec defaults to 1.0 (fully metallic); with ambient-only light and no
+    // environment those surfaces reflect nothing and render pure black.
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    pmrem.dispose();
 
     controls = new OrbitControls(camera, canvas);
     controls.enableDamping = true;
