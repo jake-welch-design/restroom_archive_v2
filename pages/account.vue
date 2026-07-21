@@ -11,8 +11,7 @@ const {
   refreshSession,
   signout,
 } = useAuth();
-const { select } = useSelection();
-const { previewModelUrl } = useSubmissionPreview();
+const { previewModelUrl, hasUnsavedSubmission } = useSubmissionPreview();
 
 const SUBMISSION_AGREEMENTS = [
   "Scans will be complete and without too many holes (excluding mirrored surfaces).",
@@ -727,6 +726,7 @@ const publishRestroom = (id: number) =>
     `r-publish-${id}`,
     `/api/admin/restrooms/${id}/publish`,
     async () => {
+      if (expandedPendingId.value === id) expandedPendingId.value = null;
       await refreshRestroomQueue();
       await refreshNuxtData("restrooms");
     },
@@ -765,6 +765,7 @@ async function confirmRejectRestroom(id: number) {
     await $fetch(`/api/admin/restrooms/${id}/reject`, { method: "POST", body });
     rejectingId.value = null;
     rejectMsg.value = "";
+    if (expandedPendingId.value === id) expandedPendingId.value = null;
     await refreshRestroomQueue();
   } catch (e: unknown) {
     const err = e as { data?: { statusMessage?: string } };
@@ -1003,7 +1004,7 @@ function setTab(tab: AccountTab) {
   if (
     accountTab.value === "submissions" &&
     tab !== "submissions" &&
-    previewModelUrl.value &&
+    hasUnsavedSubmission.value &&
     !confirm(LEAVE_SUBMISSION_WARNING)
   ) {
     return;
@@ -1015,9 +1016,24 @@ function setTab(tab: AccountTab) {
 // Warn before navigating away from the account page entirely (nav links,
 // browser back/forward, programmatic navigateTo) while a scan is loaded.
 onBeforeRouteLeave(() => {
-  if (previewModelUrl.value && !confirm(LEAVE_SUBMISSION_WARNING)) {
+  if (hasUnsavedSubmission.value && !confirm(LEAVE_SUBMISSION_WARNING)) {
     return false;
   }
+});
+
+// Expanding a pending submission auto-previews its scan in the same
+// right-panel viewer the submission wizard uses — no separate "preview"
+// button. Not treated as "unsaved progress": it's read-only, so leaving
+// doesn't need a confirm.
+watch(expandedPendingId, (id) => {
+  const r = id == null ? null : pendingRestrooms.value?.find((p) => p.id === id);
+  previewModelUrl.value = r?.modelUrl ?? null;
+});
+
+// Leaving the Admin tab should collapse any expanded preview rather than
+// leave it orphaned in the viewer with no visible expanded row to match it.
+watch(accountTab, (tab) => {
+  if (tab !== "admin") expandedPendingId.value = null;
 });
 
 // The session resolves client-side, so `?tab=admin` looks invalid on first
@@ -1912,9 +1928,6 @@ watch([isAdmin, () => accountTab.value, adminSubtab], async () => {
                     "
                   >
                     Reject
-                  </button>
-                  <button type="button" class="btn" @click="select(r.slug)">
-                    Preview in viewer
                   </button>
                 </div>
               </template>

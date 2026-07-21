@@ -3,7 +3,7 @@ const emit = defineEmits<{ submitted: [] }>();
 
 const { isAdmin } = useAuth();
 const { data: descriptorSuggestions } = useDescriptorSuggestions();
-const { previewModelUrl } = useSubmissionPreview();
+const { previewModelUrl, hasUnsavedSubmission } = useSubmissionPreview();
 const { select } = useSelection();
 
 const currentStep = ref(1);
@@ -32,12 +32,13 @@ function onFileChange(e: Event) {
   uploadFile.value = file;
   if (previewModelUrl.value) URL.revokeObjectURL(previewModelUrl.value);
   previewModelUrl.value = file ? URL.createObjectURL(file) : null;
+  hasUnsavedSubmission.value = !!file;
 }
 
 // Native "leave site?" prompt for tab close/refresh while a scan is loaded —
 // in-app navigation (route change, account tab switch) is guarded separately.
 function onBeforeUnload(e: BeforeUnloadEvent) {
-  if (!previewModelUrl.value) return;
+  if (!hasUnsavedSubmission.value) return;
   e.preventDefault();
   e.returnValue = "";
 }
@@ -46,6 +47,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("beforeunload", onBeforeUnload);
   if (previewModelUrl.value) URL.revokeObjectURL(previewModelUrl.value);
   previewModelUrl.value = null;
+  hasUnsavedSubmission.value = false;
 });
 
 const step1Valid = computed(() => !!uploadFile.value);
@@ -137,6 +139,7 @@ async function submitUpload() {
     select(res.slug);
     if (previewModelUrl.value) URL.revokeObjectURL(previewModelUrl.value);
     previewModelUrl.value = null;
+    hasUnsavedSubmission.value = false;
     if (isAdmin.value) setTimeout(() => resetUpload(), 2000);
   } catch (e: unknown) {
     const err = e as { data?: { statusMessage?: string }; message?: string };
@@ -158,6 +161,7 @@ function resetUpload() {
   uploadFile.value = null;
   if (previewModelUrl.value) URL.revokeObjectURL(previewModelUrl.value);
   previewModelUrl.value = null;
+  hasUnsavedSubmission.value = false;
   uploadError.value = "";
   uploadSuccess.value = false;
   currentStep.value = 1;
