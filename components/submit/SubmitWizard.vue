@@ -259,7 +259,7 @@ function resetUpload() {
         <div class="field">
           <span class="field-label-row">
             <span class="field-label"
-              >Latitude, Longitude <span class="req">*</span></span
+              >Coordinates <span class="req">*</span></span
             >
             <InfoTooltip>
               Please be as accurate as you can. Right click the location on
