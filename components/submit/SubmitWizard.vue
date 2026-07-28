@@ -99,12 +99,15 @@ function onCoordsPaste(e: ClipboardEvent) {
   uploadLng.value = match[2];
 }
 
+// Always shown — falls back to a plain Google Maps search until Name/Location
+// are filled in, so the link isn't hidden before the user has a reason to use it.
 const googleMapsUrl = computed(() => {
   const query = [uploadName.value.trim(), uploadLocation.value.trim()]
     .filter(Boolean)
     .join(" ");
-  if (!query) return null;
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+  return query
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`
+    : "https://www.google.com/maps";
 });
 
 async function submitUpload() {
@@ -266,7 +269,6 @@ function resetUpload() {
               Google Maps to copy/paste the exact coordinates.
             </InfoTooltip>
             <a
-              v-if="googleMapsUrl"
               :href="googleMapsUrl"
               target="_blank"
               rel="noopener"
@@ -478,10 +480,12 @@ function resetUpload() {
   max-width: 420px;
 }
 
-/* Step tabs */
+/* Step tabs — deliberately quieter than the account sub-tabs that sit
+   directly above the wizard: underlined text rather than a second filled
+   segmented control, so the two rows don't read at the same level. */
 .step-tabs {
   display: flex;
-  border: 1px solid #000;
+  border-bottom: 1px solid #000;
 }
 .step-tab {
   flex: 1 1 0;
@@ -491,30 +495,27 @@ function resetUpload() {
   gap: 4px;
   background: transparent;
   border: 0;
-  border-right: 1px solid #000;
-  padding: 8px 4px;
+  border-bottom: 1px solid transparent;
+  margin-bottom: -1px;
+  padding: 6px 4px 7px;
   font: inherit;
   font-size: 13px;
-  color: #666;
+  color: #999;
   cursor: pointer;
 }
-.step-tab:last-child {
-  border-right: 0;
-}
 .step-tab:hover:not(.active):not(:disabled) {
-  background: #f4f4f4;
-  color: #000;
+  color: #595959;
 }
 .step-tab.active {
-  background: #000;
-  color: #fff;
+  color: #000;
+  border-bottom-color: #000;
 }
 .step-tab:disabled {
   color: #ccc;
   cursor: not-allowed;
 }
 .step-num {
-  font-weight: 700;
+  opacity: 0.6;
 }
 
 /* Shared form */

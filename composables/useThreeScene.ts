@@ -1,7 +1,6 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import type { Ref } from "vue";
 import type { CameraMode } from "~/types/annotation";
 
@@ -76,22 +75,16 @@ export function useThreeScene(
     renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setClearColor(0x000000);
+    // Photogrammetry scans have lighting baked into their base color texture, so
+    // the viewer renders unlit (see toUnlitMaterial). No tone mapping either —
+    // it would remap those baked values and wash the scan out.
+    renderer.toneMapping = THREE.NoToneMapping;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
 
     scene = new THREE.Scene();
 
     camera = new THREE.PerspectiveCamera(70, 1, 0.01, 1000);
     camera.position.set(0, 0, 4);
-
-    const ambient = new THREE.AmbientLight(0xffffff, 3);
-    scene.add(ambient);
-
-    // Neutral image-based lighting so PBR materials render regardless of their
-    // metallicFactor. Some uploaded scans omit metallicFactor, which per the
-    // glTF spec defaults to 1.0 (fully metallic); with ambient-only light and no
-    // environment those surfaces reflect nothing and render pure black.
-    const pmrem = new THREE.PMREMGenerator(renderer);
-    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-    pmrem.dispose();
 
     controls = new OrbitControls(camera, canvas);
     controls.enableDamping = true;
@@ -148,6 +141,43 @@ export function useThreeScene(
     if (renderer && scene && camera) renderer.render(scene, camera);
   }
 
+  // Scans are photographed, not lit: the base color texture already contains the
+  // real-world lighting. Rendering them with a PBR material means three re-lights
+  // an already-lit image — dark surfaces pick up ambient/environment fill and the
+  // whole model reads faded. MeshBasicMaterial shows the texture exactly as
+  // authored, and sidesteps the metallicFactor-defaults-to-1 black-model problem
+  // entirely since metalness/roughness no longer participate.
+  function toUnlitMaterial(src: THREE.Material): THREE.MeshBasicMaterial {
+    const pbr = src as THREE.MeshStandardMaterial;
+    const flat = new THREE.MeshBasicMaterial({
+      name: src.name,
+      map: pbr.map ?? null,
+      color: pbr.color ? pbr.color.clone() : new THREE.Color(0xffffff),
+      vertexColors: pbr.vertexColors ?? false,
+      transparent: src.transparent,
+      opacity: src.opacity,
+      alphaMap: pbr.alphaMap ?? null,
+      alphaTest: src.alphaTest,
+      side: src.side,
+      depthWrite: src.depthWrite,
+      toneMapped: false,
+    });
+    // Textures are handed to the new material, so only the material shell is
+    // released here — disposeMaterial() would take the maps down with it.
+    src.dispose();
+    return flat;
+  }
+
+  function applyFlatMaterials(root: THREE.Object3D) {
+    root.traverse((child) => {
+      const mesh = child as THREE.Mesh;
+      if (!mesh.isMesh || !mesh.material) return;
+      mesh.material = Array.isArray(mesh.material)
+        ? mesh.material.map(toUnlitMaterial)
+        : toUnlitMaterial(mesh.material);
+    });
+  }
+
   async function loadModel(url: string) {
     if (!scene) return;
     loading.value = true;
@@ -175,6 +205,7 @@ export function useThreeScene(
 
       const tAdd = performance.now();
       currentModel = gltf.scene;
+      applyFlatMaterials(currentModel);
       scene.add(currentModel);
 
       const box = new THREE.Box3().setFromObject(currentModel);
@@ -440,6 +471,8 @@ export function useThreeScene(
       offRenderer.setPixelRatio(1);
       offRenderer.setSize(800, 800, false);
       offRenderer.setClearColor(0x000000);
+      offRenderer.toneMapping = THREE.NoToneMapping;
+      offRenderer.outputColorSpace = THREE.SRGBColorSpace;
 
       const thumbCam = new THREE.PerspectiveCamera(70, 1, 0.01, 1000);
       const box = new THREE.Box3().setFromObject(currentModel);

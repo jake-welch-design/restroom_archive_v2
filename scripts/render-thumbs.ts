@@ -103,13 +103,40 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
 renderer.setPixelRatio(1)
 renderer.setSize(800, 800)
 renderer.setClearColor(0x000000)
+renderer.toneMapping = THREE.NoToneMapping
+renderer.outputColorSpace = THREE.SRGBColorSpace
 
 const scene = new THREE.Scene()
 const camera = new THREE.PerspectiveCamera(70, 1, 0.01, 1000)
-scene.add(new THREE.AmbientLight(0xffffff, 3))
+
+// Unlit, matching the site viewer (composables/useThreeScene.ts): scans have
+// their lighting baked into the base color texture, so no lights or environment.
+function toUnlit(src) {
+  const flat = new THREE.MeshBasicMaterial({
+    name: src.name,
+    map: src.map ?? null,
+    color: src.color ? src.color.clone() : new THREE.Color(0xffffff),
+    vertexColors: src.vertexColors ?? false,
+    transparent: src.transparent,
+    opacity: src.opacity,
+    alphaMap: src.alphaMap ?? null,
+    alphaTest: src.alphaTest,
+    side: src.side,
+    depthWrite: src.depthWrite,
+    toneMapped: false,
+  })
+  src.dispose()
+  return flat
+}
 
 new GLTFLoader().load('/model.glb', (gltf) => {
   const model = gltf.scene
+  model.traverse((child) => {
+    if (!child.isMesh || !child.material) return
+    child.material = Array.isArray(child.material)
+      ? child.material.map(toUnlit)
+      : toUnlit(child.material)
+  })
   scene.add(model)
 
   const box = new THREE.Box3().setFromObject(model)

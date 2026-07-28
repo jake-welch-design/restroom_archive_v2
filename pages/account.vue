@@ -972,6 +972,12 @@ async function submitRename(a: AccountRow) {
   }
 }
 
+// The signed-in user's own handle. Named to avoid colliding with the
+// `username` ref backing the sign-up form.
+const myUsername = computed(
+  () => (user.value as { username?: string } | null)?.username ?? "",
+);
+
 const roleLabel = computed(() => {
   if (!user.value) return "";
   if (isAdmin.value) return "Admin";
@@ -1010,7 +1016,18 @@ function setTab(tab: AccountTab) {
     return;
   }
   accountTab.value = tab;
-  router.replace({ query: { ...route.query, tab } });
+  // Re-point `?section=` at the new tab's own sub-tab (dropping it for tabs
+  // that have none) so the URL never advertises a section the tab can't show.
+  const { section: _stale, ...query } = route.query;
+  const section =
+    tab === "admin"
+      ? adminSection.value
+      : tab === "submissions"
+        ? submissionsSection.value
+        : undefined;
+  router.replace({
+    query: section ? { ...query, tab, section } : { ...query, tab },
+  });
 }
 
 // Warn before navigating away from the account page entirely (nav links,
@@ -1051,23 +1068,140 @@ const adminQueueCount = computed(
     (removalRequests.value?.length ?? 0),
 );
 
-// -------------- Admin subtabs --------------
-const adminSubtab = ref<"review" | "manage">("review");
+// -------------- Sub-tabs --------------
+// Each main tab owns at most one row of sub-tabs; both share the `?section=`
+// query param so a queue can be linked to and survives a reload.
+type AdminSection =
+  | "submissions"
+  | "upgrades"
+  | "reports"
+  | "removals"
+  | "accounts"
+  | "annotations"
+  | "audit";
+type SubmissionsSection = "new" | "published" | "pending";
 
-// The Manage lists (all annotations, audit log) can be large, so fetch them
-// only when the Manage subtab is first opened.
-const manageLoaded = ref(false);
-watch([isAdmin, () => accountTab.value, adminSubtab], async () => {
-  if (
-    isAdmin.value &&
-    accountTab.value === "admin" &&
-    adminSubtab.value === "manage" &&
-    !manageLoaded.value
-  ) {
-    manageLoaded.value = true;
-    await Promise.all([refreshAllAnnotations(), refreshAuditLog()]);
-  }
+const ADMIN_SECTIONS: AdminSection[] = [
+  "submissions",
+  "upgrades",
+  "reports",
+  "removals",
+  "accounts",
+  "annotations",
+  "audit",
+];
+const SUBMISSIONS_SECTIONS: SubmissionsSection[] = [
+  "new",
+  "published",
+  "pending",
+];
+
+const adminSection = ref<AdminSection>("submissions");
+const submissionsSection = ref<SubmissionsSection>("new");
+
+const adminSubTabs = computed(() => [
+  {
+    id: "submissions",
+    label: "Submissions",
+    count: pendingRestrooms.value?.length ?? 0,
+  },
+  { id: "upgrades", label: "Upgrades", count: pendingUsers.value?.length ?? 0 },
+  {
+    id: "reports",
+    label: "Reports",
+    count: annotationReports.value?.length ?? 0,
+  },
+  {
+    id: "removals",
+    label: "Removals",
+    count: removalRequests.value?.length ?? 0,
+  },
+  { id: "accounts", label: "Accounts", gapBefore: true },
+  { id: "annotations", label: "Annotations" },
+  { id: "audit", label: "Audit" },
+]);
+
+const submissionsSubTabs = computed(() => [
+  { id: "new", label: "New" },
+  {
+    id: "published",
+    label: "Published",
+    count: publishedSubmissions.value.length,
+  },
+  {
+    id: "pending",
+    label: "Pending",
+    count: pendingAndRejectedSubmissions.value.length,
+  },
+]);
+
+// The section for whichever main tab is showing, so one <AccountSubTabs>
+// v-model and one URL param cover both rows.
+const activeSection = computed({
+  get: () =>
+    accountTab.value === "admin" ? adminSection.value : submissionsSection.value,
+  set: (v: string) => setSection(v),
 });
+
+const activeSubTabs = computed(() => {
+  if (accountTab.value === "admin" && isAdmin.value) return adminSubTabs.value;
+  if (accountTab.value === "submissions") return submissionsSubTabs.value;
+  return [];
+});
+
+function setSection(section: string) {
+  if (accountTab.value === "admin") {
+    if (!ADMIN_SECTIONS.includes(section as AdminSection)) return;
+    adminSection.value = section as AdminSection;
+  } else if (accountTab.value === "submissions") {
+    if (!SUBMISSIONS_SECTIONS.includes(section as SubmissionsSection)) return;
+    // No unsaved-work guard here: the sub-tab panels are v-show, so the wizard
+    // stays mounted and an in-progress scan survives the switch. Only leaving
+    // the Submissions tab entirely (setTab) unmounts it.
+    submissionsSection.value = section as SubmissionsSection;
+  } else {
+    return;
+  }
+  router.replace({ query: { ...route.query, section } });
+}
+
+// Restore `?section=` for whichever tab is active. Runs on mount and again
+// when `isAdmin` resolves client-side (same reason `?tab=admin` is re-applied).
+function applySectionFromQuery() {
+  const section = route.query.section;
+  if (typeof section !== "string") return;
+  if (
+    accountTab.value === "admin" &&
+    ADMIN_SECTIONS.includes(section as AdminSection)
+  ) {
+    adminSection.value = section as AdminSection;
+  } else if (
+    accountTab.value === "submissions" &&
+    SUBMISSIONS_SECTIONS.includes(section as SubmissionsSection)
+  ) {
+    submissionsSection.value = section as SubmissionsSection;
+  }
+}
+applySectionFromQuery();
+
+// The two large admin lists are fetched the first time their section is opened.
+const loadedSections = reactive(new Set<AdminSection>());
+watch(
+  [isAdmin, accountTab, adminSection],
+  async () => {
+    if (!isAdmin.value || accountTab.value !== "admin") return;
+    const section = adminSection.value;
+    if (loadedSections.has(section)) return;
+    if (section === "annotations") {
+      loadedSections.add(section);
+      await refreshAllAnnotations();
+    } else if (section === "audit") {
+      loadedSections.add(section);
+      await refreshAuditLog();
+    }
+  },
+  { immediate: true },
+);
 </script>
 
 <template>
@@ -1266,284 +1400,286 @@ watch([isAdmin, () => accountTab.value, adminSubtab], async () => {
         </button>
       </nav>
 
+      <AccountSubTabs
+        v-if="activeSubTabs.length"
+        v-model="activeSection"
+        :tabs="activeSubTabs"
+      />
+
       <!-- Profile -->
       <div v-if="accountTab === 'profile'" class="tab-panel" role="tabpanel">
-        <AccountSection title="Account">
-          <div class="settings-list">
-            <!-- Name -->
-            <div class="settings-row">
-              <span class="settings-label">Name</span>
-              <template v-if="!editingDisplayName">
-                <span class="settings-value">
-                  <template v-if="(user as any)?.displayName">{{
-                    (user as any).displayName
-                  }}</template>
-                  <span v-else class="dim">Not set</span>
-                </span>
-                <button
-                  type="button"
-                  class="btn settings-change"
-                  @click="startEditDisplayName"
-                >
-                  Change
-                </button>
-              </template>
-              <form
-                v-else
-                class="settings-edit"
-                @submit.prevent="saveDisplayName"
+        <div class="settings-list form-column">
+          <!-- Name -->
+          <div class="settings-row">
+            <span class="settings-label">Name</span>
+            <template v-if="!editingDisplayName">
+              <span class="settings-value">
+                <template v-if="(user as any)?.displayName">{{
+                  (user as any).displayName
+                }}</template>
+                <span v-else class="dim">Not set</span>
+              </span>
+              <button
+                type="button"
+                class="btn settings-change"
+                @click="startEditDisplayName"
               >
-                <label class="field">
-                  <span class="field-label">Display name</span>
-                  <input
-                    ref="dnInput"
-                    v-model="displayNameDraft"
-                    type="text"
-                    maxlength="25"
-                    class="field-input"
-                    placeholder="Blank to clear"
-                    @keydown.esc="editingDisplayName = false"
-                  />
-                  <span class="field-hint"
-                    >Shown instead of @{{ (user as any)?.username }}.</span
-                  >
-                </label>
-                <p v-if="displayNameError" class="form-error">
-                  {{ displayNameError }}
-                </p>
-                <div class="settings-edit-actions">
-                  <button
-                    type="submit"
-                    class="primary-btn btn-sm"
-                    :disabled="displayNameLoading"
-                  >
-                    {{ displayNameLoading ? "…" : "Save" }}
-                  </button>
-                  <button
-                    type="button"
-                    class="link-btn"
-                    @click="editingDisplayName = false"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            </div>
-
-            <!-- Email -->
-            <div class="settings-row">
-              <span class="settings-label">Email</span>
-              <template v-if="!changingEmail">
-                <span class="settings-value">{{ (user as any)?.email }}</span>
-                <span v-if="emailSuccess" class="password-success"
-                  >Updated.</span
+                Change
+              </button>
+            </template>
+            <form
+              v-else
+              class="settings-edit"
+              @submit.prevent="saveDisplayName"
+            >
+              <label class="field">
+                <span class="field-label">Display name</span>
+                <input
+                  ref="dnInput"
+                  v-model="displayNameDraft"
+                  type="text"
+                  maxlength="25"
+                  class="field-input"
+                  placeholder="Blank to clear"
+                  @keydown.esc="editingDisplayName = false"
+                />
+                <span class="field-hint"
+                  >Shown instead of @{{ (user as any)?.username }}.</span
                 >
+              </label>
+              <p v-if="displayNameError" class="form-error">
+                {{ displayNameError }}
+              </p>
+              <div class="settings-edit-actions">
+                <button
+                  type="submit"
+                  class="primary-btn btn-sm"
+                  :disabled="displayNameLoading"
+                >
+                  {{ displayNameLoading ? "…" : "Save" }}
+                </button>
                 <button
                   type="button"
-                  class="btn settings-change"
-                  @click="startChangeEmail"
+                  class="link-btn"
+                  @click="editingDisplayName = false"
                 >
-                  Change
+                  Cancel
                 </button>
-              </template>
-              <form v-else class="settings-edit" @submit.prevent="saveNewEmail">
-                <label class="field">
-                  <span class="field-label">New email</span>
-                  <input
-                    v-model="emailDraft"
-                    type="email"
-                    required
-                    autocomplete="email"
-                    class="field-input"
-                  />
-                </label>
-                <label class="field">
-                  <span class="field-label">Current password</span>
-                  <input
-                    v-model="emailPasswordDraft"
-                    type="password"
-                    required
-                    autocomplete="current-password"
-                    class="field-input"
-                  />
-                  <span class="field-hint"
-                    >Confirm it's you before changing your email.</span
-                  >
-                </label>
-                <p v-if="emailError" class="form-error">{{ emailError }}</p>
-                <div class="settings-edit-actions">
-                  <button
-                    type="submit"
-                    class="primary-btn btn-sm"
-                    :disabled="emailLoading"
-                  >
-                    {{ emailLoading ? "Saving…" : "Update email" }}
-                  </button>
-                  <button
-                    type="button"
-                    class="link-btn"
-                    :disabled="emailLoading"
-                    @click="cancelChangeEmail"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            </div>
-
-            <!-- Password -->
-            <div class="settings-row">
-              <span class="settings-label">Password</span>
-              <template v-if="!changingPassword">
-                <span class="settings-value settings-dots">••••••••••</span>
-                <span v-if="passwordSuccess" class="password-success"
-                  >Updated.</span
-                >
-                <button
-                  type="button"
-                  class="btn settings-change"
-                  @click="startChangePassword"
-                >
-                  Change
-                </button>
-              </template>
-              <form
-                v-else
-                class="settings-edit"
-                @submit.prevent="saveNewPassword"
-              >
-                <label class="field">
-                  <span class="field-label">Current password</span>
-                  <input
-                    v-model="currentPasswordDraft"
-                    type="password"
-                    autocomplete="current-password"
-                    required
-                    class="field-input"
-                  />
-                </label>
-                <label class="field">
-                  <span class="field-label">New password</span>
-                  <input
-                    v-model="newPasswordDraft"
-                    type="password"
-                    autocomplete="new-password"
-                    required
-                    minlength="8"
-                    class="field-input"
-                  />
-                  <span class="field-hint">Minimum 8 characters.</span>
-                </label>
-                <label class="field">
-                  <span class="field-label">Confirm new password</span>
-                  <input
-                    v-model="confirmPasswordDraft"
-                    type="password"
-                    autocomplete="new-password"
-                    required
-                    minlength="8"
-                    class="field-input"
-                  />
-                </label>
-                <p v-if="passwordError" class="form-error">
-                  {{ passwordError }}
-                </p>
-                <div class="settings-edit-actions">
-                  <button
-                    type="submit"
-                    class="primary-btn btn-sm"
-                    :disabled="passwordLoading"
-                  >
-                    {{ passwordLoading ? "Saving…" : "Update password" }}
-                  </button>
-                  <button
-                    type="button"
-                    class="link-btn"
-                    :disabled="passwordLoading"
-                    @click="cancelChangePassword"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            </div>
-
-            <!-- Request deletion -->
-            <div v-if="!isAdmin" class="settings-row settings-row-danger">
-              <span class="settings-label">Delete</span>
-              <template v-if="!deletingAccount">
-                <span class="settings-value dim"
-                  >Permanently remove your account</span
-                >
-                <button
-                  type="button"
-                  class="btn btn-danger-outline settings-change"
-                  @click="startDeleteAccount"
-                >
-                  Request deletion
-                </button>
-              </template>
-              <form
-                v-else
-                class="settings-edit"
-                @submit.prevent="confirmDeleteAccount"
-              >
-                <p class="danger-warning">
-                  This will permanently remove your account, your annotations,
-                  and any pending submissions. Published restrooms you submitted
-                  will stay in the archive but will no longer show your name.
-                  <strong>This cannot be undone.</strong>
-                </p>
-                <label class="field">
-                  <span class="field-label">
-                    Type your username
-                    <code class="confirm-code">{{
-                      (user as { username?: string } | null)?.username
-                    }}</code>
-                    to confirm
-                  </span>
-                  <input
-                    v-model="deleteUsernameConfirm"
-                    type="text"
-                    autocomplete="off"
-                    required
-                    class="field-input"
-                  />
-                </label>
-                <label class="field">
-                  <span class="field-label">Current password</span>
-                  <input
-                    v-model="deletePasswordDraft"
-                    type="password"
-                    autocomplete="current-password"
-                    required
-                    class="field-input"
-                  />
-                </label>
-                <p v-if="deleteError" class="form-error">{{ deleteError }}</p>
-                <div class="settings-edit-actions">
-                  <button
-                    type="submit"
-                    class="danger-btn btn-sm"
-                    :disabled="deleteLoading"
-                  >
-                    {{
-                      deleteLoading ? "Deleting…" : "Permanently delete account"
-                    }}
-                  </button>
-                  <button
-                    type="button"
-                    class="link-btn"
-                    :disabled="deleteLoading"
-                    @click="cancelDeleteAccount"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            </div>
+              </div>
+            </form>
           </div>
-        </AccountSection>
+
+          <!-- Email -->
+          <div class="settings-row">
+            <span class="settings-label">Email</span>
+            <template v-if="!changingEmail">
+              <span class="settings-value">{{ (user as any)?.email }}</span>
+              <span v-if="emailSuccess" class="password-success"
+                >Updated.</span
+              >
+              <button
+                type="button"
+                class="btn settings-change"
+                @click="startChangeEmail"
+              >
+                Change
+              </button>
+            </template>
+            <form v-else class="settings-edit" @submit.prevent="saveNewEmail">
+              <label class="field">
+                <span class="field-label">New email</span>
+                <input
+                  v-model="emailDraft"
+                  type="email"
+                  required
+                  autocomplete="email"
+                  class="field-input"
+                />
+              </label>
+              <label class="field">
+                <span class="field-label">Current password</span>
+                <input
+                  v-model="emailPasswordDraft"
+                  type="password"
+                  required
+                  autocomplete="current-password"
+                  class="field-input"
+                />
+                <span class="field-hint"
+                  >Confirm it's you before changing your email.</span
+                >
+              </label>
+              <p v-if="emailError" class="form-error">{{ emailError }}</p>
+              <div class="settings-edit-actions">
+                <button
+                  type="submit"
+                  class="primary-btn btn-sm"
+                  :disabled="emailLoading"
+                >
+                  {{ emailLoading ? "Saving…" : "Update email" }}
+                </button>
+                <button
+                  type="button"
+                  class="link-btn"
+                  :disabled="emailLoading"
+                  @click="cancelChangeEmail"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <!-- Password -->
+          <div class="settings-row">
+            <span class="settings-label">Password</span>
+            <template v-if="!changingPassword">
+              <span class="settings-value settings-dots">••••••••••</span>
+              <span v-if="passwordSuccess" class="password-success"
+                >Updated.</span
+              >
+              <button
+                type="button"
+                class="btn settings-change"
+                @click="startChangePassword"
+              >
+                Change
+              </button>
+            </template>
+            <form
+              v-else
+              class="settings-edit"
+              @submit.prevent="saveNewPassword"
+            >
+              <label class="field">
+                <span class="field-label">Current password</span>
+                <input
+                  v-model="currentPasswordDraft"
+                  type="password"
+                  autocomplete="current-password"
+                  required
+                  class="field-input"
+                />
+              </label>
+              <label class="field">
+                <span class="field-label">New password</span>
+                <input
+                  v-model="newPasswordDraft"
+                  type="password"
+                  autocomplete="new-password"
+                  required
+                  minlength="8"
+                  class="field-input"
+                />
+                <span class="field-hint">Minimum 8 characters.</span>
+              </label>
+              <label class="field">
+                <span class="field-label">Confirm new password</span>
+                <input
+                  v-model="confirmPasswordDraft"
+                  type="password"
+                  autocomplete="new-password"
+                  required
+                  minlength="8"
+                  class="field-input"
+                />
+              </label>
+              <p v-if="passwordError" class="form-error">
+                {{ passwordError }}
+              </p>
+              <div class="settings-edit-actions">
+                <button
+                  type="submit"
+                  class="primary-btn btn-sm"
+                  :disabled="passwordLoading"
+                >
+                  {{ passwordLoading ? "Saving…" : "Update password" }}
+                </button>
+                <button
+                  type="button"
+                  class="link-btn"
+                  :disabled="passwordLoading"
+                  @click="cancelChangePassword"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <!-- Request deletion -->
+          <div v-if="!isAdmin" class="settings-row settings-row-danger">
+            <span class="settings-label">Delete</span>
+            <template v-if="!deletingAccount">
+              <span class="settings-value dim"
+                >Permanently remove your account</span
+              >
+              <button
+                type="button"
+                class="btn btn-danger-outline settings-change"
+                @click="startDeleteAccount"
+              >
+                Request deletion
+              </button>
+            </template>
+            <form
+              v-else
+              class="settings-edit"
+              @submit.prevent="confirmDeleteAccount"
+            >
+              <p class="danger-warning">
+                This will permanently remove your account, your annotations,
+                and any pending submissions. Published restrooms you submitted
+                will stay in the archive but will no longer show your name.
+                <strong>This cannot be undone.</strong>
+              </p>
+              <label class="field">
+                <span class="field-label">
+                  Type your username
+                  <code class="confirm-code">{{ myUsername }}</code>
+                  to confirm
+                </span>
+                <input
+                  v-model="deleteUsernameConfirm"
+                  type="text"
+                  autocomplete="off"
+                  required
+                  class="field-input"
+                />
+              </label>
+              <label class="field">
+                <span class="field-label">Current password</span>
+                <input
+                  v-model="deletePasswordDraft"
+                  type="password"
+                  autocomplete="current-password"
+                  required
+                  class="field-input"
+                />
+              </label>
+              <p v-if="deleteError" class="form-error">{{ deleteError }}</p>
+              <div class="settings-edit-actions">
+                <button
+                  type="submit"
+                  class="danger-btn btn-sm"
+                  :disabled="deleteLoading"
+                >
+                  {{
+                    deleteLoading ? "Deleting…" : "Permanently delete account"
+                  }}
+                </button>
+                <button
+                  type="button"
+                  class="link-btn"
+                  :disabled="deleteLoading"
+                  @click="cancelDeleteAccount"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       </div>
 
       <!-- Submissions -->
@@ -1556,84 +1692,82 @@ watch([isAdmin, () => accountTab.value, adminSubtab], async () => {
           {{ myActionError }}
         </p>
 
-        <!-- Approved: submit form -->
-        <AccountSection v-if="canSubmit" title="New submission">
-          <SubmitWizard @submitted="onUploadSubmitted" />
-        </AccountSection>
+        <!-- New submission -->
+        <div v-show="submissionsSection === 'new'">
+          <!-- Approved: submit form -->
+          <SubmitWizard v-if="canSubmit" @submitted="onUploadSubmitted" />
 
-        <!-- Awaiting submission approval -->
-        <div v-else-if="submissionRequested" class="awaiting">
-          <p>
-            Your request to submit restrooms is awaiting admin review. You can
-            leave annotations on any restroom in the meantime.
-          </p>
-        </div>
-
-        <!-- Submission access request flow -->
-        <section v-else class="section">
-          <div v-if="!showAgreementForm" class="request-cta">
-            <p class="request-cta-copy">
-              You can leave annotations on any restroom. To submit your own
-              restroom scans, request access below.
+          <!-- Awaiting submission approval -->
+          <div v-else-if="submissionRequested" class="awaiting">
+            <p>
+              Your request to submit restrooms is awaiting admin review. You can
+              leave annotations on any restroom in the meantime.
             </p>
-            <button
-              type="button"
-              class="primary-btn"
-              @click="openAgreementForm"
-            >
-              Request access to submit restroom scans
-            </button>
           </div>
 
-          <form v-else class="agreement-form" @submit.prevent="submitAgreement">
-            <p class="agreement-intro">
-              I agree to abide by the following guidelines when submitting
-              restrooms:
-            </p>
-            <label
-              v-for="(text, i) in SUBMISSION_AGREEMENTS"
-              :key="i"
-              class="agreement-row"
-            >
-              <input
-                v-model="agreementChecks[i]"
-                type="checkbox"
-                class="agreement-check"
-              />
-              <span>{{ text }}</span>
-            </label>
-            <p class="agreement-note">
-              Admins reserve the right to deny, remove, and edit any submissions
-              as they see fit, without notice. By submitting this request, you
-              agree to these terms.
-            </p>
-
-            <p v-if="agreementError" class="form-error">{{ agreementError }}</p>
-
-            <div class="agreement-actions">
+          <!-- Submission access request flow -->
+          <div v-else class="form-column">
+            <div v-if="!showAgreementForm" class="request-cta">
+              <p class="request-cta-copy">
+                You can leave annotations on any restroom. To submit your own
+                restroom scans, request access below.
+              </p>
               <button
                 type="button"
-                class="link-btn"
-                @click="showAgreementForm = false"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
                 class="primary-btn"
-                :disabled="!allAgreementsChecked || agreementLoading"
+                @click="openAgreementForm"
               >
-                {{ agreementLoading ? "…" : "Submit request" }}
+                Request access to submit restroom scans
               </button>
             </div>
-          </form>
-        </section>
 
-        <!-- My submissions (published) -->
-        <AccountSection
-          title="My submissions"
-          :count="publishedSubmissions.length"
-        >
+            <form v-else class="agreement-form" @submit.prevent="submitAgreement">
+              <p class="agreement-intro">
+                I agree to abide by the following guidelines when submitting
+                restrooms:
+              </p>
+              <label
+                v-for="(text, i) in SUBMISSION_AGREEMENTS"
+                :key="i"
+                class="agreement-row"
+              >
+                <input
+                  v-model="agreementChecks[i]"
+                  type="checkbox"
+                  class="agreement-check"
+                />
+                <span>{{ text }}</span>
+              </label>
+              <p class="agreement-note">
+                Admins reserve the right to deny, remove, and edit any submissions
+                as they see fit, without notice. By submitting this request, you
+                agree to these terms.
+              </p>
+
+              <p v-if="agreementError" class="form-error">{{ agreementError }}</p>
+
+              <div class="agreement-actions">
+                <button
+                  type="button"
+                  class="link-btn"
+                  @click="showAgreementForm = false"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  class="primary-btn"
+                  :disabled="!allAgreementsChecked || agreementLoading"
+                >
+                  {{ agreementLoading ? "…" : "Submit request" }}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- Published -->
+        <div v-show="submissionsSection === 'published'">
           <div v-if="!publishedSubmissions.length" class="empty">
             No approved submissions yet.
           </div>
@@ -1693,15 +1827,14 @@ watch([isAdmin, () => accountTab.value, adminSubtab], async () => {
               </div>
             </li>
           </ul>
-        </AccountSection>
+        </div>
 
-        <!-- Pending submissions -->
-        <AccountSection
-          v-if="pendingAndRejectedSubmissions.length"
-          title="Pending submissions"
-          :count="pendingAndRejectedSubmissions.length"
-        >
-          <ul class="simple-list">
+        <!-- Pending -->
+        <div v-show="submissionsSection === 'pending'">
+          <div v-if="!pendingAndRejectedSubmissions.length" class="empty">
+            Nothing awaiting review.
+          </div>
+          <ul v-else class="simple-list">
             <li
               v-for="r in pendingAndRejectedSubmissions"
               :key="r.id"
@@ -1734,7 +1867,7 @@ watch([isAdmin, () => accountTab.value, adminSubtab], async () => {
               </div>
             </li>
           </ul>
-        </AccountSection>
+        </div>
       </div>
 
       <!-- Annotations -->
@@ -1748,37 +1881,35 @@ watch([isAdmin, () => accountTab.value, adminSubtab], async () => {
         </p>
 
         <!-- My annotations -->
-        <AccountSection title="My annotations" :count="myAnnotations?.length">
-          <div v-if="!myAnnotations?.length" class="empty">
-            No annotations yet.
-          </div>
-          <ul v-else class="simple-list">
-            <li v-for="a in myAnnotations" :key="a.id" class="simple-row">
-              <div class="simple-main">
-                <NuxtLink
-                  class="simple-title link"
-                  :to="`/r/${a.restroomSlug}`"
-                  >{{ a.restroomName }}</NuxtLink
-                >
-                <span class="simple-meta annotation-body">{{ a.body }}</span>
-                <span class="simple-meta"
-                  >{{ a.restroomDate }} · {{ a.restroomLocation }}</span
-                >
-              </div>
-              <div class="simple-actions">
-                <button
-                  type="button"
-                  class="icon-btn"
-                  :disabled="annotationActionId === a.id"
-                  title="Delete annotation"
-                  @click="deleteMyAnnotation(a.restroomSlug, a.id)"
-                >
-                  {{ annotationActionId === a.id ? "…" : "✕" }}
-                </button>
-              </div>
-            </li>
-          </ul>
-        </AccountSection>
+        <div v-if="!myAnnotations?.length" class="empty">
+          No annotations yet.
+        </div>
+        <ul v-else class="simple-list">
+          <li v-for="a in myAnnotations" :key="a.id" class="simple-row">
+            <div class="simple-main">
+              <NuxtLink
+                class="simple-title link"
+                :to="`/r/${a.restroomSlug}`"
+                >{{ a.restroomName }}</NuxtLink
+              >
+              <span class="simple-meta annotation-body">{{ a.body }}</span>
+              <span class="simple-meta"
+                >{{ a.restroomDate }} · {{ a.restroomLocation }}</span
+              >
+            </div>
+            <div class="simple-actions">
+              <button
+                type="button"
+                class="icon-btn"
+                :disabled="annotationActionId === a.id"
+                title="Delete annotation"
+                @click="deleteMyAnnotation(a.restroomSlug, a.id)"
+              >
+                {{ annotationActionId === a.id ? "…" : "✕" }}
+              </button>
+            </div>
+          </li>
+        </ul>
       </div>
 
       <!-- Admin -->
@@ -1791,59 +1922,33 @@ watch([isAdmin, () => accountTab.value, adminSubtab], async () => {
           {{ actionError }}
         </p>
 
-        <nav class="admin-subtabs" role="tablist">
-          <button
-            type="button"
-            class="subtab-btn"
-            role="tab"
-            :class="{ active: adminSubtab === 'review' }"
-            :aria-selected="adminSubtab === 'review'"
-            @click="adminSubtab = 'review'"
-          >
-            Review
-            <span v-if="adminQueueCount" class="count">{{
-              adminQueueCount
-            }}</span>
-          </button>
-          <button
-            type="button"
-            class="subtab-btn"
-            role="tab"
-            :class="{ active: adminSubtab === 'manage' }"
-            :aria-selected="adminSubtab === 'manage'"
-            @click="adminSubtab = 'manage'"
-          >
-            Manage
-          </button>
-        </nav>
-
-        <AccountSection
-          v-show="adminSubtab === 'review'"
-          title="Pending submissions"
-          :count="pendingRestrooms?.length"
-        >
+        <!-- Pending submissions -->
+        <div v-show="adminSection === 'submissions'">
           <div v-if="!pendingRestrooms?.length" class="empty">
             No submissions pending.
           </div>
 
           <div v-else class="queue">
-            <div v-for="r in pendingRestrooms" :key="r.id" class="card">
+            <div class="queue-head">
+              <span>Name</span>
+              <span>Date</span>
+              <span>Location</span>
+            </div>
+            <div v-for="r in pendingRestrooms" :key="r.id" class="queue-row">
               <button
                 type="button"
-                class="card-header card-toggle"
+                class="queue-main"
                 :class="{ active: expandedPendingId === r.id }"
                 :aria-expanded="expandedPendingId === r.id"
                 @click="togglePendingExpand(r.id)"
               >
-                <span class="caret">{{
-                  expandedPendingId === r.id ? "▾" : "▸"
-                }}</span>
-                <span class="card-name">{{ r.name }}</span>
-                <span class="card-meta">{{ r.date }} · {{ r.location }}</span>
+                <span class="queue-name">{{ r.name }}</span>
+                <span class="queue-cell">{{ r.date }}</span>
+                <span class="queue-cell">{{ r.location }}</span>
               </button>
 
-              <template v-if="expandedPendingId === r.id">
-                <dl class="card-details">
+              <div v-if="expandedPendingId === r.id" class="queue-expanded">
+                <dl class="detail-list">
                   <template v-if="r.lat != null && r.lng != null">
                     <dt>Coordinates</dt>
                     <dd>{{ r.lat.toFixed(4) }}, {{ r.lng.toFixed(4) }}</dd>
@@ -1908,7 +2013,7 @@ watch([isAdmin, () => accountTab.value, adminSubtab], async () => {
                     </div>
                   </div>
                 </template>
-                <div v-else class="card-actions">
+                <div v-else class="detail-actions">
                   <button
                     type="button"
                     class="btn btn-publish"
@@ -1930,16 +2035,13 @@ watch([isAdmin, () => accountTab.value, adminSubtab], async () => {
                     Reject
                   </button>
                 </div>
-              </template>
+              </div>
             </div>
           </div>
-        </AccountSection>
+        </div>
 
-        <AccountSection
-          v-show="adminSubtab === 'review'"
-          title="Pending Upgrades"
-          :count="pendingUsers?.length"
-        >
+        <!-- Pending upgrades -->
+        <div v-show="adminSection === 'upgrades'">
           <div v-if="!pendingUsers?.length" class="empty">
             No accounts pending.
           </div>
@@ -1977,13 +2079,121 @@ watch([isAdmin, () => accountTab.value, adminSubtab], async () => {
               </div>
             </li>
           </ul>
-        </AccountSection>
+        </div>
 
-        <AccountSection
-          v-show="adminSubtab === 'manage'"
-          title="Accounts"
-          :count="accounts?.length"
-        >
+        <!-- Reported annotations -->
+        <div v-show="adminSection === 'reports'">
+          <div v-if="!annotationReports?.length" class="empty">
+            No reported annotations.
+          </div>
+
+          <ul v-else class="simple-list">
+            <li
+              v-for="r in annotationReports"
+              :key="r.reportId"
+              class="simple-row"
+            >
+              <div class="simple-main">
+                <NuxtLink
+                  class="simple-title link"
+                  :to="`/r/${r.restroom.slug}`"
+                >
+                  {{ r.restroom.name }}
+                </NuxtLink>
+                <span class="simple-meta annotation-body">{{
+                  r.annotation.body
+                }}</span>
+                <span class="simple-meta">
+                  By
+                  <UserAttribution :user="r.author" fallback="unknown" />
+                  · reported by
+                  <UserAttribution :user="r.reporter" fallback="unknown" />
+                  · {{ r.reportCreatedAt }}
+                </span>
+                <span v-if="r.reportReason" class="simple-meta reason"
+                  >Reason: {{ r.reportReason }}</span
+                >
+                <span v-if="r.annotation.hiddenAt" class="simple-meta dim"
+                  >Already hidden ({{ r.annotation.hiddenAt }})</span
+                >
+              </div>
+              <div class="simple-actions">
+                <button
+                  v-if="!r.annotation.hiddenAt"
+                  type="button"
+                  class="btn btn-reject"
+                  :disabled="actionLoading === `ann-hide-${r.annotation.id}`"
+                  @click="hideReportedAnnotation(r.annotation.id)"
+                >
+                  {{
+                    actionLoading === `ann-hide-${r.annotation.id}`
+                      ? "…"
+                      : "Hide annotation"
+                  }}
+                </button>
+                <button
+                  type="button"
+                  class="btn"
+                  :disabled="actionLoading === `ann-dismiss-${r.annotation.id}`"
+                  @click="dismissAnnotationReports(r.annotation.id)"
+                >
+                  {{
+                    actionLoading === `ann-dismiss-${r.annotation.id}`
+                      ? "…"
+                      : "Dismiss"
+                  }}
+                </button>
+              </div>
+            </li>
+          </ul>
+        </div>
+
+        <!-- Removal requests -->
+        <div v-show="adminSection === 'removals'">
+          <div v-if="!removalRequests?.length" class="empty">
+            No removal requests.
+          </div>
+
+          <ul v-else class="simple-list">
+            <li v-for="r in removalRequests" :key="r.id" class="simple-row">
+              <div class="simple-main">
+                <span class="simple-title">{{ r.name }}</span>
+                <span class="simple-meta"
+                  >{{ r.date }} · {{ r.location }} · status:
+                  {{ r.status }}</span
+                >
+                <span v-if="r.removalReason" class="simple-meta reason"
+                  >Reason: {{ r.removalReason }}</span
+                >
+                <span class="simple-meta">
+                  Requested by
+                  <UserAttribution :user="r.requester" fallback="unknown" />
+                </span>
+              </div>
+              <div class="simple-actions">
+                <button
+                  type="button"
+                  class="btn btn-reject"
+                  :disabled="actionLoading === `rm-reject-${r.id}`"
+                  @click="removeRestroom(r.id)"
+                >
+                  {{ actionLoading === `rm-reject-${r.id}` ? "…" : "Remove" }}
+                </button>
+                <button
+                  type="button"
+                  class="btn"
+                  :disabled="actionLoading === `rm-dismiss-${r.id}`"
+                  @click="dismissRemoval(r.id)"
+                >
+                  {{ actionLoading === `rm-dismiss-${r.id}` ? "…" : "Dismiss" }}
+                </button>
+              </div>
+            </li>
+          </ul>
+        </div>
+
+        <!-- Accounts -->
+        <div v-show="adminSection === 'accounts'">
           <div v-if="!accounts?.length" class="empty">No accounts.</div>
 
           <ul v-else class="simple-list">
@@ -2185,13 +2395,10 @@ watch([isAdmin, () => accountTab.value, adminSubtab], async () => {
               </div>
             </li>
           </ul>
-        </AccountSection>
+        </div>
 
-        <AccountSection
-          v-show="adminSubtab === 'manage'"
-          title="All annotations"
-          :count="allAnnotations?.length"
-        >
+        <!-- All annotations -->
+        <div v-show="adminSection === 'annotations'">
           <div v-if="!allAnnotations?.length" class="empty">
             No annotations yet.
           </div>
@@ -2246,130 +2453,10 @@ watch([isAdmin, () => accountTab.value, adminSubtab], async () => {
               </div>
             </li>
           </ul>
-        </AccountSection>
+        </div>
 
-        <AccountSection
-          v-show="adminSubtab === 'review'"
-          title="Reported annotations"
-          :count="annotationReports?.length"
-        >
-          <div v-if="!annotationReports?.length" class="empty">
-            No reported annotations.
-          </div>
-
-          <ul v-else class="simple-list">
-            <li
-              v-for="r in annotationReports"
-              :key="r.reportId"
-              class="simple-row"
-            >
-              <div class="simple-main">
-                <NuxtLink
-                  class="simple-title link"
-                  :to="`/r/${r.restroom.slug}`"
-                >
-                  {{ r.restroom.name }}
-                </NuxtLink>
-                <span class="simple-meta annotation-body">{{
-                  r.annotation.body
-                }}</span>
-                <span class="simple-meta">
-                  By
-                  <UserAttribution :user="r.author" fallback="unknown" />
-                  · reported by
-                  <UserAttribution :user="r.reporter" fallback="unknown" />
-                  · {{ r.reportCreatedAt }}
-                </span>
-                <span v-if="r.reportReason" class="simple-meta reason"
-                  >Reason: {{ r.reportReason }}</span
-                >
-                <span v-if="r.annotation.hiddenAt" class="simple-meta dim"
-                  >Already hidden ({{ r.annotation.hiddenAt }})</span
-                >
-              </div>
-              <div class="simple-actions">
-                <button
-                  v-if="!r.annotation.hiddenAt"
-                  type="button"
-                  class="btn btn-reject"
-                  :disabled="actionLoading === `ann-hide-${r.annotation.id}`"
-                  @click="hideReportedAnnotation(r.annotation.id)"
-                >
-                  {{
-                    actionLoading === `ann-hide-${r.annotation.id}`
-                      ? "…"
-                      : "Hide annotation"
-                  }}
-                </button>
-                <button
-                  type="button"
-                  class="btn"
-                  :disabled="actionLoading === `ann-dismiss-${r.annotation.id}`"
-                  @click="dismissAnnotationReports(r.annotation.id)"
-                >
-                  {{
-                    actionLoading === `ann-dismiss-${r.annotation.id}`
-                      ? "…"
-                      : "Dismiss"
-                  }}
-                </button>
-              </div>
-            </li>
-          </ul>
-        </AccountSection>
-
-        <AccountSection
-          v-show="adminSubtab === 'review'"
-          title="Removal requests"
-          :count="removalRequests?.length"
-        >
-          <div v-if="!removalRequests?.length" class="empty">
-            No removal requests.
-          </div>
-
-          <ul v-else class="simple-list">
-            <li v-for="r in removalRequests" :key="r.id" class="simple-row">
-              <div class="simple-main">
-                <span class="simple-title">{{ r.name }}</span>
-                <span class="simple-meta"
-                  >{{ r.date }} · {{ r.location }} · status:
-                  {{ r.status }}</span
-                >
-                <span v-if="r.removalReason" class="simple-meta reason"
-                  >Reason: {{ r.removalReason }}</span
-                >
-                <span class="simple-meta">
-                  Requested by
-                  <UserAttribution :user="r.requester" fallback="unknown" />
-                </span>
-              </div>
-              <div class="simple-actions">
-                <button
-                  type="button"
-                  class="btn btn-reject"
-                  :disabled="actionLoading === `rm-reject-${r.id}`"
-                  @click="removeRestroom(r.id)"
-                >
-                  {{ actionLoading === `rm-reject-${r.id}` ? "…" : "Remove" }}
-                </button>
-                <button
-                  type="button"
-                  class="btn"
-                  :disabled="actionLoading === `rm-dismiss-${r.id}`"
-                  @click="dismissRemoval(r.id)"
-                >
-                  {{ actionLoading === `rm-dismiss-${r.id}` ? "…" : "Dismiss" }}
-                </button>
-              </div>
-            </li>
-          </ul>
-        </AccountSection>
-
-        <AccountSection
-          v-show="adminSubtab === 'manage'"
-          title="Audit log"
-          :default-open="false"
-        >
+        <!-- Audit log -->
+        <div v-show="adminSection === 'audit'">
           <div v-if="!auditLog?.length" class="empty">
             No admin actions recorded yet.
           </div>
@@ -2406,7 +2493,7 @@ watch([isAdmin, () => accountTab.value, adminSubtab], async () => {
               </div>
             </li>
           </ul>
-        </AccountSection>
+        </div>
       </div>
     </div>
   </div>
@@ -2456,12 +2543,18 @@ watch([isAdmin, () => accountTab.value, adminSubtab], async () => {
   font-size: 16px;
 }
 .account-role {
-  font-size: 14px;
-  /* font-weight: 700; */
+  font-size: 11px;
+  line-height: 1.4;
   background: #000;
   color: #fff;
-  padding: 3px 8px;
+  padding: 2px 7px;
   border-radius: 3px;
+}
+
+/* Caps the width of anything that reads as a form, so settings rows and
+   checklists don't stretch the full panel on a wide viewport. */
+.form-column {
+  max-width: 560px;
 }
 .dim {
   color: #999;
@@ -2531,36 +2624,38 @@ watch([isAdmin, () => accountTab.value, adminSubtab], async () => {
 /* Sign-up intro */
 .signup-intro {
   margin-bottom: 24px;
-  /* max-width: 380px; */
+  max-width: 380px;
 }
 .signup-intro-title {
-  margin: 0 0 4px;
-  font-size: 18px;
+  margin: 0 0 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #000;
+  font-size: 16px;
   font-weight: 400;
 }
 .signup-intro p {
   margin: 0;
   font-size: 14px;
   color: #666;
+  line-height: 1.4;
 }
 
 /* Submission access request */
 .request-cta {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  max-width: 380px;
+  gap: 16px;
 }
 .request-cta-copy {
   margin: 0;
   font-size: 14px;
   color: #666;
+  line-height: 1.4;
 }
 .agreement-form {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-width: 520px;
 }
 .agreement-intro {
   margin: 0;
@@ -2589,34 +2684,35 @@ watch([isAdmin, () => accountTab.value, adminSubtab], async () => {
   align-items: center;
 }
 
-/* Auth tabs */
-.auth-tabs {
-  display: flex;
-  margin-bottom: 24px;
-  border-bottom: 1px solid #000;
-}
-.tab-btn {
-  background: transparent;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  padding: 8px 16px;
-  font: inherit;
-  font-size: 16px;
-  cursor: pointer;
-  color: #b3b3b3;
-}
-.tab-btn.active {
-  color: #000;
-  border-bottom-color: #000;
-}
-
-/* Account tabs (logged-in) */
+/* Main tabs — underlined, sentence case, weight 400, like the catalog nav.
+   Shared by the logged-out auth tabs and the logged-in account tabs. */
+.auth-tabs,
 .account-tabs {
   display: flex;
   margin-bottom: 24px;
   border-bottom: 1px solid #000;
   overflow-x: auto;
+}
+.tab-btn {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  margin-bottom: -1px;
+  padding: 8px 16px 9px;
+  font: inherit;
+  font-size: 16px;
+  cursor: pointer;
+  color: #999;
+}
+.tab-btn:first-child {
+  padding-left: 0;
+}
+.tab-btn:hover:not(.active) {
+  color: #595959;
+}
+.tab-btn.active {
+  color: #000;
+  border-bottom-color: #000;
 }
 .account-tabs .tab-btn {
   display: flex;
@@ -2629,15 +2725,11 @@ watch([isAdmin, () => accountTab.value, adminSubtab], async () => {
   font-size: 11px;
   padding: 1px 7px;
 }
-.tab-panel > .section:first-of-type,
-.tab-panel > .account-section:first-of-type {
-  margin-top: 0;
-}
-.tab-panel > .account-section {
-  margin-top: 28px;
+.account-tabs .tab-btn:not(.active) .count {
+  background: #999;
 }
 
-/* Profile settings rows */
+/* Profile settings rows — label stacked over value, action on the right. */
 .settings-list {
   display: flex;
   flex-direction: column;
@@ -2645,16 +2737,16 @@ watch([isAdmin, () => accountTab.value, adminSubtab], async () => {
 .settings-row {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 6px 12px;
-  padding: 14px 0;
-  border-bottom: 1px solid #ccc;
+  align-items: center;
+  gap: 4px 16px;
+  padding: 16px 0;
+  border-bottom: 1px solid #e8e8e8;
 }
 .settings-row:last-child {
   border-bottom: 0;
 }
 .settings-label {
-  flex: 0 0 80px;
+  flex: 1 1 100%;
   font-size: 13px;
   color: #666;
 }
@@ -2670,14 +2762,13 @@ watch([isAdmin, () => accountTab.value, adminSubtab], async () => {
 .settings-change {
   flex: 0 0 auto;
   margin-left: auto;
-  align-self: center;
 }
 .settings-edit {
   flex: 1 1 100%;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  margin-top: 6px;
+  margin-top: 8px;
   max-width: 380px;
 }
 .settings-edit-actions {
@@ -2701,47 +2792,6 @@ watch([isAdmin, () => accountTab.value, adminSubtab], async () => {
 .btn-danger-outline:hover {
   background: #c33;
   color: #fff;
-}
-
-/* Admin subtabs — segmented control, subordinate to the main tabs */
-.admin-subtabs {
-  display: inline-flex;
-  border: 1px solid #000;
-  margin-bottom: 20px;
-  max-width: 100%;
-}
-.subtab-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  white-space: nowrap;
-  background: transparent;
-  border: 0;
-  border-right: 1px solid #000;
-  padding: 6px 18px;
-  font: inherit;
-  font-size: 14px;
-  color: #666;
-  cursor: pointer;
-}
-.subtab-btn:last-child {
-  border-right: 0;
-}
-.subtab-btn:hover:not(.active) {
-  background: #f4f4f4;
-  color: #000;
-}
-.subtab-btn.active {
-  background: #000;
-  color: #fff;
-}
-.subtab-btn .count {
-  font-size: 11px;
-  padding: 1px 7px;
-}
-.subtab-btn.active .count {
-  background: #fff;
-  color: #000;
 }
 
 /* Status pills (all-annotations list) */
@@ -2777,16 +2827,12 @@ watch([isAdmin, () => accountTab.value, adminSubtab], async () => {
   gap: 4px;
 }
 .field-label {
-  font-size: 14px;
+  font-size: 13px;
   color: #666;
 }
-.req {
-  color: #000;
-}
 .field-input {
-  border: 0;
   border: 1px solid #000;
-  padding: 4px 2px;
+  padding: 4px 6px;
   font: inherit;
   font-size: 14px;
   background: transparent;
@@ -2798,20 +2844,10 @@ watch([isAdmin, () => accountTab.value, adminSubtab], async () => {
   border: 1px solid #000;
   padding: 6px;
 }
-.char-count {
-  font-size: 12px;
-  color: #999;
-  text-align: right;
-}
 .field-hint {
   margin: 0;
   font-size: 12px;
   color: #999;
-}
-.field-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
 }
 .turnstile {
   margin: 4px 0;
@@ -2843,11 +2879,6 @@ watch([isAdmin, () => accountTab.value, adminSubtab], async () => {
   background: #333;
 }
 
-.success-message {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
 .link-btn {
   background: transparent;
   border: 0;
@@ -2905,76 +2936,65 @@ watch([isAdmin, () => accountTab.value, adminSubtab], async () => {
   background: #a22;
 }
 
-.section {
-  margin-top: 40px;
-}
-.caret {
-  display: inline-block;
-  width: 12px;
-  font-size: 12px;
-  color: #666;
-}
 .count {
-  font-size: 12px;
+  font-size: 11px;
   background: #000;
   color: #fff;
   border-radius: 6px;
-  padding: 2px 8px;
+  padding: 1px 7px;
 }
 .empty {
   color: #666;
   font-size: 14px;
 }
+
+/* Pending submission queue — the catalog's expand-in-place row, so the
+   admin list reads the same way the public browse list does. */
 .queue {
   display: flex;
   flex-direction: column;
-  gap: 24px;
 }
-.card {
-  border: 1px solid #000;
-}
-.card-header {
-  padding: 12px 16px;
-  border-bottom: 1px solid #000;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.card-toggle {
-  width: 100%;
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid #000;
+.queue-head,
+.queue-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
   text-align: left;
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
 }
-.card-toggle:hover {
-  background: #f4f4f4;
-}
-.card-toggle.active {
-  background: #f4f4f4;
-}
-.card-name {
-  font-size: 16px;
-}
-.card-meta {
+.queue-head {
+  padding: 0 0 8px;
+  border-bottom: 1px solid #000;
   font-size: 13px;
   color: #666;
 }
-.preview-warning {
-  margin: 8px 16px 12px;
-  font-size: 12px;
-  color: #c33;
-  font-style: italic;
+.queue-row {
+  border-bottom: 1px solid #e8e8e8;
 }
-.card-details {
+.queue-main {
+  width: 100%;
+  background: transparent;
+  border: 0;
+  padding: 10px 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  align-items: start;
+}
+.queue-main:hover:not(.active) {
+  background: #f9f9f9;
+}
+.queue-name {
+  font-size: 15px;
+}
+.queue-cell {
+  font-size: 13px;
+  color: #666;
+}
+.queue-expanded {
+  padding: 4px 0 16px;
+}
+.detail-list {
   margin: 0;
-  padding: 12px 16px;
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 6px 16px;
@@ -3004,9 +3024,8 @@ dd {
   margin-bottom: 4px;
   border-radius: 0;
 }
-.card-actions {
-  padding: 12px 16px;
-  border-top: 1px solid #000;
+.detail-actions {
+  padding-top: 16px;
   display: flex;
   gap: 12px;
 }
@@ -3039,7 +3058,7 @@ dd {
   display: flex;
   flex-direction: column;
   gap: 0;
-  border-top: 1px solid #ccc;
+  border-top: 1px solid #e8e8e8;
 }
 .simple-row {
   display: flex;
@@ -3047,8 +3066,7 @@ dd {
   align-items: center;
   gap: 16px;
   padding: 12px 0;
-  /* background: #ccc; */
-  border-bottom: 1px solid #ccc;
+  border-bottom: 1px solid #e8e8e8;
 }
 .simple-main {
   display: flex;
@@ -3120,7 +3138,7 @@ dd {
 .account-row {
   display: flex;
   flex-direction: column;
-  border-bottom: 1px solid #ccc;
+  border-bottom: 1px solid #e8e8e8;
 }
 .account-row > .simple-row {
   border-bottom: 0;
@@ -3134,7 +3152,7 @@ dd {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  border-top: 1px dashed #ccc;
+  border-top: 1px dashed #e8e8e8;
 }
 .mod-row {
   display: flex;
@@ -3204,8 +3222,14 @@ dd {
   .primary-btn {
     font-size: 12px;
   }
-  .section-title {
-    font-size: 14px;
+  .queue-head,
+  .queue-main {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  /* Location is the least useful column when there's no room for three. */
+  .queue-head span:last-child,
+  .queue-cell:last-child {
+    display: none;
   }
 }
 </style>
