@@ -13,6 +13,11 @@ const {
 } = useAuth();
 const { previewModelUrl, hasUnsavedSubmission } = useSubmissionPreview();
 
+// This page has no controls strip of its own, so the layout's `.expand-tab`
+// frames `CatalogHeader` instead — see useHeaderStripGeom.
+const pageEl = ref<HTMLElement | null>(null);
+useHeaderStripGeom(pageEl);
+
 const SUBMISSION_AGREEMENTS = [
   "Scans will be complete and without too many holes (excluding mirrored surfaces).",
   "Scans will be cropped to remove any false spaces caused by reflective surfaces.",
@@ -1205,7 +1210,7 @@ watch(
 </script>
 
 <template>
-  <div class="account-page">
+  <div ref="pageEl" class="account-page">
     <CatalogHeader />
 
     <!-- Logged-out: auth forms -->

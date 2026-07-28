@@ -20,10 +20,15 @@ useSeoMeta({
 useHead({
   link: [{ rel: "canonical", href: `${siteUrl}/about` }],
 });
+
+// This page has no controls strip of its own, so the layout's `.expand-tab`
+// frames `CatalogHeader` instead — see useHeaderStripGeom.
+const pageEl = ref<HTMLElement | null>(null);
+useHeaderStripGeom(pageEl);
 </script>
 
 <template>
-  <div class="about-page">
+  <div ref="pageEl" class="about-page">
     <CatalogHeader />
     <article class="about-content">
       <h1>What is The Restroom Archive?</h1>
