@@ -532,7 +532,7 @@ function formatShortDate(iso: string) {
 .desc-text {
   margin: 0;
   color: #000;
-  font-size: 16px;
+  font-size: 12px;
   line-height: 1.35;
 }
 .edit-link {
@@ -731,9 +731,6 @@ function formatShortDate(iso: string) {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 8px;
     padding: 6px 12px;
-    font-size: 12px;
-  }
-  .desc-text {
     font-size: 12px;
   }
   .label {

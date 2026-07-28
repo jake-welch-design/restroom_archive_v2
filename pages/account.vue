@@ -2500,20 +2500,28 @@ watch(
 </template>
 
 <style scoped>
+/* Type scale — four steps, each with one job. Nothing on this page should
+   introduce a fifth size.
+     15px  identity + main tabs   (the only "large" text)
+     13px  content: titles, values, prose, buttons, inputs   (inherited base)
+     12px  support: labels, meta, column heads, sub-tabs
+     11px  micro: counts, pills, chips, hints
+   Spacing runs on a 4px grid: 4 / 8 / 12 / 16 / 20. */
 .account-page {
   display: flex;
   flex-direction: column;
   height: 100%;
   background: #fff;
   font-family: Arial, Helvetica, sans-serif;
-  font-size: 16px;
+  font-size: 13px;
+  line-height: 1.4;
   color: #000;
   overflow: hidden;
 }
 .body-section {
   flex: 1 1 auto;
   overflow-y: auto;
-  padding: 24px;
+  padding: 20px;
 }
 
 /* Header */
@@ -2523,165 +2531,41 @@ watch(
   align-items: center;
   border-bottom: 1px solid #000;
   padding-bottom: 8px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
   gap: 12px;
   flex-wrap: wrap;
 }
 .account-identity {
   display: flex;
   align-items: last baseline;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
 }
 .account-header-right {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   flex-shrink: 0;
 }
 .account-email {
-  font-size: 16px;
+  font-size: 15px;
 }
 .account-role {
   font-size: 11px;
   line-height: 1.4;
   background: #000;
   color: #fff;
-  padding: 2px 7px;
+  padding: 2px 6px;
   border-radius: 3px;
 }
 
 /* Caps the width of anything that reads as a form, so settings rows and
    checklists don't stretch the full panel on a wide viewport. */
 .form-column {
-  max-width: 560px;
+  max-width: 480px;
 }
 .dim {
   color: #999;
-}
-.rename-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-  margin-top: 4px;
-}
-.rename-input {
-  width: 200px;
-  border: 1px solid #000;
-  padding: 4px 6px;
-  font-size: 14px;
-}
-.rename-btn {
-  align-self: flex-start;
-}
-
-.awaiting {
-  background: #f4f4f4;
-  padding: 16px;
-  font-size: 14px;
-  color: #000;
-  margin-bottom: 24px;
-}
-.awaiting p {
-  margin: 0;
-}
-.muted-banner {
-  background: #fff4e5;
-}
-
-/* Admin message banner */
-.admin-message-banner {
-  background: #c33;
-  color: #fff;
-  padding: 12px 16px;
-  font-size: 14px;
-  line-height: 1.4;
-  margin-bottom: 16px;
-}
-.admin-message-banner strong {
-  font-weight: 700;
-  margin-right: 4px;
-}
-
-.forgot-password-link {
-  background: transparent;
-  border: 0;
-  padding: 0;
-  font: inherit;
-  font-size: 14px;
-  color: #000;
-  text-decoration: underline;
-  align-self: flex-start;
-}
-
-.password-success {
-  font-size: 14px;
-  color: #666;
-  font-style: italic;
-}
-
-/* Sign-up intro */
-.signup-intro {
-  margin-bottom: 24px;
-  max-width: 380px;
-}
-.signup-intro-title {
-  margin: 0 0 8px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #000;
-  font-size: 16px;
-  font-weight: 400;
-}
-.signup-intro p {
-  margin: 0;
-  font-size: 14px;
-  color: #666;
-  line-height: 1.4;
-}
-
-/* Submission access request */
-.request-cta {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.request-cta-copy {
-  margin: 0;
-  font-size: 14px;
-  color: #666;
-  line-height: 1.4;
-}
-.agreement-form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.agreement-intro {
-  margin: 0;
-  font-size: 14px;
-}
-.agreement-row {
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-  font-size: 14px;
-  line-height: 1.4;
-  cursor: pointer;
-}
-.agreement-check {
-  margin-top: 3px;
-  flex-shrink: 0;
-}
-.agreement-note {
-  margin: 4px 0 0;
-  font-size: 13px;
-  color: #666;
-}
-.agreement-actions {
-  display: flex;
-  gap: 16px;
-  align-items: center;
 }
 
 /* Main tabs — underlined, sentence case, weight 400, like the catalog nav.
@@ -2689,7 +2573,7 @@ watch(
 .auth-tabs,
 .account-tabs {
   display: flex;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
   border-bottom: 1px solid #000;
   overflow-x: auto;
 }
@@ -2698,9 +2582,9 @@ watch(
   border: 0;
   border-bottom: 1px solid transparent;
   margin-bottom: -1px;
-  padding: 8px 16px 9px;
+  padding: 6px 14px 7px;
   font: inherit;
-  font-size: 16px;
+  font-size: 15px;
   cursor: pointer;
   color: #999;
 }
@@ -2721,10 +2605,6 @@ watch(
   white-space: nowrap;
   flex-shrink: 0;
 }
-.account-tabs .count {
-  font-size: 11px;
-  padding: 1px 7px;
-}
 .account-tabs .tab-btn:not(.active) .count {
   background: #999;
 }
@@ -2738,8 +2618,8 @@ watch(
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 16px;
-  padding: 16px 0;
+  gap: 2px 12px;
+  padding: 12px 0;
   border-bottom: 1px solid #e8e8e8;
 }
 .settings-row:last-child {
@@ -2747,13 +2627,12 @@ watch(
 }
 .settings-label {
   flex: 1 1 100%;
-  font-size: 13px;
+  font-size: 12px;
   color: #666;
 }
 .settings-value {
   flex: 1 1 auto;
   min-width: 0;
-  font-size: 15px;
   word-break: break-word;
 }
 .settings-dots {
@@ -2769,39 +2648,279 @@ watch(
   flex-direction: column;
   gap: 12px;
   margin-top: 8px;
-  max-width: 380px;
+  max-width: 340px;
 }
 .settings-edit-actions {
   display: flex;
   gap: 12px;
   align-items: center;
 }
+
+/* Banners */
+.awaiting {
+  background: #f4f4f4;
+  padding: 12px;
+  color: #000;
+  margin-bottom: 16px;
+}
+.awaiting p {
+  margin: 0;
+}
+.muted-banner {
+  background: #fff4e5;
+}
+.admin-message-banner {
+  background: #c33;
+  color: #fff;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+.admin-message-banner strong {
+  font-weight: 700;
+  margin-right: 4px;
+}
+.danger-warning {
+  margin: 0;
+  color: #000;
+  background: #fbeaea;
+  border-left: 3px solid #c33;
+  padding: 8px 12px;
+}
+
+/* Sign-up intro */
+.signup-intro {
+  margin-bottom: 16px;
+  max-width: 340px;
+}
+.signup-intro-title {
+  margin: 0 0 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #000;
+  font-size: 15px;
+  font-weight: 400;
+}
+.signup-intro p {
+  margin: 0;
+  font-size: 12px;
+  color: #666;
+}
+
+/* Submission access request */
+.request-cta {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.request-cta-copy {
+  margin: 0;
+  font-size: 12px;
+  color: #666;
+}
+.agreement-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.agreement-intro {
+  margin: 0;
+}
+.agreement-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  cursor: pointer;
+}
+.agreement-check {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+.agreement-note {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #666;
+}
+.agreement-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-top: 4px;
+}
+
+/* Shared form */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 340px;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.field-label {
+  font-size: 12px;
+  color: #666;
+}
+.field-input {
+  border: 1px solid #000;
+  padding: 5px 6px;
+  font: inherit;
+  background: transparent;
+  outline: none;
+  color: #000;
+}
+.field-textarea {
+  resize: vertical;
+  padding: 6px;
+}
+.field-hint {
+  margin: 0;
+  font-size: 11px;
+  color: #999;
+}
+.turnstile {
+  margin: 4px 0;
+}
+.form-error {
+  margin: 0;
+  color: #c33;
+}
+.action-error {
+  margin-bottom: 12px;
+}
+.password-success {
+  color: #666;
+  font-style: italic;
+}
+
+/* Buttons — all content-level (13px); only the danger-outline and the
+   account delete step down, because they sit inside meta-level rows. */
+.primary-btn {
+  background: #000;
+  color: #fff;
+  border: 0;
+  padding: 8px 18px;
+  font: inherit;
+  cursor: pointer;
+  align-self: flex-start;
+}
+.primary-btn:disabled,
+.danger-btn:disabled,
+.btn:disabled,
+.icon-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.primary-btn:hover:not(:disabled) {
+  background: #333;
+}
+.danger-btn {
+  background: #c33;
+  color: #fff;
+  border: 0;
+  padding: 8px 18px;
+  font: inherit;
+  cursor: pointer;
+  align-self: flex-start;
+}
+.danger-btn:hover:not(:disabled) {
+  background: #a22;
+}
+.btn {
+  background: transparent;
+  border: 1px solid #000;
+  padding: 5px 10px;
+  font: inherit;
+  cursor: pointer;
+}
+.btn.active {
+  background: #000;
+  color: #fff;
+}
 .btn-sm {
-  padding: 6px 16px;
-  font-size: 14px;
+  padding: 5px 14px;
+}
+.btn-publish:hover:not(:disabled) {
+  background: #000;
+  color: #fff;
+}
+.btn-reject:hover:not(:disabled) {
+  background: #c33;
+  border-color: #c33;
+  color: #fff;
 }
 .btn-danger-outline {
   border: 1px solid #c33;
   color: #c33;
   background: transparent;
-  padding: 6px 12px;
+  padding: 4px 10px;
   font: inherit;
-  font-size: 13px;
+  font-size: 12px;
   cursor: pointer;
 }
 .btn-danger-outline:hover {
   background: #c33;
   color: #fff;
 }
+.btn-delete {
+  border-color: #999;
+  color: #666;
+  font-size: 12px;
+  padding: 4px 10px;
+}
+.btn-delete:hover:not(:disabled) {
+  background: #c33;
+  border-color: #c33;
+  color: #fff;
+}
+.link-btn,
+.forgot-password-link {
+  background: transparent;
+  border: 0;
+  padding: 4px 8px;
+  font: inherit;
+  color: #000;
+  cursor: pointer;
+  text-decoration: underline;
+  align-self: flex-start;
+}
+.forgot-password-link {
+  padding: 0;
+}
+.icon-btn {
+  background: transparent;
+  border: none;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0;
+  color: #000;
+}
+.icon-btn:hover:not(:disabled) {
+  color: #ff0000;
+}
 
-/* Status pills (all-annotations list) */
+/* Counts, pills and chips — the micro step. */
+.count {
+  font-size: 11px;
+  background: #000;
+  color: #fff;
+  border-radius: 6px;
+  padding: 1px 6px;
+}
 .pill {
   display: inline-block;
   font-size: 11px;
   line-height: 1.4;
-  padding: 1px 7px;
+  padding: 1px 6px;
   border-radius: 3px;
-  margin-right: 6px;
+  margin-right: 4px;
   color: #fff;
 }
 .pill-hidden {
@@ -2810,142 +2929,19 @@ watch(
 .pill-reported {
   background: #c33;
 }
-.simple-row.is-hidden .simple-main {
-  opacity: 0.55;
-}
-
-/* Shared form */
-.form {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  max-width: 380px;
-}
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.field-label {
-  font-size: 13px;
-  color: #666;
-}
-.field-input {
-  border: 1px solid #000;
-  padding: 4px 6px;
-  font: inherit;
-  font-size: 14px;
-  background: transparent;
-  outline: none;
-  color: #000;
-}
-.field-textarea {
-  resize: vertical;
-  border: 1px solid #000;
-  padding: 6px;
-}
-.field-hint {
-  margin: 0;
-  font-size: 12px;
-  color: #999;
-}
-.turnstile {
-  margin: 4px 0;
-}
-.form-error {
-  margin: 0;
-  font-size: 14px;
-  color: #c33;
-}
-.action-error {
-  margin-bottom: 16px;
-}
-
-.primary-btn {
+.admin-tag {
+  display: inline-block;
   background: #000;
   color: #fff;
-  border: 0;
-  padding: 10px 24px;
-  font: inherit;
-  font-size: 16px;
-  cursor: pointer;
-  align-self: flex-start;
-}
-.primary-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.primary-btn:hover:not(:disabled) {
-  background: #333;
-}
-
-.link-btn {
-  background: transparent;
-  border: 0;
-  padding: 6px 10px;
-  font: inherit;
-  font-size: 14px;
-  color: #000;
-  cursor: pointer;
-  text-decoration: underline;
-  align-self: flex-start;
-}
-.audit-action {
-  color: #000;
-}
-.audit-target {
-  color: #888;
-  font-family: ui-monospace, Menlo, monospace;
-  font-size: 13px;
-  margin-left: 4px;
-}
-.audit-meta-summary {
-  color: #666;
-  word-break: break-word;
-}
-.danger-warning {
-  margin: 0;
-  font-size: 14px;
-  line-height: 1.5;
-  color: #000;
-  background: #fbeaea;
-  border-left: 3px solid #c33;
-  padding: 10px 12px;
-}
-.confirm-code {
-  font-family: ui-monospace, Menlo, monospace;
-  background: #f4f4f4;
-  padding: 1px 6px;
-  font-size: 13px;
-}
-.danger-btn {
-  background: #c33;
-  color: #fff;
-  border: 0;
-  padding: 10px 24px;
-  font: inherit;
-  font-size: 16px;
-  cursor: pointer;
-  align-self: flex-start;
-}
-.danger-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.danger-btn:hover:not(:disabled) {
-  background: #a22;
-}
-
-.count {
   font-size: 11px;
-  background: #000;
-  color: #fff;
-  border-radius: 6px;
-  padding: 1px 7px;
+  line-height: 1.2;
+  padding: 2px 6px;
+  margin: 0 4px 4px 0;
+  border-radius: 0;
 }
 .empty {
   color: #666;
-  font-size: 14px;
+  font-size: 12px;
 }
 
 /* Pending submission queue — the catalog's expand-in-place row, so the
@@ -2962,9 +2958,9 @@ watch(
   text-align: left;
 }
 .queue-head {
-  padding: 0 0 8px;
+  padding: 0 0 6px;
   border-bottom: 1px solid #000;
-  font-size: 13px;
+  font-size: 12px;
   color: #666;
 }
 .queue-row {
@@ -2974,7 +2970,7 @@ watch(
   width: 100%;
   background: transparent;
   border: 0;
-  padding: 10px 0;
+  padding: 8px 0;
   font: inherit;
   color: inherit;
   cursor: pointer;
@@ -2983,22 +2979,18 @@ watch(
 .queue-main:hover:not(.active) {
   background: #f9f9f9;
 }
-.queue-name {
-  font-size: 15px;
-}
 .queue-cell {
-  font-size: 13px;
+  font-size: 12px;
   color: #666;
 }
 .queue-expanded {
-  padding: 4px 0 16px;
+  padding: 2px 0 12px;
 }
 .detail-list {
   margin: 0;
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 6px 16px;
-  font-size: 14px;
+  gap: 4px 12px;
   align-content: start;
 }
 dt {
@@ -3011,84 +3003,51 @@ dd {
 }
 .dd-description {
   white-space: pre-wrap;
-  line-height: 1.4;
-}
-.admin-tag {
-  display: inline-block;
-  background: #000;
-  color: #fff;
-  font-size: 12px;
-  line-height: 1.2;
-  padding: 2px 6px;
-  margin-right: 4px;
-  margin-bottom: 4px;
-  border-radius: 0;
 }
 .detail-actions {
-  padding-top: 16px;
+  padding-top: 12px;
   display: flex;
-  gap: 12px;
-}
-.btn {
-  background: transparent;
-  border: 1px solid #000;
-  padding: 6px 10px;
-  font: inherit;
-  font-size: 14px;
-  cursor: pointer;
-}
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.btn-publish:hover:not(:disabled) {
-  background: #000;
-  color: #fff;
-}
-.btn-reject:hover:not(:disabled) {
-  background: #c33;
-  border-color: #c33;
-  color: #fff;
+  gap: 8px;
 }
 
+/* Row lists */
 .simple-list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0;
   border-top: 1px solid #e8e8e8;
 }
 .simple-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 16px;
-  padding: 12px 0;
+  gap: 12px;
+  padding: 10px 0;
   border-bottom: 1px solid #e8e8e8;
+}
+.simple-row.is-hidden .simple-main {
+  opacity: 0.55;
 }
 .simple-main {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
-.simple-title {
-  font-size: 15px;
-}
 .simple-title.link {
   color: #000;
   text-decoration: underline;
 }
 .simple-meta {
-  font-size: 13px;
+  font-size: 12px;
   color: #666;
 }
-.simple-meta.reason {
+.simple-meta.reason,
+.simple-meta.annotation-body {
   color: #000;
 }
 .simple-meta.annotation-body {
-  color: #000;
   white-space: pre-wrap;
 }
 .simple-actions {
@@ -3097,41 +3056,43 @@ dd {
   flex-shrink: 0;
   align-items: center;
 }
-
-.icon-btn {
-  background: transparent;
-  /* border: 1px solid #000; */
-  border: none;
-  width: 28px;
-  height: 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-  padding: 0;
-  color: #000;
-}
-.icon-btn:hover:not(:disabled) {
-  color: #ff0000;
-}
-
-.icon-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.inline-removal-form {
+.inline-removal-form,
+.inline-reject-form {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+.inline-removal-form {
   margin-top: 8px;
+}
+.inline-reject-form {
+  padding: 8px 0 4px;
 }
 .inline-actions {
   display: flex;
-  gap: 12px;
+  gap: 8px;
   align-items: center;
+}
+
+/* Audit log */
+.audit-action {
+  color: #000;
+}
+.audit-target {
+  color: #888;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 12px;
+  margin-left: 4px;
+}
+.audit-meta-summary {
+  color: #666;
+  word-break: break-word;
+}
+.confirm-code {
+  font-family: ui-monospace, Menlo, monospace;
+  background: #f4f4f4;
+  padding: 1px 5px;
+  font-size: 12px;
 }
 
 /* Admin accounts list */
@@ -3143,18 +3104,17 @@ dd {
 .account-row > .simple-row {
   border-bottom: 0;
 }
-.btn.active {
-  background: #000;
-  color: #fff;
-}
 .account-options {
-  padding: 12px 0 16px;
+  padding: 8px 0 12px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   border-top: 1px dashed #e8e8e8;
 }
-.mod-row {
+.mod-row,
+.restrict-group,
+.rename-row,
+.ban-group {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -3163,64 +3123,36 @@ dd {
 .mod-row-restrict {
   justify-content: space-between;
 }
-.restrict-group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
 .mute-days {
-  width: 70px;
+  width: 64px;
   border: 1px solid #000;
-  padding: 6px 6px;
-  font-size: 14px;
+  padding: 5px 6px;
+  font: inherit;
 }
-.admin-msg-preview {
-  color: #c33;
-  font-style: italic;
+.rename-input {
+  width: 180px;
+  border: 1px solid #000;
+  padding: 5px 6px;
+  font: inherit;
 }
+.rename-btn {
+  align-self: flex-start;
+}
+.admin-msg-preview,
 .rejection-msg {
   color: #c33;
   font-style: italic;
 }
-.inline-reject-form {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px 0 6px;
-}
-
-.ban-group {
-  display: flex;
-  gap: 8px;
-}
-.btn-delete {
-  border-color: #999;
-  color: #666;
-  font-size: 13px;
-}
-.btn-delete:hover:not(:disabled) {
-  background: #c33;
-  border-color: #c33;
-  color: #fff;
-}
 
 @media (max-width: 750px) {
-  .account-page {
-    font-size: 12px;
-  }
   .body-section {
     padding: 12px;
   }
   .tab-btn {
-    font-size: 12px;
-    padding: 8px 10px;
+    padding: 6px 10px 7px;
   }
   .field-input {
     font-size: 16px; /* keep 16px — iOS zooms into inputs below 16px */
-  }
-  .primary-btn {
-    font-size: 12px;
   }
   .queue-head,
   .queue-main {

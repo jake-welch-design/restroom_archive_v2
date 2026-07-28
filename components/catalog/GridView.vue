@@ -290,7 +290,7 @@ onMounted(() => scrollToSelected(props.selectedSlug));
 .desc-text {
   margin: 0;
   color: #000;
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1.35;
 }
 .descriptors-section {

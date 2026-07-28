@@ -464,9 +464,8 @@ function resetUpload() {
 .link-btn {
   background: transparent;
   border: 0;
-  padding: 6px 10px;
+  padding: 4px 8px;
   font: inherit;
-  font-size: 14px;
   color: #000;
   cursor: pointer;
   text-decoration: underline;
@@ -476,7 +475,7 @@ function resetUpload() {
 .wizard {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
   max-width: 420px;
 }
 
@@ -499,7 +498,7 @@ function resetUpload() {
   margin-bottom: -1px;
   padding: 6px 4px 7px;
   font: inherit;
-  font-size: 13px;
+  font-size: 12px;
   color: #999;
   cursor: pointer;
 }
@@ -522,7 +521,7 @@ function resetUpload() {
 .form {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 .field {
   display: flex;
@@ -535,7 +534,7 @@ function resetUpload() {
   gap: 6px;
 }
 .field-label {
-  font-size: 14px;
+  font-size: 12px;
   color: #666;
 }
 .req {
@@ -543,9 +542,8 @@ function resetUpload() {
 }
 .field-input {
   border: 1px solid #000;
-  padding: 4px 2px;
+  padding: 5px 6px;
   font: inherit;
-  font-size: 14px;
   background: transparent;
   outline: none;
   color: #000;
@@ -555,13 +553,13 @@ function resetUpload() {
   padding: 6px;
 }
 .char-count {
-  font-size: 12px;
+  font-size: 11px;
   color: #999;
   text-align: right;
 }
 .field-hint {
   margin: 0;
-  font-size: 12px;
+  font-size: 11px;
   color: #999;
 }
 .field-hint-warn {
@@ -570,17 +568,16 @@ function resetUpload() {
 .field-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  gap: 12px;
 }
 .maps-link {
   margin-left: auto;
-  font-size: 12px;
+  font-size: 11px;
   color: #000;
   white-space: nowrap;
 }
 .form-error {
   margin: 0;
-  font-size: 14px;
   color: #c33;
 }
 
@@ -588,9 +585,8 @@ function resetUpload() {
   background: #000;
   color: #fff;
   border: 0;
-  padding: 10px 24px;
+  padding: 8px 18px;
   font: inherit;
-  font-size: 16px;
   cursor: pointer;
 }
 .primary-btn:disabled {
@@ -604,7 +600,7 @@ function resetUpload() {
 .step-actions {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   margin-top: 4px;
 }
 .step-next {
@@ -615,19 +611,16 @@ function resetUpload() {
 .review {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 .review-row {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  font-size: 14px;
 }
 .review-label {
-  font-size: 12px;
+  font-size: 11px;
   color: #666;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
 }
 .review-tags {
   display: flex;
@@ -637,16 +630,13 @@ function resetUpload() {
 .review-tag {
   background: #000;
   color: #fff;
-  font-size: 12px;
-  padding: 3px 7px;
+  font-size: 11px;
+  padding: 2px 6px;
 }
 
 @media (max-width: 750px) {
   .field-input {
     font-size: 16px; /* keep 16px — iOS zooms into inputs below 16px */
-  }
-  .primary-btn {
-    font-size: 12px;
   }
 }
 </style>

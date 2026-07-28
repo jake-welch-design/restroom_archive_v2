@@ -206,7 +206,7 @@ function formatShortDate(iso: string) {
 .desc-text {
   margin: 0;
   color: #000;
-  font-size: 16px;
+  font-size: 12px;
   line-height: 1.35;
 }
 
@@ -369,10 +369,6 @@ function formatShortDate(iso: string) {
   }
 
   .panel-name {
-    font-size: 12px;
-  }
-
-  .desc-text {
     font-size: 12px;
   }
 

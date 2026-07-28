@@ -32,10 +32,12 @@ defineEmits<{ (e: "update:modelValue", id: string): void }>();
 </template>
 
 <style scoped>
+/* Support step of the account type scale (12px), one notch under the 15px
+   main tabs it sits beneath. See the scale comment in pages/account.vue. */
 .subtabs {
   display: flex;
   flex-wrap: wrap;
-  margin-bottom: 19px;
+  margin-bottom: 15px;
 }
 .subtab-btn {
   display: flex;
@@ -48,14 +50,14 @@ defineEmits<{ (e: "update:modelValue", id: string): void }>();
      adjacent buttons share one hairline and the control still reads as a
      segmented block once the row wraps in a narrow panel. */
   margin: 0 -1px -1px 0;
-  padding: 6px 14px;
+  padding: 5px 12px;
   font: inherit;
-  font-size: 13px;
+  font-size: 12px;
   color: #666;
   cursor: pointer;
 }
 .subtab-btn.gap-before {
-  margin-left: 13px;
+  margin-left: 11px;
 }
 .subtab-btn:hover:not(.active) {
   background: #f4f4f4;
@@ -70,7 +72,7 @@ defineEmits<{ (e: "update:modelValue", id: string): void }>();
   background: #000;
   color: #fff;
   border-radius: 6px;
-  padding: 1px 7px;
+  padding: 1px 6px;
 }
 .subtab-btn:not(.active) .count {
   background: #666;
@@ -82,8 +84,7 @@ defineEmits<{ (e: "update:modelValue", id: string): void }>();
 
 @media (max-width: 750px) {
   .subtab-btn {
-    font-size: 12px;
-    padding: 6px 10px;
+    padding: 5px 10px;
   }
 }
 </style>
