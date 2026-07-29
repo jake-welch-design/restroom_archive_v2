@@ -211,7 +211,19 @@ function formatShortDate(iso: string) {
         <div class="row-main">
           <div class="col-date">{{ formatShortDate(r.isoDate) }}</div>
           <div class="col-name">{{ r.name }}</div>
-          <div class="col-loc">{{ r.location }}</div>
+          <div class="col-loc">
+            <span class="col-loc-text">{{ r.location }}</span>
+            <!-- Sits on the row's own line, baseline-aligned with the location
+                 it shares the column with, rather than down in the description. -->
+            <button
+              v-if="isAdmin && r.slug === selectedSlug && editingSlug !== r.slug"
+              type="button"
+              class="edit-link"
+              @click="startEdit(r, $event)"
+            >
+              Edit
+            </button>
+          </div>
         </div>
 
         <div v-if="r.slug === selectedSlug" class="row-expanded">
@@ -316,14 +328,6 @@ function formatShortDate(iso: string) {
                   {{ r.description ?? "No description yet." }}
                 </p>
               </div>
-              <button
-                v-if="isAdmin"
-                type="button"
-                class="edit-link"
-                @click="startEdit(r, $event)"
-              >
-                Edit
-              </button>
             </div>
 
             <!-- Descriptors -->
@@ -449,6 +453,17 @@ function formatShortDate(iso: string) {
 .col-loc {
   order: 3;
 }
+/* Row cells only — `.col-loc` is also the `.thead` sort button, which must keep
+   its arrow next to the label rather than pushed to the far edge. */
+.row-main .col-loc {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.col-loc-text {
+  min-width: 0;
+}
 .tbody {
   list-style: none;
   margin: 0;
@@ -532,7 +547,7 @@ function formatShortDate(iso: string) {
 .desc-text {
   margin: 0;
   color: #000;
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.35;
 }
 .edit-link {
@@ -540,7 +555,8 @@ function formatShortDate(iso: string) {
   border: 0;
   padding: 0;
   font: inherit;
-  font-size: 14px;
+  /* Secondary action: stays small next to the 16px row text it aligns with. */
+  font-size: 12px;
   color: #595959;
   cursor: pointer;
   flex-shrink: 0;
@@ -699,9 +715,10 @@ function formatShortDate(iso: string) {
 .edit-btn {
   background: transparent;
   border: 1px solid #000;
-  padding: 4px 16px;
+  padding: 3px 10px;
   font: inherit;
-  font-size: 14px;
+  /* Matches `.edit-label` on the fields above it. */
+  font-size: 12px;
   cursor: pointer;
 }
 .edit-btn:disabled {
@@ -734,6 +751,9 @@ function formatShortDate(iso: string) {
     font-size: 12px;
   }
   .label {
+    font-size: 12px;
+  }
+  .desc-text {
     font-size: 12px;
   }
   .annotation-body {

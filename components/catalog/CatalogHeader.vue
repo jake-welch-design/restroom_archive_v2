@@ -68,6 +68,10 @@ watch(() => route.path, () => {
   border-bottom: 1px solid #000;
   flex: 0 0 auto;
   font-family: Arial, Helvetica, sans-serif;
+  /* Pinned, not inherited: the header has to be the same height on every page,
+     and pages set their own line-height on the root (Account's 1.4 made this
+     ~6px taller than on Catalog, dropping the whole head-row out of line). */
+  line-height: normal;
   background: #fff;
 }
 

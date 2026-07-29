@@ -13,10 +13,13 @@ const {
 } = useAuth();
 const { previewModelUrl, hasUnsavedSubmission } = useSubmissionPreview();
 
-// This page has no controls strip of its own, so the layout's `.expand-tab`
-// frames `CatalogHeader` instead — see useHeaderStripGeom.
+// No controls strip on this page, so the first header rule grows to meet the
+// layout's `.expand-tab` instead of the tab measuring itself against a strip.
+// `alignEl` is whichever header is mounted: the auth tabs, or the account
+// header once signed in.
 const pageEl = ref<HTMLElement | null>(null);
-useHeaderStripGeom(pageEl);
+const alignEl = ref<HTMLElement | null>(null);
+const alignStyle = useAlignToStrip(pageEl, alignEl);
 
 const SUBMISSION_AGREEMENTS = [
   "Scans will be complete and without too many holes (excluding mirrored surfaces).",
@@ -1210,12 +1213,12 @@ watch(
 </script>
 
 <template>
-  <div ref="pageEl" class="account-page">
+  <div ref="pageEl" class="account-page" :style="alignStyle">
     <CatalogHeader />
 
     <!-- Logged-out: auth forms -->
     <div v-if="!loggedIn" class="body-section">
-      <div class="auth-tabs">
+      <div ref="alignEl" class="auth-tabs">
         <button
           type="button"
           class="tab-btn"
@@ -1332,7 +1335,7 @@ watch(
         <strong>From admin:</strong> {{ adminMessage }}
       </div>
 
-      <header class="account-header">
+      <header ref="alignEl" class="account-header">
         <div class="account-identity">
           <UserAttribution
             v-if="user"
@@ -2524,9 +2527,30 @@ watch(
   overflow: hidden;
 }
 .body-section {
+  --gutter: 20px;
   flex: 1 1 auto;
   overflow-y: auto;
-  padding: 20px;
+  padding: var(--gutter);
+}
+
+/* Full-bleed rules: the header stack pulls out to the panel edges and puts the
+   gutter back as padding, so the borders span the panel like the catalog's
+   sub-header while the content stays on the same left edge as everything else. */
+.account-header,
+.account-tabs,
+.auth-tabs {
+  margin-inline: calc(-1 * var(--gutter));
+  padding-inline: var(--gutter);
+}
+
+/* The first header row closes the gutter above it too, so it fills the band the
+   expand tab frames (site header's border → tab bottom) and its content centres
+   against the tab instead of sitting low in it — the catalog's `.controls`
+   starts flush under the header the same way. Skipped when the admin banner
+   takes first place, since the row is then not what the tab frames. */
+.body-section > .account-header:first-child,
+.body-section > .auth-tabs:first-child {
+  margin-top: calc(-1 * var(--gutter));
 }
 
 /* Header */
@@ -2535,10 +2559,15 @@ watch(
   justify-content: space-between;
   align-items: center;
   border-bottom: 1px solid #000;
-  padding-bottom: 8px;
+  /* Symmetric, so `align-items: center` centres against the row's full height
+     rather than 8px above it once the row grows to meet the tab. */
+  padding-block: 8px;
   margin-bottom: 12px;
   gap: 12px;
   flex-wrap: wrap;
+  /* Grows to end level with the expand tab — see useAlignToStrip. */
+  box-sizing: border-box;
+  min-height: var(--strip-align-height, 0px);
 }
 .account-identity {
   display: flex;
@@ -2581,6 +2610,13 @@ watch(
   margin-bottom: 16px;
   border-bottom: 1px solid #000;
   overflow-x: auto;
+}
+/* Logged out, the auth tabs are the first header rule, so they're what grows
+   to end level with the expand tab — see useAlignToStrip. The buttons stretch
+   with the row, keeping the active underline on the rule. */
+.auth-tabs {
+  box-sizing: border-box;
+  min-height: var(--strip-align-height, 0px);
 }
 .tab-btn {
   background: transparent;
@@ -2799,8 +2835,9 @@ watch(
   font-style: italic;
 }
 
-/* Buttons — all content-level (13px); only the danger-outline and the
-   account delete step down, because they sit inside meta-level rows. */
+/* Buttons — row-level actions (Change, Save, Cancel, admin queue actions) sit
+   at 12px with tight padding so they match the labels they sit beside rather
+   than outweighing them. Only the primary/danger CTAs stay content-level. */
 .primary-btn {
   background: #000;
   color: #fff;
@@ -2835,8 +2872,9 @@ watch(
 .btn {
   background: transparent;
   border: 1px solid #000;
-  padding: 5px 10px;
+  padding: 3px 8px;
   font: inherit;
+  font-size: 12px;
   cursor: pointer;
 }
 .btn.active {
@@ -2844,7 +2882,8 @@ watch(
   color: #fff;
 }
 .btn-sm {
-  padding: 5px 14px;
+  padding: 3px 10px;
+  font-size: 12px;
 }
 .btn-publish:hover:not(:disabled) {
   background: #000;
@@ -2859,7 +2898,7 @@ watch(
   border: 1px solid #c33;
   color: #c33;
   background: transparent;
-  padding: 4px 10px;
+  padding: 3px 8px;
   font: inherit;
   font-size: 12px;
   cursor: pointer;
@@ -2872,7 +2911,7 @@ watch(
   border-color: #999;
   color: #666;
   font-size: 12px;
-  padding: 4px 10px;
+  padding: 3px 8px;
 }
 .btn-delete:hover:not(:disabled) {
   background: #c33;
@@ -2883,8 +2922,9 @@ watch(
 .forgot-password-link {
   background: transparent;
   border: 0;
-  padding: 4px 8px;
+  padding: 2px 4px;
   font: inherit;
+  font-size: 12px;
   color: #000;
   cursor: pointer;
   text-decoration: underline;
@@ -3151,7 +3191,20 @@ dd {
 
 @media (max-width: 750px) {
   .body-section {
-    padding: 12px;
+    --gutter: 12px;
+  }
+  /* The tab moves to the panel's bottom edge here — nothing to align to, so
+     the row keeps its natural height and the normal gutter above it. */
+  .account-header,
+  .auth-tabs {
+    min-height: 0;
+  }
+  .body-section > .account-header:first-child,
+  .body-section > .auth-tabs:first-child {
+    margin-top: 0;
+  }
+  .account-header {
+    padding-top: 0;
   }
   .tab-btn {
     padding: 6px 10px 7px;

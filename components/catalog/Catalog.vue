@@ -168,9 +168,14 @@ function measureStrip() {
   // First strip element in document order: Catalog's own `.sub-header`
   // (grid/map) or the ListView's `.thead` (list). Falls back to `.controls`.
   const bottomEl = cat.querySelector<HTMLElement>(".sub-header, .thead");
-  const bottom = (bottomEl ?? controls).getBoundingClientRect().bottom;
   const top = cRect.top - catTop;
-  const height = bottom - cRect.top;
+  // Sum the two strip rows rather than spanning from one's top to the other's
+  // bottom: the filter panel opens *between* them, and a span would swallow it
+  // and stretch the tab. They're adjacent rows of the same flex column, so with
+  // the filter closed the sum is the span — it just stops the tab resizing when
+  // the filter opens under it.
+  const height =
+    cRect.height + (bottomEl ? bottomEl.getBoundingClientRect().height : 0);
   if (height > 0) stripGeom.value = { top, height };
 }
 

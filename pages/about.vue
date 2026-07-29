@@ -21,17 +21,18 @@ useHead({
   link: [{ rel: "canonical", href: `${siteUrl}/about` }],
 });
 
-// This page has no controls strip of its own, so the layout's `.expand-tab`
-// frames `CatalogHeader` instead — see useHeaderStripGeom.
+// No controls strip on this page, so the title rule grows to meet the layout's
+// `.expand-tab` instead of the tab measuring itself against a strip.
 const pageEl = ref<HTMLElement | null>(null);
-useHeaderStripGeom(pageEl);
+const alignEl = ref<HTMLElement | null>(null);
+const alignStyle = useAlignToStrip(pageEl, alignEl);
 </script>
 
 <template>
-  <div ref="pageEl" class="about-page">
+  <div ref="pageEl" class="about-page" :style="alignStyle">
     <CatalogHeader />
     <article class="about-content">
-      <h1>What is The Restroom Archive?</h1>
+      <h1 ref="alignEl">What is The Restroom Archive?</h1>
       <p>
         The Restroom Archive is an ongoing repository of 3D scans of restrooms
         designed, built, and maintained by
@@ -87,7 +88,8 @@ useHeaderStripGeom(pageEl);
   overflow: hidden;
 }
 .about-content {
-  padding: 24px;
+  --gutter: 24px;
+  padding: var(--gutter);
   overflow-y: auto;
   flex: 1 1 auto;
   line-height: 1.5;
@@ -102,6 +104,16 @@ useHeaderStripGeom(pageEl);
 }
 
 .about-content h1 {
+  /* Grows to end level with the expand tab — see useAlignToStrip. */
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: var(--strip-align-height, 0px);
+  /* Full-bleed rule: pull out to the panel edges and put the gutter back as
+     padding, so the border spans the panel like the catalog's sub-header
+     while the title stays on the same left edge as the body copy. */
+  margin-inline: calc(-1 * var(--gutter));
+  padding-inline: var(--gutter);
   font-size: 18px;
   font-weight: 400;
   border-bottom: 1px solid #000;
@@ -128,10 +140,12 @@ useHeaderStripGeom(pageEl);
     font-size: 12px;
   }
   .about-content {
-    padding: 12px;
+    --gutter: 12px;
   }
 
   .about-content h1 {
+    /* The tab moves to the panel's bottom edge here — nothing to align to. */
+    min-height: 0;
     font-size: 14px;
   }
 
