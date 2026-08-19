@@ -19,7 +19,7 @@ watch(() => route.path, () => {
       </component>
       <nav class="top-nav">
         <NuxtLink to="/about" :class="{ active: route.path === '/about' }"
-          >About</NuxtLink
+          >Info</NuxtLink
         >
         <NuxtLink
           to="/"
@@ -46,7 +46,7 @@ watch(() => route.path, () => {
     <div class="mobile-nav-wrap" :class="{ open: menuOpen }">
       <nav class="mobile-nav">
         <NuxtLink to="/about" :class="{ active: route.path === '/about' }"
-          >About</NuxtLink
+          >Info</NuxtLink
         >
         <NuxtLink
           to="/"

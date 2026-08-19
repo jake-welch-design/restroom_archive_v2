@@ -10,6 +10,7 @@ const emit = defineEmits<{ "update:modelValue": [tags: string[]] }>();
 
 const draft = ref("");
 const inputRef = ref<HTMLInputElement | null>(null);
+const listRef = ref<HTMLElement | null>(null);
 const open = ref(false);
 const activeIndex = ref(-1);
 
@@ -19,16 +20,13 @@ function exists(list: string[], tag: string) {
 }
 
 // Suggestions not already selected, filtered by the current draft. Shown on
-// focus (all available) and narrowed as the user types.
+// focus (every previously-used tag, scrollable) and narrowed as the user types.
 const filteredSuggestions = computed(() => {
   const all = props.suggestions ?? [];
   if (!all.length) return [];
   const q = draft.value.trim().toLowerCase();
   const available = all.filter((s) => !exists(props.modelValue, s));
-  const matches = q
-    ? available.filter((s) => s.toLowerCase().includes(q))
-    : available;
-  return matches.slice(0, 8);
+  return q ? available.filter((s) => s.toLowerCase().includes(q)) : available;
 });
 
 const showDropdown = computed(() => open.value && filteredSuggestions.value.length > 0);
@@ -92,6 +90,15 @@ watch(filteredSuggestions, () => {
   activeIndex.value = -1;
 });
 
+// The list scrolls now that it holds every previously-used tag — keep the
+// arrow-key cursor inside the visible part of it.
+watch(activeIndex, async (i) => {
+  if (i < 0) return;
+  await nextTick();
+  const option = listRef.value?.children[i] as HTMLElement | undefined;
+  option?.scrollIntoView({ block: "nearest" });
+});
+
 function remove(tag: string) {
   emit(
     "update:modelValue",
@@ -147,7 +154,7 @@ function onBlur() {
         @blur="onBlur"
       />
     </div>
-    <ul v-if="showDropdown" class="tag-suggestions" role="listbox">
+    <ul v-if="showDropdown" ref="listRef" class="tag-suggestions" role="listbox">
       <li
         v-for="(s, i) in filteredSuggestions"
         :key="s"

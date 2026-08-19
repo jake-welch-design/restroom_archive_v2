@@ -15,8 +15,8 @@ const { previewModelUrl, hasUnsavedSubmission } = useSubmissionPreview();
 
 // No controls strip on this page, so the first header rule grows to meet the
 // layout's `.expand-tab` instead of the tab measuring itself against a strip.
-// `alignEl` is whichever header is mounted: the auth tabs, or the account
-// header once signed in.
+// `alignEl` is whichever tabs row is mounted: the logged-out auth tabs, or the
+// logged-in account tabs.
 const pageEl = ref<HTMLElement | null>(null);
 const alignEl = ref<HTMLElement | null>(null);
 const alignStyle = useAlignToStrip(pageEl, alignEl);
@@ -844,6 +844,9 @@ function toggleOptions(id: number) {
   optionsAccountId.value = id;
   optionsMessage.value = "";
   optionsMuteDays.value = null;
+  // A rename left open on another account shouldn't greet you on this one.
+  renamingAccountId.value = null;
+  renameError.value = "";
 }
 
 function isAccountMuted(account: AccountRow): boolean {
@@ -852,14 +855,55 @@ function isAccountMuted(account: AccountRow): boolean {
   return Number.isFinite(ms) && ms > Date.now();
 }
 
-function accountStatusLabel(account: AccountRow): string {
-  if (account.bannedAt) return "Banned";
-  if (isAccountMuted(account)) return `Muted until ${account.mutedUntil}`;
+// SQLite hands these back as `YYYY-MM-DD HH:MM:SS` in UTC; a raw one in the
+// middle of a sentence reads like debug output.
+function formatAdminDate(value: string | null): string {
+  if (!value) return "";
+  const ms = Date.parse(`${value.replace(" ", "T")}Z`);
+  if (!Number.isFinite(ms)) return value;
+  const d = new Date(ms);
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  const month = d.toLocaleString("en-US", { month: "short", timeZone: "UTC" });
+  return `${day} ${month} ${d.getUTCFullYear()}`;
+}
+
+function accountRoleLabel(account: AccountRow): string {
   if (account.role === "admin") return "Admin";
   if (account.approvedAt) return "Archivist";
-  if (account.submissionRequestedAt)
-    return "Annotator · requested archivist access";
   return "Annotator";
+}
+
+// Status as separate badges rather than one run-on string: role is a standing
+// fact, a suspension or ban is a condition, and a pending upgrade request is a
+// to-do. Reading them as one sentence made all three look equally urgent.
+type AccountBadge = {
+  label: string;
+  tone: "role" | "neutral" | "warn" | "danger" | "outline";
+};
+
+function accountBadges(account: AccountRow): AccountBadge[] {
+  const badges: AccountBadge[] = [
+    {
+      label: accountRoleLabel(account),
+      tone: account.role === "admin" || account.approvedAt ? "role" : "neutral",
+    },
+  ];
+  if (account.bannedAt) {
+    badges.push({ label: "Banned", tone: "danger" });
+  } else if (isAccountMuted(account)) {
+    badges.push({
+      label: `Suspended until ${formatAdminDate(account.mutedUntil)}`,
+      tone: "warn",
+    });
+  }
+  if (
+    account.role !== "admin" &&
+    !account.approvedAt &&
+    account.submissionRequestedAt
+  ) {
+    badges.push({ label: "Access requested", tone: "outline" });
+  }
+  return badges;
 }
 
 async function runAccountAction(
@@ -904,7 +948,7 @@ function grantSubmissionAccess(a: AccountRow) {
 }
 function muteAccount(a: AccountRow) {
   if (!optionsMuteDays.value || optionsMuteDays.value < 1) {
-    actionError.value = "Enter a number of days to mute.";
+    actionError.value = "Enter how many days the suspension should last.";
     return Promise.resolve();
   }
   return runAccountAction(a, "mute", `/api/admin/users/${a.id}/mute`, {
@@ -1051,7 +1095,8 @@ onBeforeRouteLeave(() => {
 // button. Not treated as "unsaved progress": it's read-only, so leaving
 // doesn't need a confirm.
 watch(expandedPendingId, (id) => {
-  const r = id == null ? null : pendingRestrooms.value?.find((p) => p.id === id);
+  const r =
+    id == null ? null : pendingRestrooms.value?.find((p) => p.id === id);
   previewModelUrl.value = r?.modelUrl ?? null;
 });
 
@@ -1147,7 +1192,9 @@ const submissionsSubTabs = computed(() => [
 // v-model and one URL param cover both rows.
 const activeSection = computed({
   get: () =>
-    accountTab.value === "admin" ? adminSection.value : submissionsSection.value,
+    accountTab.value === "admin"
+      ? adminSection.value
+      : submissionsSection.value,
   set: (v: string) => setSection(v),
 });
 
@@ -1335,8 +1382,12 @@ watch(
         <strong>From admin:</strong> {{ adminMessage }}
       </div>
 
-      <header ref="alignEl" class="account-header">
+      <!-- Top row sits where the catalog's search bar does: left-clustered,
+           no border, flush under the site header — like `.controls`. Sign out
+           sits on the right, same line, like it used to. -->
+      <header class="account-header">
         <div class="account-identity">
+          <span v-if="roleLabel" class="account-role">{{ roleLabel }}</span>
           <UserAttribution
             v-if="user"
             class="account-email"
@@ -1346,22 +1397,14 @@ watch(
             }"
           />
         </div>
-        <div class="account-header-right">
-          <span class="account-role">{{ roleLabel }}</span>
-          <button type="button" class="link-btn" @click="signout">
-            Sign out
-          </button>
-        </div>
+        <button type="button" class="link-btn" @click="signout">
+          Sign out
+        </button>
       </header>
 
-      <div v-if="isMuted" class="awaiting muted-banner">
-        <p>
-          Your account is muted until {{ mutedUntil }}. You can't post
-          annotations or submit restrooms during this period.
-        </p>
-      </div>
-
-      <nav class="account-tabs" role="tablist">
+      <!-- Bottom row is what the expand tab frames — same band position, and
+           same flat/color-only styling, as the Info page's tabs. -->
+      <nav ref="alignEl" class="account-tabs" role="tablist">
         <button
           v-if="isAdmin"
           type="button"
@@ -1407,6 +1450,13 @@ watch(
           Annotations
         </button>
       </nav>
+
+      <div v-if="isMuted" class="awaiting muted-banner">
+        <p>
+          Your account is muted until {{ mutedUntil }}. You can't post
+          annotations or submit restrooms during this period.
+        </p>
+      </div>
 
       <AccountSubTabs
         v-if="activeSubTabs.length"
@@ -1482,9 +1532,7 @@ watch(
             <span class="settings-label">Email</span>
             <template v-if="!changingEmail">
               <span class="settings-value">{{ (user as any)?.email }}</span>
-              <span v-if="emailSuccess" class="password-success"
-                >Updated.</span
-              >
+              <span v-if="emailSuccess" class="password-success">Updated.</span>
               <button
                 type="button"
                 class="btn settings-change"
@@ -1636,9 +1684,9 @@ watch(
               @submit.prevent="confirmDeleteAccount"
             >
               <p class="danger-warning">
-                This will permanently remove your account, your annotations,
-                and any pending submissions. Published restrooms you submitted
-                will stay in the archive but will no longer show your name.
+                This will permanently remove your account, your annotations, and
+                any pending submissions. Published restrooms you submitted will
+                stay in the archive but will no longer show your name.
                 <strong>This cannot be undone.</strong>
               </p>
               <label class="field">
@@ -1729,7 +1777,11 @@ watch(
               </button>
             </div>
 
-            <form v-else class="agreement-form" @submit.prevent="submitAgreement">
+            <form
+              v-else
+              class="agreement-form"
+              @submit.prevent="submitAgreement"
+            >
               <p class="agreement-intro">
                 I agree to abide by the following guidelines when submitting
                 restrooms:
@@ -1747,12 +1799,14 @@ watch(
                 <span>{{ text }}</span>
               </label>
               <p class="agreement-note">
-                Admins reserve the right to deny, remove, and edit any submissions
-                as they see fit, without notice. By submitting this request, you
-                agree to these terms.
+                Admins reserve the right to deny, remove, and edit any
+                submissions as they see fit, without notice. By submitting this
+                request, you agree to these terms.
               </p>
 
-              <p v-if="agreementError" class="form-error">{{ agreementError }}</p>
+              <p v-if="agreementError" class="form-error">
+                {{ agreementError }}
+              </p>
 
               <div class="agreement-actions">
                 <button
@@ -2217,9 +2271,17 @@ watch(
                     />
                   </span>
                   <span class="simple-meta"
-                    >@{{ a.username }} · {{ a.email }} ·
-                    {{ accountStatusLabel(a) }}</span
+                    >@{{ a.username }} · {{ a.email }}</span
                   >
+                  <span class="simple-meta badge-row">
+                    <span
+                      v-for="b in accountBadges(a)"
+                      :key="b.label"
+                      class="pill"
+                      :class="`pill-${b.tone}`"
+                      >{{ b.label }}</span
+                    >
+                  </span>
                   <span
                     v-if="a.adminMessage"
                     class="simple-meta admin-msg-preview"
@@ -2233,171 +2295,275 @@ watch(
                     :class="{ active: optionsAccountId === a.id }"
                     @click="toggleOptions(a.id)"
                   >
-                    {{ optionsAccountId === a.id ? "Close" : "Options" }}
+                    {{ optionsAccountId === a.id ? "Close" : "Manage" }}
                   </button>
                 </div>
               </div>
 
+              <!-- Same settings-row idiom as the Profile tab: one labelled row
+                   per thing you can change, current state in the middle, the
+                   single action that changes it on the right. Ordered by
+                   consequence, so the irreversible ones sit last under their
+                   own heading instead of beside a rename button. -->
               <div v-if="optionsAccountId === a.id" class="account-options">
                 <label class="field">
-                  <span class="field-label">Message (optional)</span>
+                  <span class="field-label">Note to user</span>
                   <textarea
                     v-model="optionsMessage"
                     class="field-input field-textarea"
                     rows="2"
                     maxlength="500"
-                    placeholder="Shown at the top of their account in red"
+                    placeholder="Optional"
                   />
+                  <span class="field-hint">
+                    Attached to the next action you take below — rename and
+                    delete excepted. Shown at the top of their account in red.
+                  </span>
                 </label>
 
-                <!-- Row 1: Rename + Promote -->
-                <div class="mod-row">
-                  <div v-if="renamingAccountId === a.id" class="rename-row">
-                    <input
-                      v-model="renameDraft"
-                      type="text"
-                      minlength="3"
-                      maxlength="20"
-                      pattern="[a-z0-9_]+"
-                      class="field-input rename-input"
-                      placeholder="new_username"
-                    />
-                    <button
-                      type="button"
-                      class="btn btn-publish"
-                      :disabled="actionLoading === `acct-${a.id}-rename`"
-                      @click="submitRename(a)"
-                    >
-                      {{
-                        actionLoading === `acct-${a.id}-rename` ? "…" : "Save"
-                      }}
-                    </button>
-                    <button
-                      type="button"
-                      class="link-btn"
-                      @click="renamingAccountId = null"
-                    >
-                      Cancel
-                    </button>
-                    <p v-if="renameError" class="form-error">
-                      {{ renameError }}
-                    </p>
-                  </div>
-                  <button
-                    v-else-if="a.id !== (user as any)?.id"
-                    type="button"
-                    class="btn rename-btn"
-                    @click="startRename(a)"
-                  >
-                    Rename @{{ a.username }}
-                  </button>
+                <div class="settings-group">
+                  <span class="settings-group-label">Access</span>
+                  <div class="settings-list">
+                    <!-- Username -->
+                    <div class="settings-row">
+                      <span class="settings-label">Username</span>
+                      <template v-if="renamingAccountId !== a.id">
+                        <span class="settings-value">@{{ a.username }}</span>
+                        <button
+                          v-if="a.id !== (user as any)?.id"
+                          type="button"
+                          class="btn settings-change"
+                          @click="startRename(a)"
+                        >
+                          Rename
+                        </button>
+                      </template>
+                      <form
+                        v-else
+                        class="settings-edit"
+                        @submit.prevent="submitRename(a)"
+                      >
+                        <label class="field">
+                          <span class="field-label">New username</span>
+                          <input
+                            v-model="renameDraft"
+                            type="text"
+                            minlength="3"
+                            maxlength="20"
+                            pattern="[a-z0-9_]+"
+                            class="field-input"
+                            placeholder="new_username"
+                          />
+                          <span class="field-hint"
+                            >3–20 lowercase letters, numbers, or
+                            underscores.</span
+                          >
+                        </label>
+                        <p v-if="renameError" class="form-error">
+                          {{ renameError }}
+                        </p>
+                        <div class="settings-edit-actions">
+                          <button
+                            type="submit"
+                            class="primary-btn btn-sm"
+                            :disabled="actionLoading === `acct-${a.id}-rename`"
+                          >
+                            {{
+                              actionLoading === `acct-${a.id}-rename`
+                                ? "…"
+                                : "Save"
+                            }}
+                          </button>
+                          <button
+                            type="button"
+                            class="link-btn"
+                            @click="renamingAccountId = null"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
+                    </div>
 
-                  <button
-                    v-if="a.role !== 'admin'"
-                    type="button"
-                    class="btn btn-publish"
-                    :disabled="actionLoading === `acct-${a.id}-promote`"
-                    @click="promoteAccount(a)"
-                  >
-                    {{
-                      actionLoading === `acct-${a.id}-promote`
-                        ? "…"
-                        : "Promote to admin"
-                    }}
-                  </button>
+                    <!-- Role -->
+                    <div class="settings-row">
+                      <span class="settings-label">Role</span>
+                      <span class="settings-value">{{
+                        accountRoleLabel(a)
+                      }}</span>
+                      <button
+                        v-if="a.role !== 'admin'"
+                        type="button"
+                        class="btn settings-change"
+                        :disabled="actionLoading === `acct-${a.id}-promote`"
+                        @click="promoteAccount(a)"
+                      >
+                        {{
+                          actionLoading === `acct-${a.id}-promote`
+                            ? "…"
+                            : "Promote to admin"
+                        }}
+                      </button>
+                      <span v-if="a.role !== 'admin'" class="settings-note">
+                        Admins review the queues and moderate accounts. There's
+                        no demote action here.
+                      </span>
+                    </div>
+
+                    <!-- Submission access -->
+                    <div class="settings-row">
+                      <span class="settings-label">Submissions</span>
+                      <span class="settings-value">
+                        <template v-if="a.role === 'admin' || a.approvedAt"
+                          >Can submit scans</template
+                        >
+                        <template v-else-if="a.submissionRequestedAt"
+                          >Annotations only — access requested</template
+                        >
+                        <span v-else class="dim">Annotations only</span>
+                      </span>
+                      <template v-if="a.role !== 'admin'">
+                        <button
+                          v-if="a.approvedAt"
+                          type="button"
+                          class="btn settings-change"
+                          :disabled="actionLoading === `acct-${a.id}-revoke`"
+                          @click="revokeSubmissionAccess(a)"
+                        >
+                          {{
+                            actionLoading === `acct-${a.id}-revoke`
+                              ? "…"
+                              : "Revoke access"
+                          }}
+                        </button>
+                        <button
+                          v-else
+                          type="button"
+                          class="btn btn-publish settings-change"
+                          :disabled="actionLoading === `acct-${a.id}-grant`"
+                          @click="grantSubmissionAccess(a)"
+                        >
+                          {{
+                            actionLoading === `acct-${a.id}-grant`
+                              ? "…"
+                              : "Grant access"
+                          }}
+                        </button>
+                      </template>
+                    </div>
+                  </div>
                 </div>
 
-                <!-- Row 2: Timed restrictions + Permanent ban -->
-                <div v-if="a.role !== 'admin'" class="mod-row mod-row-restrict">
-                  <div class="restrict-group">
-                    <template v-if="!isAccountMuted(a)">
-                      <input
-                        v-model.number="optionsMuteDays"
-                        type="number"
-                        min="1"
-                        max="3650"
-                        class="field-input mute-days"
-                        placeholder="days"
-                      />
-                    </template>
-                    <button
-                      v-if="a.approvedAt"
-                      type="button"
-                      class="btn"
-                      :disabled="actionLoading === `acct-${a.id}-revoke`"
-                      @click="revokeSubmissionAccess(a)"
-                    >
-                      {{
-                        actionLoading === `acct-${a.id}-revoke`
-                          ? "…"
-                          : "Revoke submission access"
-                      }}
-                    </button>
-                    <button
-                      v-else
-                      type="button"
-                      class="btn btn-publish"
-                      :disabled="actionLoading === `acct-${a.id}-grant`"
-                      @click="grantSubmissionAccess(a)"
-                    >
-                      {{
-                        actionLoading === `acct-${a.id}-grant`
-                          ? "…"
-                          : "Grant submission access"
-                      }}
-                    </button>
-                    <button
-                      v-if="isAccountMuted(a)"
-                      type="button"
-                      class="btn"
-                      :disabled="actionLoading === `acct-${a.id}-unmute`"
-                      @click="unmuteAccount(a)"
-                    >
-                      {{
-                        actionLoading === `acct-${a.id}-unmute` ? "…" : "Unmute"
-                      }}
-                    </button>
-                    <button
-                      v-else
-                      type="button"
-                      class="btn"
-                      :disabled="actionLoading === `acct-${a.id}-mute`"
-                      @click="muteAccount(a)"
-                    >
-                      {{
-                        actionLoading === `acct-${a.id}-mute`
-                          ? "…"
-                          : "Revoke All Access"
-                      }}
-                    </button>
-                  </div>
+                <!-- Admins can't be suspended, banned, or deleted (the API
+                     refuses), so the whole group is theirs to not see. -->
+                <div v-if="a.role !== 'admin'" class="settings-group">
+                  <span class="settings-group-label"
+                    >Restrictions — cannot be undone by the user</span
+                  >
+                  <div class="settings-list">
+                    <!-- Suspension -->
+                    <div class="settings-row">
+                      <span class="settings-label">Suspension</span>
+                      <span class="settings-value">
+                        <template v-if="isAccountMuted(a)"
+                          >Until {{ formatAdminDate(a.mutedUntil) }}</template
+                        >
+                        <span v-else class="dim">Not suspended</span>
+                      </span>
+                      <div class="settings-change mod-action">
+                        <button
+                          v-if="isAccountMuted(a)"
+                          type="button"
+                          class="btn"
+                          :disabled="actionLoading === `acct-${a.id}-unmute`"
+                          @click="unmuteAccount(a)"
+                        >
+                          {{
+                            actionLoading === `acct-${a.id}-unmute`
+                              ? "…"
+                              : "Lift suspension"
+                          }}
+                        </button>
+                        <template v-else>
+                          <input
+                            v-model.number="optionsMuteDays"
+                            type="number"
+                            min="1"
+                            max="3650"
+                            class="field-input mute-days"
+                            aria-label="Days to suspend"
+                            placeholder="days"
+                          />
+                          <button
+                            type="button"
+                            class="btn btn-reject"
+                            :disabled="actionLoading === `acct-${a.id}-mute`"
+                            @click="muteAccount(a)"
+                          >
+                            {{
+                              actionLoading === `acct-${a.id}-mute`
+                                ? "…"
+                                : "Suspend"
+                            }}
+                          </button>
+                        </template>
+                      </div>
+                      <span v-if="!isAccountMuted(a)" class="settings-note">
+                        Blocks annotations and new submissions for the number of
+                        days entered. Their account and existing scans stay up.
+                      </span>
+                    </div>
 
-                  <div class="ban-group">
-                    <button
-                      type="button"
-                      class="btn btn-delete"
-                      :disabled="actionLoading === `acct-${a.id}-delete`"
-                      @click="deleteAccount(a)"
-                    >
-                      {{
-                        actionLoading === `acct-${a.id}-delete`
-                          ? "…"
-                          : "Delete account"
-                      }}
-                    </button>
-                    <button
-                      v-if="!a.bannedAt"
-                      type="button"
-                      class="btn btn-reject"
-                      :disabled="actionLoading === `acct-${a.id}-ban`"
-                      @click="banAccount(a)"
-                    >
-                      {{
-                        actionLoading === `acct-${a.id}-ban`
-                          ? "…"
-                          : "Permanently ban"
-                      }}
-                    </button>
+                    <!-- Ban -->
+                    <div class="settings-row settings-row-danger">
+                      <span class="settings-label">Ban</span>
+                      <span class="settings-value">
+                        <template v-if="a.bannedAt"
+                          >Banned {{ formatAdminDate(a.bannedAt) }}</template
+                        >
+                        <span v-else class="dim">Not banned</span>
+                      </span>
+                      <button
+                        v-if="!a.bannedAt"
+                        type="button"
+                        class="btn btn-reject settings-change"
+                        :disabled="actionLoading === `acct-${a.id}-ban`"
+                        @click="banAccount(a)"
+                      >
+                        {{
+                          actionLoading === `acct-${a.id}-ban` ? "…" : "Ban"
+                        }}
+                      </button>
+                      <span v-if="!a.bannedAt" class="settings-note">
+                        Permanent. Hides every restroom they've submitted from
+                        the archive.
+                      </span>
+                    </div>
+
+                    <!-- Delete -->
+                    <div class="settings-row settings-row-danger">
+                      <span class="settings-label">Delete</span>
+                      <span class="settings-value dim"
+                        >Removes the account from the database</span
+                      >
+                      <button
+                        type="button"
+                        class="btn btn-delete settings-change"
+                        :disabled="actionLoading === `acct-${a.id}-delete`"
+                        @click="deleteAccount(a)"
+                      >
+                        {{
+                          actionLoading === `acct-${a.id}-delete`
+                            ? "…"
+                            : "Delete"
+                        }}
+                      </button>
+                      <span class="settings-note">
+                        Their published restrooms stay in the archive,
+                        unattributed. The email isn't blacklisted — they can
+                        sign up again.
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2543,43 +2709,31 @@ watch(
   padding-inline: var(--gutter);
 }
 
-/* The first header row closes the gutter above it too, so it fills the band the
-   expand tab frames (site header's border → tab bottom) and its content centres
-   against the tab instead of sitting low in it — the catalog's `.controls`
-   starts flush under the header the same way. Skipped when the admin banner
-   takes first place, since the row is then not what the tab frames. */
+/* The first row closes the gutter above it too, so the band it starts starts
+   flush under the site header's border — the catalog's `.controls` starts
+   flush under the header the same way. Skipped when the admin banner takes
+   first place, since the row is then not what the tab frames. */
 .body-section > .account-header:first-child,
 .body-section > .auth-tabs:first-child {
   margin-top: calc(-1 * var(--gutter));
 }
 
-/* Header */
+/* Identity row — top of the band, no border, content-sized: the same role
+   `.controls` plays in the catalog (search bar sits here, left-clustered,
+   flush under the header). Sign out sits on the right, same line. */
 .account-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid #000;
-  /* Symmetric, so `align-items: center` centres against the row's full height
-     rather than 8px above it once the row grows to meet the tab. */
-  padding-block: 8px;
-  margin-bottom: 12px;
+  padding-block: 6px;
   gap: 12px;
   flex-wrap: wrap;
-  /* Grows to end level with the expand tab — see useAlignToStrip. */
-  box-sizing: border-box;
-  min-height: var(--strip-align-height, 0px);
 }
 .account-identity {
   display: flex;
-  align-items: last baseline;
-  gap: 4px;
-  min-width: 0;
-}
-.account-header-right {
-  display: flex;
   align-items: center;
-  gap: 12px;
-  flex-shrink: 0;
+  gap: 8px;
+  min-width: 0;
 }
 .account-email {
   font-size: 15px;
@@ -2602,19 +2756,15 @@ watch(
   color: #999;
 }
 
-/* Main tabs — underlined, sentence case, weight 400, like the catalog nav.
-   Shared by the logged-out auth tabs and the logged-in account tabs. */
-.auth-tabs,
-.account-tabs {
+/* Auth tabs — underlined, sentence case, weight 400, like the catalog nav.
+   Logged-out only; they're the first header row, so they're what grows to end
+   level with the expand tab — see useAlignToStrip. The buttons stretch with
+   the row, keeping the active underline on the rule. */
+.auth-tabs {
   display: flex;
   margin-bottom: 16px;
   border-bottom: 1px solid #000;
   overflow-x: auto;
-}
-/* Logged out, the auth tabs are the first header rule, so they're what grows
-   to end level with the expand tab — see useAlignToStrip. The buttons stretch
-   with the row, keeping the active underline on the rule. */
-.auth-tabs {
   box-sizing: border-box;
   min-height: var(--strip-align-height, 0px);
 }
@@ -2639,10 +2789,38 @@ watch(
   color: #000;
   border-bottom-color: #000;
 }
+
+/* Account tabs — bottom of the band the expand tab frames (see
+   useAlignToStrip), same position as the Info page's tabs. Styled the same
+   flat, color-only way: `.tab-btn`'s #999/#595959/#000 states already match
+   `.info-tab`'s, so only the underline/padding need overriding away. */
+.account-tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: 20px;
+  border-bottom: 1px solid #000;
+  padding: 10px var(--gutter);
+  margin-bottom: 16px;
+  overflow-x: auto;
+  box-sizing: border-box;
+  min-height: var(--strip-align-height, 0px);
+}
 .account-tabs .tab-btn {
   display: flex;
   align-items: center;
   gap: 6px;
+  padding: 0;
+  border-bottom: 0;
+  margin-bottom: 0;
+  /* Overrides the shared `.tab-btn`'s 15px — sized for the underlined auth
+     tabs — down to the 14px the Info page's tabs and the catalog's headings
+     use. Tight line-height for the same reason `.account-actions .link-btn`
+     needed it: `.account-page`'s inherited 1.4 (unlike the Info page, which
+     doesn't set line-height above `.about-content`) was enough on its own to
+     push the row's natural height past `min-height`, so the row grew past
+     the tab instead of the tab framing the row. */
+  font-size: 14px;
+  line-height: 1;
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -2650,7 +2828,9 @@ watch(
   background: #999;
 }
 
-/* Profile settings rows — label stacked over value, action on the right. */
+/* Settings rows — label stacked over value, action on the right. Used by the
+   Profile tab and by the admin account controls, which are the same kind of
+   thing seen from the other side. */
 .settings-list {
   display: flex;
   flex-direction: column;
@@ -2695,6 +2875,32 @@ watch(
   display: flex;
   gap: 12px;
   align-items: center;
+}
+/* Explains what a row's action does, on its own line under it — the row is
+   `flex-wrap`, so a full-basis child always breaks below the button. */
+.settings-note {
+  flex: 1 1 100%;
+  margin-top: 2px;
+  font-size: 11px;
+  color: #999;
+}
+/* Rows whose action can't be walked back. Only the label carries the colour —
+   a full red row would shout louder than a ban warrants at rest. */
+.settings-row-danger .settings-label {
+  color: #c33;
+}
+/* Named runs of rows. The heading is the micro step so it groups the rows
+   without competing with their labels. */
+.settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.settings-group-label {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #999;
 }
 
 /* Banners */
@@ -2974,6 +3180,25 @@ watch(
 .pill-reported {
   background: #c33;
 }
+/* Account status badges: filled = a standing fact about the account, outlined
+   = something waiting on an admin. */
+.pill-role {
+  background: #000;
+}
+.pill-neutral {
+  background: #999;
+}
+.pill-warn {
+  background: #c60;
+}
+.pill-danger {
+  background: #c33;
+}
+.pill-outline {
+  background: transparent;
+  color: #666;
+  box-shadow: inset 0 0 0 1px #999;
+}
 .admin-tag {
   display: inline-block;
   background: #000;
@@ -3149,39 +3374,34 @@ dd {
 .account-row > .simple-row {
   border-bottom: 0;
 }
+/* Capped to the same measure as the account's own settings form: these are a
+   form, not a table, and a full-panel-wide row of controls was most of why the
+   old layout read as a pile of buttons. */
 .account-options {
-  padding: 8px 0 12px;
+  padding: 12px 0 16px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  border-top: 1px dashed #e8e8e8;
+  gap: 16px;
+  border-top: 1px solid #e8e8e8;
+  max-width: 480px;
 }
-.mod-row,
-.restrict-group,
-.rename-row,
-.ban-group {
+.badge-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
+  gap: 4px 0;
+  margin-top: 2px;
 }
-.mod-row-restrict {
-  justify-content: space-between;
+/* A row whose action needs an input beside the button. */
+.mod-action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .mute-days {
   width: 64px;
   border: 1px solid #000;
   padding: 5px 6px;
   font: inherit;
-}
-.rename-input {
-  width: 180px;
-  border: 1px solid #000;
-  padding: 5px 6px;
-  font: inherit;
-}
-.rename-btn {
-  align-self: flex-start;
 }
 .admin-msg-preview,
 .rejection-msg {
@@ -3195,16 +3415,20 @@ dd {
   }
   /* The tab moves to the panel's bottom edge here — nothing to align to, so
      the row keeps its natural height and the normal gutter above it. */
-  .account-header,
+  .account-tabs,
   .auth-tabs {
     min-height: 0;
+  }
+  .account-tabs {
+    gap: 14px;
+    padding-block: 6px;
+  }
+  .account-tabs .tab-btn {
+    font-size: 12px;
   }
   .body-section > .account-header:first-child,
   .body-section > .auth-tabs:first-child {
     margin-top: 0;
-  }
-  .account-header {
-    padding-top: 0;
   }
   .tab-btn {
     padding: 6px 10px 7px;
