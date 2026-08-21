@@ -21,66 +21,94 @@ useHead({
   link: [{ rel: "canonical", href: `${siteUrl}/about` }],
 });
 
-type InfoTab = "about" | "stats" | "contact" | "colophon";
+type InfoTab = "about" | "contact";
 
 const TABS: { id: InfoTab; label: string }[] = [
   { id: "about", label: "About" },
-  // { id: "stats", label: "Stats" },
   { id: "contact", label: "Contact" },
-  { id: "colophon", label: "Colophon" },
 ];
 
 const activeTab = ref<InfoTab>("about");
 
-// Stats read the same catalog list the index page does — shared `useFetch` key,
-// so arriving from the catalog costs nothing extra.
-const { data: restrooms } = useRestrooms();
-
-// Admins get pending entries in the list so /r/<slug> can resolve them; they
-// shouldn't be counted here.
-const published = computed(() =>
-  (restrooms.value ?? []).filter((r) => r.status !== "pending"),
-);
-
-function formatDisplayDate(iso: string) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  const day = String(d.getUTCDate()).padStart(2, "0");
-  const month = d.toLocaleString("en-US", { month: "short", timeZone: "UTC" });
-  return `${day} ${month} ${d.getUTCFullYear()}`;
-}
-
-const stats = computed(() => {
-  const list = published.value;
-  const dates = list
-    .map((r) => r.isoDate)
-    .filter(Boolean)
-    .sort();
-  return [
-    { label: "Restrooms scanned", value: String(list.length) },
-    {
-      label: "Locations",
-      value: String(new Set(list.map((r) => r.location).filter(Boolean)).size),
-    },
-    { label: "First scan", value: formatDisplayDate(dates[0] ?? "") },
-    {
-      label: "Latest scan",
-      value: formatDisplayDate(dates[dates.length - 1] ?? ""),
-    },
-  ].filter((s) => s.value);
-});
+// Running totals shown in the row above the tabs, in the search bar's slot —
+// cheap server-side counts, not derived from the (much larger) catalog list.
+const { data: stats } = useStats();
 
 // The tabs row is the band the layout's `.expand-tab` frames, so it grows to
 // meet the tab rather than the tab measuring itself against a strip.
 const pageEl = ref<HTMLElement | null>(null);
 const alignEl = ref<HTMLElement | null>(null);
 const alignStyle = useAlignToStrip(pageEl, alignEl);
+
+// Contact form
+const contactName = ref("");
+const contactEmail = ref("");
+const contactSubject = ref("");
+const contactBody = ref("");
+const contactTurnstileToken = ref("");
+const contactLoading = ref(false);
+const contactError = ref("");
+const contactSubmitted = ref(false);
+
+async function submitContact() {
+  if (!contactTurnstileToken.value) {
+    for (let i = 0; i < 20 && !contactTurnstileToken.value; i++) {
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    if (!contactTurnstileToken.value) {
+      contactError.value =
+        "Still verifying — please wait a moment and try again.";
+      return;
+    }
+  }
+  contactError.value = "";
+  contactLoading.value = true;
+  try {
+    await $fetch("/api/contact", {
+      method: "POST",
+      body: {
+        name: contactName.value,
+        email: contactEmail.value,
+        subject: contactSubject.value,
+        body: contactBody.value,
+        turnstileToken: contactTurnstileToken.value,
+      },
+    });
+    contactSubmitted.value = true;
+  } catch (e: unknown) {
+    const err = e as { data?: { statusMessage?: string }; message?: string };
+    contactError.value =
+      err.data?.statusMessage ?? err.message ?? "Something went wrong.";
+    contactTurnstileToken.value = "";
+  } finally {
+    contactLoading.value = false;
+  }
+}
 </script>
 
 <template>
   <div ref="pageEl" class="about-page" :style="alignStyle">
     <CatalogHeader />
+
+    <div class="stats-row">
+      <div class="stat-strip" aria-label="Site statistics">
+        <span class="stat"
+          ><span class="stat-label">Restrooms</span>:
+          {{ stats.restrooms }}</span
+        >
+        <span class="stat"
+          ><span class="stat-label">Cities</span>: {{ stats.cities }}</span
+        >
+        <span class="stat"
+          ><span class="stat-label">Archivists</span>:
+          {{ stats.archivists }}</span
+        >
+        <span class="stat"
+          ><span class="stat-label">Annotations</span>:
+          {{ stats.annotations }}</span
+        >
+      </div>
+    </div>
 
     <nav ref="alignEl" class="info-tabs" role="tablist">
       <button
@@ -102,53 +130,91 @@ const alignStyle = useAlignToStrip(pageEl, alignEl);
       <section v-if="activeTab === 'about'" role="tabpanel">
         <h1>What is The Restroom Archive?</h1>
         <p>
-          The Restroom Archive is an ongoing repository of 3D scans of restrooms
-          designed, built, and maintained by
-          <a
-            href="https://jakewelch.design"
-            target="_blank"
-            rel="noopener noreferrer"
-            >Jake Welch</a
-          >. What began as a joke in 2023 has become a years-long practice of 3D
-          scanning restrooms in restaurants, gas stations, convenience stores,
-          bars, coffee shops, and other establishments across the U.S. and
-          Europe. The scans are intended to document the diverse nature of these
-          uniquely private, publicly accessible spaces. By documenting their
-          characteristics, atmosphere, decor, and artifacts left behind by
-          visitors, Jake hopes to reveal how public restrooms reflect the
-          creativity and impertinence of humans when they know no one is
-          watching.
+          The Restroom Archive is an ongoing repository of 3D scans of publicly
+          accessible restrooms. Built by
+          <a href="https://jakewelch.design">Jake Welch</a>, the archive is
+          built to effectively document these unique spaces. By documenting
+          their characteristics, atmosphere, decor, and artifacts left behind by
+          visitors, I hope to reveal how public restrooms reflect the creativity
+          and impertinence of humans when they know no one is watching.
         </p>
-        <h1>Why does this exist?</h1>
-      </section>
-
-      <!-- Stats -->
-      <section v-else-if="activeTab === 'stats'" role="tabpanel">
-        <dl class="stat-list">
-          <template v-for="s in stats" :key="s.label">
-            <dt>{{ s.label }}</dt>
-            <dd>{{ s.value }}</dd>
-          </template>
-        </dl>
       </section>
 
       <!-- Contact -->
-      <section v-else-if="activeTab === 'contact'" role="tabpanel">
-        <p>
-          If you have any feedback or questions, please reach out to Jake at
-          <a href="mailto:hello@restroomarchive.com"
-            >hello@restroomarchive.com</a
-          >
-        </p>
-      </section>
-
-      <!-- Colophon -->
       <section v-else role="tabpanel">
-        <p>
-          Scans were made with LiDAR using Polycam for iPhone. This site was
-          built with Nuxt, Three.js, and TypeScript, and is deployed to
-          Cloudflare Pages.
-        </p>
+        <div v-if="contactSubmitted" class="contact-msg">
+          <p>Thanks — your message is on its way.</p>
+          <p class="dim">
+            We'll reply to {{ contactEmail }} if a reply is needed.
+          </p>
+        </div>
+
+        <form v-else class="contact-form" @submit.prevent="submitContact">
+          <p>Questions or feedback? Please feel free to reach out.</p>
+
+          <label class="field">
+            <span class="field-label">Name</span>
+            <input
+              v-model="contactName"
+              type="text"
+              required
+              class="field-input"
+            />
+          </label>
+
+          <label class="field">
+            <span class="field-label">Email</span>
+            <input
+              v-model="contactEmail"
+              type="email"
+              autocomplete="email"
+              required
+              class="field-input"
+            />
+          </label>
+
+          <label class="field">
+            <span class="field-label">Subject</span>
+            <input
+              v-model="contactSubject"
+              type="text"
+              required
+              class="field-input"
+            />
+          </label>
+
+          <label class="field">
+            <span class="field-label">Message</span>
+            <textarea
+              v-model="contactBody"
+              required
+              rows="5"
+              class="field-input field-textarea"
+            />
+          </label>
+
+          <NuxtTurnstile
+            v-model="contactTurnstileToken"
+            class="turnstile"
+            :options="{ theme: 'light', appearance: 'interaction-only' }"
+          />
+
+          <p v-if="contactError" class="form-error">{{ contactError }}</p>
+
+          <button
+            type="submit"
+            class="primary-btn"
+            :disabled="contactLoading || !contactTurnstileToken"
+          >
+            {{
+              contactLoading
+                ? "Sending…"
+                : !contactTurnstileToken
+                  ? "Verifying…"
+                  : "Send"
+            }}
+          </button>
+        </form>
       </section>
 
       <footer class="about-footer">
@@ -173,8 +239,33 @@ const alignStyle = useAlignToStrip(pageEl, alignEl);
   overflow: hidden;
 }
 
-/* Tabs row — the band between the site header's border and the one the expand
-   tab ends on. Mirrors the catalog's `.sub-header` / `.thead` heading row that
+/* Stats row — sits directly under the site header, in the same band the
+   catalog's `.controls` row occupies. The stat strip lands in the search
+   bar's slot on the left. */
+.stats-row {
+  display: flex;
+  align-items: center;
+  padding: 6px var(--gutter);
+  flex: 0 0 auto;
+}
+
+.stat-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  font-size: 14px;
+  /* Matches the content-box height of the catalog's search input (font +
+     2px/2px padding + its 1px bottom border) so this text centers at the
+     same vertical spot "Random"/"Filter" do in that row. */
+  line-height: 21px;
+  color: #000;
+}
+.stat-label {
+  color: #666;
+}
+
+/* Tabs row — the band between the stats row and the one the expand tab ends
+   on. Mirrors the catalog's `.sub-header` / `.thead` heading row that
    occupies the same position. */
 .info-tabs {
   display: flex;
@@ -191,6 +282,7 @@ const alignStyle = useAlignToStrip(pageEl, alignEl);
   box-sizing: border-box;
   min-height: var(--strip-align-height, 0px);
 }
+
 .info-tab {
   background: transparent;
   border: 0;
@@ -241,18 +333,68 @@ const alignStyle = useAlignToStrip(pageEl, alignEl);
   margin-bottom: 0;
 }
 
-/* Stats */
-.stat-list {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 6px 16px;
-  margin: 0;
+/* Contact */
+.contact-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 380px;
 }
-.stat-list dt {
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.field-label {
+  font-size: 12px;
   color: #666;
 }
-.stat-list dd {
+.field-input {
+  border: 1px solid #000;
+  padding: 4px 2px;
+  font: inherit;
+  font-size: 14px;
+  background: transparent;
+  outline: none;
+  color: #000;
+}
+.field-textarea {
+  resize: vertical;
+  min-height: 90px;
+  font-family: inherit;
+}
+.turnstile {
+  margin: 4px 0;
+}
+.form-error {
   margin: 0;
+  font-size: 14px;
+  color: #c33;
+}
+.primary-btn {
+  background: #000;
+  color: #fff;
+  border: 0;
+  padding: 10px 24px;
+  font: inherit;
+  font-size: 16px;
+  cursor: pointer;
+  align-self: flex-start;
+}
+.primary-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.primary-btn:hover:not(:disabled) {
+  background: #333;
+}
+.contact-msg p {
+  margin: 0 0 8px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.dim {
+  color: #999;
 }
 
 .about-footer {
@@ -272,6 +414,14 @@ const alignStyle = useAlignToStrip(pageEl, alignEl);
     --gutter: 12px;
     font-size: 12px;
   }
+  .stats-row {
+    padding: 6px var(--gutter);
+  }
+  .stat-strip {
+    gap: 4px 14px;
+    font-size: 12px;
+    line-height: 19px;
+  }
   .info-tabs {
     gap: 14px;
     padding: 6px var(--gutter);
@@ -283,6 +433,13 @@ const alignStyle = useAlignToStrip(pageEl, alignEl);
   }
   .about-content h1 {
     font-size: 14px;
+  }
+  .field-input {
+    font-size: 12px;
+  }
+  .primary-btn {
+    font-size: 14px;
+    padding: 8px 18px;
   }
 
   .about-footer p {

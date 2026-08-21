@@ -1346,7 +1346,11 @@ watch(
           Minimum 8 characters.
         </p>
 
-        <NuxtTurnstile v-model="turnstileToken" class="turnstile" />
+        <NuxtTurnstile
+          v-model="turnstileToken"
+          class="turnstile"
+          :options="{ theme: 'light', appearance: 'interaction-only' }"
+        />
 
         <p v-if="authError" class="form-error">{{ authError }}</p>
 

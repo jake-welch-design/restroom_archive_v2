@@ -61,7 +61,11 @@ async function submit() {
           />
         </label>
 
-        <NuxtTurnstile v-model="turnstileToken" class="turnstile" />
+        <NuxtTurnstile
+          v-model="turnstileToken"
+          class="turnstile"
+          :options="{ theme: 'light', appearance: 'interaction-only' }"
+        />
 
         <p v-if="error" class="form-error">{{ error }}</p>
 

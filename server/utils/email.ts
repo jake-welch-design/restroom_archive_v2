@@ -1,9 +1,19 @@
 const FROM_EMAIL = 'noreply@restroomarchive.com'
 const FROM_NAME = 'The Restroom Archive'
 const HEADER_IMG = 'https://pub-1b76864877c9442db2b46c539ae89ecc.r2.dev/assets/metatag.png'
+const CONTACT_EMAIL = 'hello@restroomarchive.com'
 
 function siteUrl() {
   return useRuntimeConfig().public.siteUrl || 'https://restroomarchive.com'
+}
+
+function escapeHtml(s: string) {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
 }
 
 function template(body: string) {
@@ -75,6 +85,24 @@ export async function sendPasswordResetEmail(to: string, token: string) {
       <p style="text-align:center;font-size:12px;color:#999;margin:0 0 30px">
         If you didn't request this, you can ignore this email — your password won't change.
       </p>
+    `),
+  )
+}
+
+export async function sendContactEmail(opts: { name: string, email: string, subject: string, body: string }) {
+  await send(
+    CONTACT_EMAIL,
+    `[Contact] ${opts.subject}`,
+    template(`
+      <p style="text-align:center;font-size:20px;font-weight:400;color:#000;margin:40px 0 20px">
+        New contact form submission
+      </p>
+      <hr style="border:solid 0.5px #000;width:90%" />
+      <table cellpadding="0" cellspacing="0" style="width:90%;margin:20px auto 0;font-size:14px;color:#000">
+        <tr><td style="padding:4px 0;color:#999;width:80px">From</td><td style="padding:4px 0">${escapeHtml(opts.name)} &lt;${escapeHtml(opts.email)}&gt;</td></tr>
+        <tr><td style="padding:4px 0;color:#999">Subject</td><td style="padding:4px 0">${escapeHtml(opts.subject)}</td></tr>
+      </table>
+      <p style="white-space:pre-wrap;padding:0 20px;font-size:14px;color:#000;margin:20px 20px 30px;line-height:1.5">${escapeHtml(opts.body)}</p>
     `),
   )
 }
