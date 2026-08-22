@@ -77,6 +77,15 @@ function fitView(pinned: RestroomSummary[]) {
   }
 }
 
+// First camera placement after the map loads. The component is torn down and
+// remounted every time the user leaves/returns to map view, so this also runs
+// on each tab switch: if something is selected, land straight on its pin
+// instead of fitting the whole set.
+function initialCamera(pinned: RestroomSummary[]) {
+  if (flyToSelected(props.selectedSlug, false)) return;
+  fitView(pinned);
+}
+
 function initMap() {
   const el = mapContainer.value;
   if (!el || map) return;
@@ -189,10 +198,10 @@ function initMap() {
     const pinned = updatePinData(props.rows) ?? [];
     updateActivePin(props.selectedSlug);
 
-    // If the container has real dimensions, fit now; otherwise defer until
-    // the first resize when the flex layout resolves.
+    // If the container has real dimensions, place the camera now; otherwise
+    // defer until the first resize when the flex layout resolves.
     if (el.clientWidth > 0 && el.clientHeight > 0) {
-      fitView(pinned);
+      initialCamera(pinned);
     } else {
       needsInitialFit = true;
       initialPins = pinned;
@@ -210,7 +219,7 @@ function initMap() {
     map.resize();
     if (needsInitialFit && el.clientWidth > 0 && el.clientHeight > 0) {
       needsInitialFit = false;
-      fitView(initialPins);
+      initialCamera(initialPins);
     }
   });
   resizeObs.observe(el);
@@ -239,16 +248,19 @@ function getPanelPadding(): maplibregl.PaddingOptions {
   return { top: 0, bottom: Math.round(h * 0.3333), left: 0, right: 0 };
 }
 
-function flyToSelected(slug: string | null) {
-  if (!slug || !map || !sourceReady) return;
+// Returns whether the camera actually moved — callers use that to fall back to
+// a fit-all view when there's nothing selected (or it has no coordinates).
+function flyToSelected(slug: string | null, animate = true) {
+  if (!slug || !map || !sourceReady) return false;
   const row = props.rows.find((r) => r.slug === slug);
-  if (row?.lng != null && row?.lat != null) {
-    map.flyTo({
-      center: [row.lng, row.lat],
-      zoom: 14,
-      padding: getPanelPadding(),
-    });
-  }
+  if (row?.lng == null || row?.lat == null) return false;
+  map.flyTo({
+    center: [row.lng, row.lat],
+    zoom: 14,
+    padding: getPanelPadding(),
+    duration: animate ? undefined : 0,
+  });
+  return true;
 }
 
 // Colour + opacity are property-driven so already-viewed pins read as dimmed

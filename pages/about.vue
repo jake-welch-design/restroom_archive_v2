@@ -128,15 +128,16 @@ async function submitContact() {
     <article class="about-content">
       <!-- About -->
       <section v-if="activeTab === 'about'" role="tabpanel">
-        <h1>What is The Restroom Archive?</h1>
+        <h1>About the archive</h1>
         <p>
-          The Restroom Archive is an ongoing repository of 3D scans of publicly
-          accessible restrooms. Built by
-          <a href="https://jakewelch.design">Jake Welch</a>, the archive is
-          built to effectively document these unique spaces. By documenting
-          their characteristics, atmosphere, decor, and artifacts left behind by
-          visitors, I hope to reveal how public restrooms reflect the creativity
-          and impertinence of humans when they know no one is watching.
+          The Restroom Archive is an ongoing repository of publicly accessible
+          restrooms. Everyone uses restrooms, yet as spaces, they are considered
+          taboo, rarely discussed, acknowledged, or considered. Designed, and
+          built by <a href="https://jakewelch.design">Jake Welch</a>, this
+          archive aims to document the diverse qualities of these unique spaces.
+          There is perhaps no space in our societies which better captures the
+          creativity and impertinence of humans when they know that nobody else
+          is watching.
         </p>
       </section>
 
