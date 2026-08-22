@@ -128,17 +128,19 @@ async function submitContact() {
     <article class="about-content">
       <!-- About -->
       <section v-if="activeTab === 'about'" role="tabpanel">
-        <h1>About the archive</h1>
+        <h1>About</h1>
         <p>
           The Restroom Archive is an ongoing repository of publicly accessible
           restrooms. Everyone uses restrooms, yet as spaces, they are considered
           taboo, rarely discussed, acknowledged, or considered. Designed, and
           built by <a href="https://jakewelch.design">Jake Welch</a>, this
           archive aims to document the diverse qualities of these unique spaces.
-          There is perhaps no space in our societies which better captures the
+          There is perhaps no space in society which better captures the
           creativity and impertinence of humans when they know that nobody else
           is watching.
         </p>
+        <h1>Controls</h1>
+        <p>Drag to rotate, right click to pan, and scroll to zoom.</p>
       </section>
 
       <!-- Contact -->
