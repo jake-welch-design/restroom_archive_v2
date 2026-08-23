@@ -590,9 +590,9 @@ onBeforeUnmount(() => {
     <!-- Rendered here rather than registered as a maplibre IControl: the
          control containers put this in the wrong corner on iOS Safari, and a
          plain absolutely-positioned element lands where the CSS says on every
-         browser. Top-left on desktop; top-right on mobile, where the info panel
-         covers the left half of the map. -->
-    <div class="basemap-switch">
+         browser. It sits in the top-left of the *visible* map — which on mobile
+         means clearing the info panel's half when that panel is open. -->
+    <div class="basemap-switch" :class="{ 'panel-open': panelOpen }">
       <button
         v-for="opt in [
           { key: 'map', label: 'Map' },
@@ -628,12 +628,14 @@ onBeforeUnmount(() => {
 
 /* Sits just inside the map's top-left corner (the map is inset 16px, so 24px
    puts an 8px gap inside its border). z-index clears the canvas but stays under
-   the info panel (z-index 5). */
+   the info panel (z-index 5). On desktop the panel is a bottom sheet, so the
+   top-left corner is always clear. */
 .basemap-switch {
   position: absolute;
   top: 24px;
   left: 24px;
   z-index: 2;
+  transition: left 0.3s ease;
   display: flex;
   flex-direction: column;
   border: 1px solid #000;
@@ -688,12 +690,18 @@ onBeforeUnmount(() => {
     inset: 8px;
   }
 
-  /* The info panel covers the left half on mobile, so the switcher moves to the
-     right strip, below the zoom control. */
+  /* Map is inset 8px here, so 16px keeps the same 8px gap inside its border. */
   .basemap-switch {
-    top: 106px;
-    left: auto;
-    right: 16px;
+    top: 16px;
+    left: 16px;
+  }
+
+  /* With the info panel open it covers the left half of the map, so the visible
+     map is the right half — put the switcher in the top-left corner of *that*.
+     The panel is 50% of .map-area and .map-wrap fills .map-area, so 50% here is
+     the panel's right edge; +16px keeps the 8px inset plus an 8px gap. */
+  .basemap-switch.panel-open {
+    left: calc(50% + 16px);
   }
 }
 </style>
