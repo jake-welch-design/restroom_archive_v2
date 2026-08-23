@@ -78,15 +78,11 @@ function formatShortDate(iso: string) {
     </div>
 
     <div class="description">
-      <div class="label">Description:</div>
       <p class="desc-text">
         {{ restroom.description ?? "No description yet." }}
       </p>
-    </div>
 
-    <div v-if="restroom.descriptors?.length" class="descriptors-section">
-      <div class="label">Descriptors:</div>
-      <div class="descriptor-chips">
+      <div v-if="restroom.descriptors?.length" class="descriptor-chips">
         <button
           v-for="t in restroom.descriptors"
           :key="t"
@@ -198,11 +194,6 @@ function formatShortDate(iso: string) {
   color: #000;
 }
 
-.label {
-  font-size: 14px;
-  margin-bottom: 8px;
-}
-
 .desc-text {
   margin: 0;
   color: #000;
@@ -210,15 +201,11 @@ function formatShortDate(iso: string) {
   line-height: 1.35;
 }
 
-.descriptors-section {
-  margin-top: 16px;
-}
-
 .descriptor-chips {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  margin-top: 8px;
+  margin-top: 12px;
 }
 
 .tag-chip {
@@ -247,8 +234,12 @@ function formatShortDate(iso: string) {
   background: #f0f0f0;
 }
 
+/* Divider matches the one under `.panel-header`, so the panel reads as three
+   sections: name/date/location, description + descriptors, annotations. */
 .annotations-section {
-  margin-top: 16px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e8e8e8;
 }
 
 .annotations-toggle {
@@ -369,10 +360,6 @@ function formatShortDate(iso: string) {
   }
 
   .panel-name {
-    font-size: 12px;
-  }
-
-  .label {
     font-size: 12px;
   }
 

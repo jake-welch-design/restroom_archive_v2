@@ -331,34 +331,26 @@ function formatShortDate(iso: string) {
 
           <!-- Read view -->
           <div v-else class="description">
-            <div class="desc-row">
-              <div>
-                <div class="label">Description:</div>
-                <p class="desc-text">
-                  {{ r.description ?? "No description yet." }}
-                </p>
-              </div>
-            </div>
+            <p class="desc-text">
+              {{ r.description ?? "No description yet." }}
+            </p>
 
             <!-- Descriptors -->
             <div
               v-if="r.descriptors?.length"
-              class="descriptors-section"
+              class="descriptor-chips"
               @click.stop
             >
-              <div class="label">Descriptors:</div>
-              <div class="descriptor-chips">
-                <button
-                  v-for="t in r.descriptors"
-                  :key="t"
-                  type="button"
-                  class="tag-chip row-chip"
-                  :class="{ active: isTagActive(t) }"
-                  @click.stop="emit('toggleTag', t)"
-                >
-                  {{ t }}
-                </button>
-              </div>
+              <button
+                v-for="t in r.descriptors"
+                :key="t"
+                type="button"
+                class="tag-chip row-chip"
+                :class="{ active: isTagActive(t) }"
+                @click.stop="emit('toggleTag', t)"
+              >
+                {{ t }}
+              </button>
             </div>
 
             <!-- Annotations -->
@@ -493,18 +485,15 @@ function formatShortDate(iso: string) {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   padding: 8px 24px;
-  font-size: 16px;
+  font-size: 14px;
   align-items: start;
   min-height: 20px;
-}
-.descriptors-section {
-  margin-top: 16px;
 }
 .descriptor-chips {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  margin-top: 8px;
+  margin-top: 12px;
 }
 .tag-chip {
   display: inline-flex;
@@ -540,20 +529,18 @@ function formatShortDate(iso: string) {
   background: #fff;
 }
 .row-expanded {
-  padding: 8px 24px 20px;
+  padding: 0 24px 0;
+}
+/* Section rules, in place of the old "Description:"/"Descriptors:" headers —
+   the same light divider the account tab uses. The top padding lives here
+   rather than on `.row-expanded` so the rule sits directly under the row. */
+.description,
+.edit-form {
+  border-top: 1px solid #e8e8e8;
+  padding-top: 12px;
 }
 
 /* Read view */
-.desc-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
-}
-.label {
-  font-size: 14px;
-  margin-bottom: 8px;
-}
 .desc-text {
   margin: 0;
   color: #000;
@@ -565,7 +552,7 @@ function formatShortDate(iso: string) {
   border: 0;
   padding: 0;
   font: inherit;
-  /* Secondary action: stays small next to the 16px row text it aligns with. */
+  /* Secondary action: stays small next to the 14px row text it aligns with. */
   font-size: 12px;
   color: #595959;
   cursor: pointer;
@@ -577,7 +564,9 @@ function formatShortDate(iso: string) {
 
 /* Annotations */
 .annotations-section {
-  margin-top: 16px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e8e8e8;
 }
 .annotations-toggle {
   background: transparent;
@@ -760,8 +749,9 @@ function formatShortDate(iso: string) {
     padding: 6px 12px;
     font-size: 12px;
   }
-  .label {
-    font-size: 12px;
+  /* Keeps the section dividers inset to the same gutter as the row text. */
+  .row-expanded {
+    padding: 0 12px 0px;
   }
   .desc-text {
     font-size: 12px;
@@ -786,7 +776,7 @@ function formatShortDate(iso: string) {
     padding: 6px 10px;
   }
   .row-expanded {
-    padding: 6px 10px 14px;
+    padding: 0 10px 0px;
   }
 }
 </style>

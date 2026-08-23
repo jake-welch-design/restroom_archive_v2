@@ -92,7 +92,7 @@ watch(() => route.path, () => {
 .top-nav {
   display: flex;
   gap: 20px;
-  font-size: 16px;
+  font-size: 14px;
 }
 
 .top-nav a {
@@ -174,7 +174,7 @@ watch(() => route.path, () => {
     display: flex;
     gap: 20px;
     padding: 0 8px;
-    font-size: 16px;
+    font-size: 14px;
     transition: padding 0.25s ease;
   }
 

@@ -236,10 +236,13 @@ async function submitContact() {
   font-weight: 400;
 }
 
-/* Sections stack with the same rhythm the paragraphs set, so "Controls" and
-   "Contact" read as continuations of the bio rather than separate panels. */
+/* Sections stack with the same rhythm the paragraphs set, split by the light
+   divider the account tab and catalog rows use. No margin on top of the
+   padding: the previous paragraph's own 1.2em bottom margin already sits
+   above the rule, so this keeps the same space on either side of it. */
 .about-content section + section {
-  margin-top: 1.2em;
+  padding-top: 1.2em;
+  border-top: 1px solid #e8e8e8;
 }
 
 .about-content section:last-of-type p:last-child {
