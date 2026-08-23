@@ -104,6 +104,15 @@ watch(() => route.path, () => {
   color: #595959;
 }
 
+/* Matches the catalog control bar's hover; pointer devices only so a tap
+   doesn't leave the underline stuck on. */
+@media (hover: hover) {
+  .top-nav a:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+}
+
 /* Hamburger — hidden on desktop */
 .hamburger {
   display: none;
@@ -189,6 +198,15 @@ watch(() => route.path, () => {
 
   .mobile-nav a.active {
     color: #595959;
+  }
+
+  /* Reached with a mouse only in a narrow desktop window — on a phone
+     `hover: hover` is false and this never applies. */
+  @media (hover: hover) {
+    .mobile-nav a:hover {
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
   }
 }
 </style>

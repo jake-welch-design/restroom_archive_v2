@@ -348,6 +348,10 @@ function goPrev() {
   min-width: 0;
   height: 100%;
   position: relative;
+  /* Its own stacking context, below `.panel`'s 2. Without it the viewer's
+     internal overlays (the loading GIF sits at z-index 10) are stacked against
+     the panel directly and paint over the sheet where the two overlap. */
+  z-index: 1;
 }
 .corner-title {
   position: absolute;
