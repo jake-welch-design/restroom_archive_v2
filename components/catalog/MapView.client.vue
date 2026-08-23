@@ -17,6 +17,11 @@ let sourceReady = false;
 let hoverPopup: maplibregl.Popup | null = null;
 let needsInitialFit = false;
 let initialPins: RestroomSummary[] = [];
+// True while the camera still shows the position we put it in; cleared as soon
+// as the user pans/zooms themselves, so resize-driven re-centring doesn't fight
+// them for control of the view.
+let cameraOwned = true;
+let recenterTimer: ReturnType<typeof setTimeout> | null = null;
 
 // Pins the user has already opened, persisted so the "already looked at"
 // state survives reloads. Viewed pins render dimmed + desaturated.
@@ -27,11 +32,11 @@ const viewedSlugs = new Set<string>();
 // so the map opens in whichever mode was last used.
 const BASEMAP_KEY = "ra:basemap";
 type Basemap = "map" | "satellite";
-let basemap: Basemap = "map";
+const basemap = ref<Basemap>("map");
 
 function loadBasemap() {
   try {
-    if (localStorage.getItem(BASEMAP_KEY) === "satellite") basemap = "satellite";
+    if (localStorage.getItem(BASEMAP_KEY) === "satellite") basemap.value = "satellite";
   } catch {
     // Ignore unavailable storage — the default basemap is fine.
   }
@@ -39,7 +44,7 @@ function loadBasemap() {
 
 function saveBasemap() {
   try {
-    localStorage.setItem(BASEMAP_KEY, basemap);
+    localStorage.setItem(BASEMAP_KEY, basemap.value);
   } catch {
     // Ignore storage write failures (private mode / quota).
   }
@@ -151,7 +156,7 @@ function initMap() {
           id: "carto-layer",
           type: "raster",
           source: "carto",
-          layout: { visibility: basemap === "map" ? "visible" : "none" },
+          layout: { visibility: basemap.value === "map" ? "visible" : "none" },
           // Deliberate desaturation of the light basemap; imagery is left alone.
           paint: { "raster-saturation": -0.15 },
         },
@@ -159,7 +164,7 @@ function initMap() {
           id: "satellite-layer",
           type: "raster",
           source: "satellite",
-          layout: { visibility: basemap === "satellite" ? "visible" : "none" },
+          layout: { visibility: basemap.value === "satellite" ? "visible" : "none" },
         },
       ],
     },
@@ -173,13 +178,6 @@ function initMap() {
 
   map.touchZoomRotate.disableRotation();
   map.addControl(new maplibregl.NavigationControl(), "top-right");
-  // Top-left on desktop. On mobile the info panel covers the left half of the
-  // map top-to-bottom, so the switcher would sit underneath it — there it stays
-  // in the top-right strip, stacked below the zoom control.
-  map.addControl(
-    new BasemapControl(),
-    window.innerWidth <= 750 ? "top-right" : "top-left",
-  );
 
   map.on("load", () => {
     if (!map) return;
@@ -263,6 +261,15 @@ function initMap() {
     map.resize();
   });
 
+  // Track whether the camera is still showing what we last put there. Once the
+  // user pans or zooms by hand the view is theirs, and resize must not yank it
+  // back to the selected pin.
+  for (const ev of ["dragstart", "zoomstart", "rotatestart"] as const) {
+    map.on(ev, (e: { originalEvent?: unknown }) => {
+      if (e.originalEvent) cameraOwned = false;
+    });
+  }
+
   // Resize the map whenever the container (or its parent) changes size.
   // This also handles the on-refresh case: the flex layout resolves after
   // mount, ResizeObserver fires, resize() corrects the canvas, and if the
@@ -273,7 +280,13 @@ function initMap() {
     if (needsInitialFit && el.clientWidth > 0 && el.clientHeight > 0) {
       needsInitialFit = false;
       initialCamera(initialPins);
+      return;
     }
+    // resize() keeps the raw viewport centre, which is not the padded centre the
+    // pin was placed at — so the pin drifts every time the container changes
+    // size. On iOS Safari that is constant: the panel is sized in dvh and the
+    // collapsing URL bar re-runs this on almost every scroll. Put the pin back.
+    if (cameraOwned) scheduleRecenter();
   });
   resizeObs.observe(el);
   if (el.parentElement) resizeObs.observe(el.parentElement);
@@ -292,14 +305,75 @@ watch(
   (rows) => updatePinData(rows),
 );
 
-function getPanelPadding(): maplibregl.PaddingOptions {
-  if (!props.panelOpen) return { top: 0, bottom: 0, left: 0, right: 0 };
-  const isMobile = window.innerWidth <= 750;
-  if (isMobile) {
-    return { top: 0, bottom: 0, left: Math.round(window.innerWidth * 0.5), right: 0 };
+// Layout box of `el` relative to `ancestor`, walking the offsetParent chain.
+// offset* is used rather than getBoundingClientRect because it ignores CSS
+// transforms — the panel is mid slide-in when this runs, and its visual rect is
+// still off-screen at that point.
+function offsetBox(el: HTMLElement, ancestor: HTMLElement) {
+  let x = 0;
+  let y = 0;
+  let n: HTMLElement | null = el;
+  while (n && n !== ancestor) {
+    x += n.offsetLeft;
+    y += n.offsetTop;
+    n = n.offsetParent as HTMLElement | null;
   }
-  const h = mapContainer.value?.clientHeight ?? 0;
-  return { top: 0, bottom: Math.round(h * 0.3333), left: 0, right: 0 };
+  return { left: x, top: y, right: x + el.offsetWidth, bottom: y + el.offsetHeight };
+}
+
+// Camera padding that keeps the selected pin centred in the part of the map the
+// info panel doesn't cover — a side sheet on mobile, a bottom sheet on desktop.
+//
+// This is measured from the rendered elements rather than derived from the CSS
+// percentages. The old version multiplied `window.innerWidth` by the panel's
+// 50%, which iOS Safari breaks: `innerWidth` there follows the *visual*
+// viewport, so any pinch or auto-zoom (focusing the search field is enough)
+// makes it disagree with the layout width the panel is actually sized against.
+function getPanelPadding(): maplibregl.PaddingOptions {
+  const zero = { top: 0, bottom: 0, left: 0, right: 0 };
+  const el = mapContainer.value;
+  if (!props.panelOpen || !el) return zero;
+
+  // Fallback for when the panel can't be measured (not in the DOM yet, or a
+  // browser that reports the offset chain differently): estimate from the CSS
+  // the panel is laid out with. documentElement.clientWidth, not innerWidth —
+  // on iOS the latter tracks the visual viewport and shrinks when Safari zooms.
+  const estimate = (): maplibregl.PaddingOptions => {
+    const w = el.clientWidth;
+    const h = el.clientHeight;
+    return document.documentElement.clientWidth <= 750
+      ? { ...zero, left: Math.round(w * 0.5) }
+      : { ...zero, bottom: Math.round(h * 0.3333) };
+  };
+
+  const area = el.closest<HTMLElement>(".map-area");
+  const panel = area?.querySelector<HTMLElement>(".map-panel");
+  if (!area || !panel) return estimate();
+
+  const m = offsetBox(el, area);
+  const p = offsetBox(panel, area);
+  // A zero-area panel box means the measurement didn't work here; estimate
+  // rather than silently returning no padding and hiding the pin.
+  if (panel.offsetWidth === 0 || panel.offsetHeight === 0) return estimate();
+  // Leave the camera somewhere to work with if the panel ever covers nearly
+  // everything (very short viewports).
+  const cap = (v: number, extent: number) =>
+    Math.max(0, Math.min(Math.round(v), Math.round(extent * 0.8)));
+
+  // Side sheet: spans (near enough) the full height of the map, docked to one
+  // side. Otherwise treat it as docked to the bottom.
+  const measured: maplibregl.PaddingOptions =
+    p.bottom - p.top >= (m.bottom - m.top) * 0.9
+      ? p.left <= m.left
+        ? { ...zero, left: cap(p.right - m.left, el.clientWidth) }
+        : { ...zero, right: cap(m.right - p.left, el.clientWidth) }
+      : { ...zero, bottom: cap(m.bottom - p.top, el.clientHeight) };
+
+  // If the panel is open, it covers something — padding of 0 on every side means
+  // the measurement went wrong, and using it would leave the pin under the panel.
+  const total =
+    measured.left + measured.right + measured.top + measured.bottom;
+  return total > 0 ? measured : estimate();
 }
 
 // Returns whether the camera actually moved — callers use that to fall back to
@@ -308,6 +382,7 @@ function flyToSelected(slug: string | null, animate = true) {
   if (!slug || !map || !sourceReady) return false;
   const row = props.rows.find((r) => r.slug === slug);
   if (row?.lng == null || row?.lat == null) return false;
+  cameraOwned = true;
   const camera = {
     center: [row.lng, row.lat] as [number, number],
     zoom: 14,
@@ -327,15 +402,27 @@ function flyToSelected(slug: string | null, animate = true) {
 // opens or closes: the panel covers part of the map, so the pin has to shift to
 // stay centred in whatever is still visible. Zoom is deliberately untouched —
 // toggling a panel should pan, never zoom.
-function recenterSelected() {
+function recenterSelected(duration = 400) {
   if (!map || !sourceReady) return;
   const row = props.rows.find((r) => r.slug === props.selectedSlug);
   if (row?.lng == null || row?.lat == null) return;
+  cameraOwned = true;
   map.easeTo({
     center: [row.lng, row.lat],
     padding: getPanelPadding(),
-    duration: 400,
+    duration,
   });
+}
+
+// Resize can fire many times in a row (iOS toolbar, orientation change, the
+// flex layout settling), so coalesce and correct once it stops. The correction
+// itself is instant — an animation here would read as the map wobbling.
+function scheduleRecenter() {
+  if (recenterTimer) clearTimeout(recenterTimer);
+  recenterTimer = setTimeout(() => {
+    recenterTimer = null;
+    recenterSelected(0);
+  }, 120);
 }
 
 // Colour + opacity are property-driven so already-viewed pins read as dimmed
@@ -348,7 +435,7 @@ function recenterSelected() {
 // dimmed state to a level that still reads as "already looked at".
 function updateActivePin(slug: string | null) {
   if (!map || !sourceReady) return;
-  const sat = basemap === "satellite";
+  const sat = basemap.value === "satellite";
   const isSelected: maplibregl.ExpressionSpecification = slug
     ? ["==", ["get", "slug"], slug]
     : ["literal", false];
@@ -382,8 +469,8 @@ function updateActivePin(slug: string | null) {
 }
 
 function setBasemap(next: Basemap) {
-  if (!map || basemap === next) return;
-  basemap = next;
+  if (!map || basemap.value === next) return;
+  basemap.value = next;
   saveBasemap();
   map.setLayoutProperty(
     "carto-layer",
@@ -398,48 +485,59 @@ function setBasemap(next: Basemap) {
   updateActivePin(props.selectedSlug);
 }
 
-// Two-button basemap switcher, added to the same corner as the zoom control so
-// it stacks directly beneath it.
-class BasemapControl implements maplibregl.IControl {
-  private container: HTMLDivElement | null = null;
+// Diagnostics for devices that can't be attached to a debugger: visit the map
+// with ?mapdebug=1 to see what the layout actually measures there.
+const route = useRoute();
+const showMapDebug = computed(() => route.query.mapdebug === "1");
+const debugInfo = ref<Record<string, string>>({});
+let debugTimer: ReturnType<typeof setInterval> | null = null;
 
-  onAdd() {
-    const el = document.createElement("div");
-    el.className = "maplibregl-ctrl basemap-ctrl";
-    for (const opt of [
-      { key: "map", label: "Map" },
-      { key: "satellite", label: "Satellite" },
-    ] as const) {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.textContent = opt.label;
-      btn.setAttribute("aria-pressed", String(basemap === opt.key));
-      btn.addEventListener("click", () => {
-        setBasemap(opt.key);
-        for (const b of el.querySelectorAll("button")) {
-          b.setAttribute("aria-pressed", String(b.textContent === opt.label));
-        }
-      });
-      el.appendChild(btn);
-    }
-    this.container = el;
-    return el;
-  }
-
-  onRemove() {
-    this.container?.remove();
-    this.container = null;
-  }
+function sampleDebug() {
+  const el = mapContainer.value;
+  if (!el) return;
+  const area = el.closest<HTMLElement>(".map-area");
+  const panel = area?.querySelector<HTMLElement>(".map-panel");
+  const pad = getPanelPadding();
+  const vv = window.visualViewport;
+  debugInfo.value = {
+    innerW: String(window.innerWidth),
+    docW: String(document.documentElement.clientWidth),
+    visualW: vv ? String(Math.round(vv.width)) : "n/a",
+    scale: vv ? vv.scale.toFixed(2) : "n/a",
+    panelOpenProp: String(props.panelOpen),
+    areaFound: String(!!area),
+    panelFound: String(!!panel),
+    panelBox: panel
+      ? `${panel.offsetLeft},${panel.offsetTop} ${panel.offsetWidth}x${panel.offsetHeight}`
+      : "—",
+    mapBox: `${el.offsetLeft},${el.offsetTop} ${el.offsetWidth}x${el.offsetHeight}`,
+    padding: `L${pad.left} R${pad.right} T${pad.top} B${pad.bottom}`,
+    mapPadding: map
+      ? (() => {
+          const p = map.getPadding();
+          return `L${Math.round(p.left)} B${Math.round(p.bottom)}`;
+        })()
+      : "—",
+  };
 }
+
+watch(showMapDebug, (on) => {
+  if (debugTimer) clearInterval(debugTimer);
+  debugTimer = on ? setInterval(sampleDebug, 500) : null;
+  if (on) sampleDebug();
+}, { immediate: true });
 
 watch(() => props.selectedSlug, updateActivePin);
 
 // Selection and panel visibility are watched together because clicking a pin
 // changes both in the same tick — two separate watchers would fire two camera
 // moves and the second would cancel the first.
+//
+// flush: "post" so the panel element is in the DOM by the time getPanelPadding
+// measures it; a pre-flush watcher runs before Vue has patched it in.
 watch(
   [() => props.selectedSlug, () => props.panelOpen],
-  ([slug], [prevSlug]) => {
+  ([slug, open], [prevSlug, prevOpen]) => {
     if (slug !== prevSlug) {
       // New pin: fly to it, offset for whatever the panel covers.
       flyToSelected(slug);
@@ -448,12 +546,34 @@ watch(
       // that's now visible.
       recenterSelected();
     }
+    // Only when the panel itself just opened: it slides in over 300ms, so
+    // measure again once its layout has settled. Deliberately not done on a
+    // selection change — that would cut the fly-to animation short.
+    if (open && !prevOpen) {
+      setTimeout(() => cameraOwned && recenterSelected(0), 360);
+    }
   },
+  { flush: "post" },
 );
+
+// iOS reports the URL bar showing/hiding through visualViewport, which doesn't
+// always coincide with a ResizeObserver entry for the map container.
+if (window.visualViewport) {
+  const vv = window.visualViewport;
+  const onViewportChange = () => {
+    if (cameraOwned) scheduleRecenter();
+  };
+  vv.addEventListener("resize", onViewportChange);
+  onBeforeUnmount(() => vv.removeEventListener("resize", onViewportChange));
+}
 
 onBeforeUnmount(() => {
   resizeObs?.disconnect();
   resizeObs = null;
+  if (recenterTimer) clearTimeout(recenterTimer);
+  recenterTimer = null;
+  if (debugTimer) clearInterval(debugTimer);
+  debugTimer = null;
   hoverPopup?.remove();
   hoverPopup = null;
   map?.remove();
@@ -466,6 +586,30 @@ onBeforeUnmount(() => {
 <template>
   <div class="map-wrap">
     <div ref="mapContainer" class="map" />
+
+    <!-- Rendered here rather than registered as a maplibre IControl: the
+         control containers put this in the wrong corner on iOS Safari, and a
+         plain absolutely-positioned element lands where the CSS says on every
+         browser. Top-left on desktop; top-right on mobile, where the info panel
+         covers the left half of the map. -->
+    <div class="basemap-switch">
+      <button
+        v-for="opt in [
+          { key: 'map', label: 'Map' },
+          { key: 'satellite', label: 'Satellite' },
+        ] as const"
+        :key="opt.key"
+        type="button"
+        :aria-pressed="basemap === opt.key"
+        @click="setBasemap(opt.key)"
+      >
+        {{ opt.label }}
+      </button>
+    </div>
+
+    <div v-if="showMapDebug" class="map-debug">
+      <div v-for="(v, k) in debugInfo" :key="k">{{ k }}: {{ v }}</div>
+    </div>
   </div>
 </template>
 
@@ -482,25 +626,21 @@ onBeforeUnmount(() => {
   border: 1px solid #000;
 }
 
-@media (max-width: 750px) {
-  .map {
-    inset: 8px;
-  }
-}
-</style>
-
-<style>
-/* Basemap switcher: square, flat and black-bordered to match the catalog
-   chrome rather than MapLibre's default rounded control group. */
-.basemap-ctrl {
+/* Sits just inside the map's top-left corner (the map is inset 16px, so 24px
+   puts an 8px gap inside its border). z-index clears the canvas but stays under
+   the info panel (z-index 5). */
+.basemap-switch {
+  position: absolute;
+  top: 24px;
+  left: 24px;
+  z-index: 2;
   display: flex;
   flex-direction: column;
   border: 1px solid #000;
   background: #fff;
-  box-shadow: none;
-  overflow: hidden;
 }
-.basemap-ctrl button {
+
+.basemap-switch button {
   appearance: none;
   border: 0;
   background: #fff;
@@ -512,25 +652,53 @@ onBeforeUnmount(() => {
   cursor: pointer;
   text-align: left;
 }
-.basemap-ctrl button + button {
+
+.basemap-switch button + button {
   border-top: 1px solid #000;
 }
-.basemap-ctrl button:hover:not([aria-pressed="true"]) {
+
+.basemap-switch button:hover:not([aria-pressed="true"]) {
   background: #f0f0f0;
 }
-.basemap-ctrl button[aria-pressed="true"] {
+
+.basemap-switch button[aria-pressed="true"] {
   background: #000;
   color: #fff;
   cursor: default;
 }
 
-@media (max-width: 750px) {
-  .basemap-ctrl button {
-    font-size: 10px;
-    padding: 4px 6px;
-  }
+.map-debug {
+  position: absolute;
+  right: 20px;
+  bottom: 20px;
+  z-index: 6;
+  max-width: 60%;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid #000;
+  padding: 4px 6px;
+  font-family: Menlo, Consolas, monospace;
+  font-size: 9px;
+  line-height: 1.35;
+  pointer-events: none;
+  overflow-wrap: anywhere;
 }
 
+@media (max-width: 750px) {
+  .map {
+    inset: 8px;
+  }
+
+  /* The info panel covers the left half on mobile, so the switcher moves to the
+     right strip, below the zoom control. */
+  .basemap-switch {
+    top: 106px;
+    left: auto;
+    right: 16px;
+  }
+}
+</style>
+
+<style>
 .restroom-hover-popup .maplibregl-popup-content {
   background: #fff;
   color: #000;

@@ -42,6 +42,18 @@ export function useThreeScene(
   let orbitDistance = 4;
   let loadId = 0;
 
+  // Orbit pivot re-anchoring (see reanchorOrbitTarget)
+  let modelRadius = 2;
+  let lastProbeAt = 0;
+  const probeRaycaster = new THREE.Raycaster();
+  const probeDir = new THREE.Vector3();
+  // Raycasting a photogrammetry mesh is O(triangles) — there's no BVH here, so
+  // the probe only runs on interaction start and never more than this often.
+  const PROBE_INTERVAL_MS = 250;
+  // How much farther the geometry has to be than the pivot before we correct.
+  // Kept high so ordinary orbiting from outside the model keeps its centre pivot.
+  const PROBE_RATIO = 2.5;
+
   // Tween state for flyTo
   let tweenRaf = 0;
   let tweenActive = false;
@@ -212,6 +224,7 @@ export function useThreeScene(
       const center = box.getCenter(new THREE.Vector3());
       const size = box.getSize(new THREE.Vector3());
       currentModel.position.sub(center);
+      modelRadius = (Math.max(size.x, size.y, size.z) || 1) / 2;
 
       if (camera && controls) {
         const maxDim = Math.max(size.x, size.y, size.z) || 1;
@@ -221,6 +234,10 @@ export function useThreeScene(
 
         camera.near = Math.max(distance / 1000, 0.01);
         camera.far = distance * 100;
+        // Backstop for the degenerate case the pivot probe can't catch (zooming
+        // into empty space): a radius of exactly 0 leaves OrbitControls with no
+        // step size at all and the viewer permanently stuck.
+        controls.minDistance = distance * 0.005;
 
         if (mode.value === "pov") {
           controls.enabled = false;
@@ -312,6 +329,54 @@ export function useThreeScene(
     if (hits.length === 0) return null;
     // Store in model-local space so the point tracks the model as it auto-rotates
     return currentModel.worldToLocal(hits[0].point.clone());
+  }
+
+  // OrbitControls sizes both the dolly step and the pan step from the distance
+  // between the camera and controls.target — so the pivot, not the geometry,
+  // decides how fast the viewer moves. The target sits at the scan's centre,
+  // which for a room scan is empty air: zoom in past a wall and the radius
+  // collapses toward zero while the surfaces on screen are still metres away.
+  // Every wheel tick then dollies a fraction of that tiny radius and a full drag
+  // pans almost nothing, which reads as the viewer seizing up near the model.
+  //
+  // Fix the pivot rather than the speeds: push the target back out onto whatever
+  // surface lies along the camera's forward axis, so the radius tracks what's
+  // actually on screen. The camera is never touched, and OrbitControls recomputes
+  // its offset from the live target each update() — so the view is identical
+  // before and after, only the step size is corrected.
+  function reanchorOrbitTarget(force = false) {
+    if (!camera || !controls || !currentModel) return;
+    if (mode.value !== "orbit" || tweenActive) return;
+
+    const radius = camera.position.distanceTo(controls.target);
+    // Cap it so a long ray across the scan can't fling the pivot somewhere that
+    // makes the controls overshoot instead.
+    const maxWanted = orbitDistance * 2;
+    // Exact early-out: past this radius no hit distance could clear PROBE_RATIO,
+    // so there's nothing to correct and we skip the raycast. Keeps the common
+    // case — orbiting at a normal distance — free of any per-click mesh work.
+    if (radius * PROBE_RATIO > maxWanted) return;
+
+    const now = performance.now();
+    if (!force && now - lastProbeAt < PROBE_INTERVAL_MS) return;
+    lastProbeAt = now;
+
+    camera.getWorldDirection(probeDir);
+
+    probeRaycaster.set(camera.position, probeDir);
+    probeRaycaster.near = 0;
+    probeRaycaster.far = orbitDistance * 4;
+    const hit = probeRaycaster.intersectObject(currentModel, true)[0];
+
+    // A miss means we're staring into empty space (out a doorway, off the edge of
+    // the scan) — fall back to the model's own scale rather than leaving the
+    // pivot collapsed.
+    const surfaceDistance = hit ? hit.distance : modelRadius;
+    const wanted = Math.min(surfaceDistance, maxWanted);
+
+    if (!(wanted > 0) || wanted < radius * PROBE_RATIO) return;
+
+    controls.target.copy(camera.position).addScaledVector(probeDir, wanted);
   }
 
   function getCameraSnapshot(): CameraSnapshot {
@@ -518,6 +583,10 @@ export function useThreeScene(
     activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     pointerDownX = e.clientX;
     pointerDownY = e.clientY;
+    if (mode.value === "orbit") {
+      // Drag start is discrete and rare, so skip the throttle here.
+      reanchorOrbitTarget(true);
+    }
     if (mode.value !== "pov") return;
     if (tweenActive) return;
     if (activePointers.size === 2) {
@@ -583,7 +652,12 @@ export function useThreeScene(
   }
 
   function onWheel(e: WheelEvent) {
-    if (mode.value !== "pov" || !camera) return;
+    if (!camera) return;
+    if (mode.value === "orbit") {
+      reanchorOrbitTarget();
+      return;
+    }
+    if (mode.value !== "pov") return;
     e.preventDefault();
     povState.fov = Math.max(30, Math.min(110, povState.fov + e.deltaY * 0.05));
     camera.fov = povState.fov;
