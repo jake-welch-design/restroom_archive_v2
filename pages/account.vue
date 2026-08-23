@@ -375,6 +375,7 @@ function submissionStatusLabel(status: string) {
   if (status === "published") return "Published";
   if (status === "pending") return "Awaiting review";
   if (status === "rejected" || status === "hidden") return "Rejected";
+  if (status === "removed") return "Removed at your request";
   if (status === "removal_requested") return "Removal requested";
   return status;
 }
@@ -385,12 +386,15 @@ const publishedSubmissions = computed(() =>
   ),
 );
 
-const pendingAndRejectedSubmissions = computed(() =>
+// Everything that isn't live in the archive: awaiting review, turned down, or
+// taken down after a removal request.
+const inactiveSubmissions = computed(() =>
   (mySubmissions.value ?? []).filter(
     (r) =>
       r.status === "pending" ||
       r.status === "rejected" ||
-      r.status === "hidden",
+      r.status === "hidden" ||
+      r.status === "removed",
   ),
 );
 
@@ -453,7 +457,7 @@ async function dismissRejectedSubmission(
   const msg =
     status === "pending"
       ? "Withdraw this pending submission? This cannot be undone."
-      : "Remove this rejected submission from your list?";
+      : "Clear this submission from your list?";
   if (!confirm(msg)) return;
   submissionActionId.value = id;
   myActionError.value = "";
@@ -622,6 +626,7 @@ const AUDIT_ACTION_LABEL: Record<string, string> = {
   "user.revoke-submission": "revoked submission access",
   "restroom.publish": "published restroom",
   "restroom.reject": "rejected restroom",
+  "restroom.remove": "removed restroom on request",
   "restroom.dismiss-removal": "dismissed removal request",
   "annotation.hide": "hid annotation",
   "annotation.unhide": "unhid annotation",
@@ -747,12 +752,25 @@ const rejectUser = (id: number) =>
   runAction(`u-reject-${id}`, `/api/admin/users/${id}/reject`, async () => {
     await Promise.all([refreshUserQueue(), refreshAccounts()]);
   });
-const removeRestroom = (id: number) =>
-  runAction(
-    `rm-reject-${id}`,
-    `/api/admin/restrooms/${id}/reject`,
-    refreshRemovalQueue,
+// Grants the request: the entry comes out of the archive and the scan file is
+// deleted. Irreversible, hence the confirm.
+function removeRestroom(id: number, name: string) {
+  if (
+    !confirm(
+      `Remove “${name}” from the archive? The scan file is deleted and this cannot be undone.`,
+    )
+  )
+    return;
+  return runAction(
+    `rm-remove-${id}`,
+    `/api/admin/restrooms/${id}/remove`,
+    async () => {
+      await refreshRemovalQueue();
+      await refreshNuxtData("restrooms");
+    },
   );
+}
+// Turns the request down: the entry stays published, the request leaves the queue.
 const dismissRemoval = (id: number) =>
   runAction(
     `rm-dismiss-${id}`,
@@ -1184,7 +1202,7 @@ const submissionsSubTabs = computed(() => [
   {
     id: "pending",
     label: "Pending",
-    count: pendingAndRejectedSubmissions.value.length,
+    count: inactiveSubmissions.value.length,
   },
 ]);
 
@@ -1897,12 +1915,12 @@ watch(
 
         <!-- Pending -->
         <div v-show="submissionsSection === 'pending'">
-          <div v-if="!pendingAndRejectedSubmissions.length" class="empty">
+          <div v-if="!inactiveSubmissions.length" class="empty">
             Nothing awaiting review.
           </div>
           <ul v-else class="simple-list">
             <li
-              v-for="r in pendingAndRejectedSubmissions"
+              v-for="r in inactiveSubmissions"
               :key="r.id"
               class="simple-row"
             >
@@ -1924,7 +1942,9 @@ watch(
                   class="icon-btn"
                   :disabled="submissionActionId === r.id"
                   :title="
-                    r.status === 'pending' ? 'Withdraw submission' : 'Remove'
+                    r.status === 'pending'
+                      ? 'Withdraw submission'
+                      : 'Clear from list'
                   "
                   @click="dismissRejectedSubmission(r.slug, r.id, r.status)"
                 >
@@ -2240,14 +2260,16 @@ watch(
                 <button
                   type="button"
                   class="btn btn-reject"
-                  :disabled="actionLoading === `rm-reject-${r.id}`"
-                  @click="removeRestroom(r.id)"
+                  title="Grant the request — take the entry out of the archive"
+                  :disabled="actionLoading === `rm-remove-${r.id}`"
+                  @click="removeRestroom(r.id, r.name)"
                 >
-                  {{ actionLoading === `rm-reject-${r.id}` ? "…" : "Remove" }}
+                  {{ actionLoading === `rm-remove-${r.id}` ? "…" : "Remove" }}
                 </button>
                 <button
                   type="button"
                   class="btn"
+                  title="Turn the request down — the entry stays published"
                   :disabled="actionLoading === `rm-dismiss-${r.id}`"
                   @click="dismissRemoval(r.id)"
                 >

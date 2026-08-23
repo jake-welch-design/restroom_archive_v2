@@ -30,7 +30,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, statusMessage: 'You can only dismiss your own submissions.' })
   }
 
-  const dismissable = ['rejected', 'hidden', 'pending']
+  const dismissable = ['rejected', 'hidden', 'pending', 'removed']
   if (isOwner && user.role !== 'admin' && !dismissable.includes(restroom.status)) {
     throw createError({ statusCode: 409, statusMessage: 'Only pending or rejected submissions can be dismissed.' })
   }

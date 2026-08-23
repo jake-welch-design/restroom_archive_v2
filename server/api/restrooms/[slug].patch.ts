@@ -1,7 +1,7 @@
 import { eq, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { useDb, schema } from '~~/server/utils/db'
-import { requireRole } from '~~/server/utils/requireRole'
+import { requireActiveUser } from '~~/server/utils/requireActiveUser'
 import { serializeDescriptors } from '~~/server/utils/descriptors'
 
 const Body = z.object({
@@ -22,8 +22,10 @@ function formatDisplayDate(isoDate: string) {
   return `${day} ${month} ${year}`
 }
 
+// Admins can edit any entry; archivists can edit the info on their own
+// submissions. Banned/muted accounts are blocked by requireActiveUser.
 export default defineEventHandler(async (event) => {
-  requireRole(event, 'admin')
+  const user = requireActiveUser(event)
 
   const slug = getRouterParam(event, 'slug')
   if (!slug) throw createError({ statusCode: 400, statusMessage: 'Missing slug' })
@@ -33,12 +35,16 @@ export default defineEventHandler(async (event) => {
   const db = useDb(event)
 
   const row = await db
-    .select({ id: schema.restrooms.id })
+    .select({ id: schema.restrooms.id, submittedBy: schema.restrooms.submittedBy })
     .from(schema.restrooms)
     .where(eq(schema.restrooms.slug, slug))
     .get()
 
   if (!row) throw createError({ statusCode: 404, statusMessage: 'Restroom not found' })
+
+  if (row.submittedBy !== user.id && user.role !== 'admin') {
+    throw createError({ statusCode: 403, statusMessage: 'You can only edit your own submissions.' })
+  }
 
   const coords = (body.lat != null && body.lng != null)
     ? `${Math.abs(body.lat).toFixed(2)} ${body.lat >= 0 ? 'N' : 'S'}, ${Math.abs(body.lng).toFixed(2)} ${body.lng >= 0 ? 'E' : 'W'}`

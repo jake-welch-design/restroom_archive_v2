@@ -19,18 +19,27 @@ export default defineEventHandler(async (event) => {
 
   const db = useDb(event)
 
-  const row = await db
+  const restroom = await db
+    .select({ id: schema.restrooms.id, submittedBy: schema.restrooms.submittedBy })
+    .from(schema.restrooms)
+    .where(eq(schema.restrooms.slug, slug))
+    .get()
+
+  if (!restroom) throw createError({ statusCode: 404, statusMessage: 'Restroom not found' })
+
+  // The UI only offers this on your own entries; enforce it here too.
+  if (restroom.submittedBy !== user.id && user.role !== 'admin') {
+    throw createError({ statusCode: 403, statusMessage: 'You can only request removal of your own submissions.' })
+  }
+
+  await db
     .update(schema.restrooms)
     .set({
       removalRequestedBy: user.id,
       removalReason: body.reason ?? null,
       updatedAt: sql`(datetime('now'))`,
     })
-    .where(eq(schema.restrooms.slug, slug))
-    .returning({ id: schema.restrooms.id })
-    .get()
-
-  if (!row) throw createError({ statusCode: 404, statusMessage: 'Restroom not found' })
+    .where(eq(schema.restrooms.id, restroom.id))
 
   return { ok: true }
 })

@@ -3,6 +3,8 @@ import { useDb, schema } from '~~/server/utils/db'
 import { requireRole } from '~~/server/utils/requireRole'
 import { recordAdminAction } from '~~/server/utils/auditLog'
 
+// Turns a removal request down: the request leaves the queue and the entry
+// stays exactly as it was. The opposite outcome from `remove`.
 export default defineEventHandler(async (event) => {
   requireRole(event, 'admin')
 

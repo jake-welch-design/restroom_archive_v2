@@ -45,6 +45,14 @@ const descriptorSuggestions = computed(() => {
 const { isAdmin, user } = useAuth();
 const { selectAnnotation } = useSelection();
 
+// Admins edit anything; archivists edit the info on their own submissions.
+// Usernames are unique, so they're enough to match without exposing ids.
+function canEdit(r: RestroomSummary) {
+  if (isAdmin.value) return true;
+  const u = user.value as { username?: string } | null;
+  return !!u?.username && r.submitter?.username === u.username;
+}
+
 // Annotations for the expanded row
 const expandedSlug = computed(() => props.selectedSlug);
 const { data: annotations, refresh: refreshAnnotations } =
@@ -216,7 +224,9 @@ function formatShortDate(iso: string) {
             <!-- Sits on the row's own line, baseline-aligned with the location
                  it shares the column with, rather than down in the description. -->
             <button
-              v-if="isAdmin && r.slug === selectedSlug && editingSlug !== r.slug"
+              v-if="
+                canEdit(r) && r.slug === selectedSlug && editingSlug !== r.slug
+              "
               type="button"
               class="edit-link"
               @click="startEdit(r, $event)"
