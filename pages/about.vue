@@ -21,24 +21,24 @@ useHead({
   link: [{ rel: "canonical", href: `${siteUrl}/about` }],
 });
 
-type InfoTab = "about" | "contact";
-
-const TABS: { id: InfoTab; label: string }[] = [
-  { id: "about", label: "About" },
-  { id: "contact", label: "Contact" },
-];
-
-const activeTab = ref<InfoTab>("about");
-
-// Running totals shown in the row above the tabs, in the search bar's slot —
-// cheap server-side counts, not derived from the (much larger) catalog list.
+// Running totals, read as the closing sentence of the bio — cheap server-side
+// counts, not derived from the (much larger) catalog list. Built as a string so
+// the counts agree with their nouns: the archivist count is still low enough
+// that "1 archivists" is a real case, not a hypothetical.
 const { data: stats } = useStats();
 
-// The tabs row is the band the layout's `.expand-tab` frames, so it grows to
-// meet the tab rather than the tab measuring itself against a strip.
-const pageEl = ref<HTMLElement | null>(null);
-const alignEl = ref<HTMLElement | null>(null);
-const alignStyle = useAlignToStrip(pageEl, alignEl);
+const plural = (n: number, one: string, many: string) =>
+  `${n} ${n === 1 ? one : many}`;
+
+const statsSentence = computed(() => {
+  const s = stats.value;
+  const verb = s.restrooms === 1 ? "has" : "have";
+  return (
+    `Currently, ${plural(s.restrooms, "restroom", "restrooms")} ${verb} been ` +
+    `archived in ${plural(s.cities, "city", "cities")} by ` +
+    `${plural(s.archivists, "archivist", "archivists")}.`
+  );
+});
 
 // Contact form
 const contactName = ref("");
@@ -87,47 +87,11 @@ async function submitContact() {
 </script>
 
 <template>
-  <div ref="pageEl" class="about-page" :style="alignStyle">
+  <div class="about-page">
     <CatalogHeader />
 
-    <div class="stats-row">
-      <div class="stat-strip" aria-label="Site statistics">
-        <span class="stat"
-          ><span class="stat-label">Restrooms</span>:
-          {{ stats.restrooms }}</span
-        >
-        <span class="stat"
-          ><span class="stat-label">Cities</span>: {{ stats.cities }}</span
-        >
-        <span class="stat"
-          ><span class="stat-label">Archivists</span>:
-          {{ stats.archivists }}</span
-        >
-        <span class="stat"
-          ><span class="stat-label">Annotations</span>:
-          {{ stats.annotations }}</span
-        >
-      </div>
-    </div>
-
-    <nav ref="alignEl" class="info-tabs" role="tablist">
-      <button
-        v-for="t in TABS"
-        :key="t.id"
-        type="button"
-        class="info-tab"
-        role="tab"
-        :class="{ active: activeTab === t.id }"
-        :aria-selected="activeTab === t.id"
-        @click="activeTab = t.id"
-      >
-        {{ t.label }}
-      </button>
-    </nav>
-
     <article class="about-content">
-      <!-- About -->
-      <section v-if="activeTab === 'about'" role="tabpanel">
+      <section>
         <h1>About</h1>
         <p>
           The Restroom Archive is an ongoing repository of publicly accessible
@@ -137,14 +101,18 @@ async function submitContact() {
           archive aims to document the diverse qualities of these unique spaces.
           There is perhaps no space in society which better captures the
           creativity and impertinence of humans when they know that nobody else
-          is watching.
+          is watching. {{ statsSentence }}
         </p>
+      </section>
+
+      <section>
         <h1>Controls</h1>
         <p>Drag to rotate, right click to pan, and scroll to zoom.</p>
       </section>
 
-      <!-- Contact -->
-      <section v-else role="tabpanel">
+      <section>
+        <h1>Contact</h1>
+
         <div v-if="contactSubmitted" class="contact-msg">
           <p>Thanks — your message is on its way.</p>
           <p class="dim">
@@ -229,8 +197,6 @@ async function submitContact() {
 
 <style scoped>
 .about-page {
-  /* One gutter for the page: the tabs row and the content below it have to
-     share a left edge. */
   --gutter: 24px;
   display: flex;
   flex-direction: column;
@@ -240,66 +206,6 @@ async function submitContact() {
   font-size: 16px;
   color: #000;
   overflow: hidden;
-}
-
-/* Stats row — sits directly under the site header, in the same band the
-   catalog's `.controls` row occupies. The stat strip lands in the search
-   bar's slot on the left. */
-.stats-row {
-  display: flex;
-  align-items: center;
-  padding: 6px var(--gutter);
-  flex: 0 0 auto;
-}
-
-.stat-strip {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 24px;
-  font-size: 14px;
-  /* Matches the content-box height of the catalog's search input (font +
-     2px/2px padding + its 1px bottom border) so this text centers at the
-     same vertical spot "Random"/"Filter" do in that row. */
-  line-height: 21px;
-  color: #000;
-}
-.stat-label {
-  color: #666;
-}
-
-/* Tabs row — the band between the stats row and the one the expand tab ends
-   on. Mirrors the catalog's `.sub-header` / `.thead` heading row that
-   occupies the same position. */
-.info-tabs {
-  display: flex;
-  /* Bottom-anchored, not centred in the band: the catalog fills the same band
-     with two rows and its headings sit in the lower one, so matching that
-     row's 10px bottom padding lands these on the same line. */
-  align-items: flex-end;
-  gap: 20px;
-  padding: 10px var(--gutter);
-  border-bottom: 1px solid #000;
-  font-size: 14px;
-  flex: 0 0 auto;
-  /* Grows to end level with the expand tab — see useAlignToStrip. */
-  box-sizing: border-box;
-  min-height: var(--strip-align-height, 0px);
-}
-
-.info-tab {
-  background: transparent;
-  border: 0;
-  padding: 0;
-  font: inherit;
-  font-size: 14px;
-  color: #999;
-  cursor: pointer;
-}
-.info-tab:hover:not(.active) {
-  color: #595959;
-}
-.info-tab.active {
-  color: #000;
 }
 
 .about-content {
@@ -325,14 +231,18 @@ async function submitContact() {
 
 .about-content h1 {
   margin: 0 0 0.5em;
-  /* padding-bottom: 8px; */
-  /* border-bottom: 1px solid #000; */
   color: #666;
   font-size: 14px;
   font-weight: 400;
 }
 
-.about-content p:last-child {
+/* Sections stack with the same rhythm the paragraphs set, so "Controls" and
+   "Contact" read as continuations of the bio rather than separate panels. */
+.about-content section + section {
+  margin-top: 1.2em;
+}
+
+.about-content section:last-of-type p:last-child {
   margin-bottom: 0;
 }
 
@@ -342,6 +252,9 @@ async function submitContact() {
   flex-direction: column;
   gap: 16px;
   max-width: 380px;
+}
+.contact-form p {
+  margin: 0;
 }
 .field {
   display: flex;
@@ -415,23 +328,6 @@ async function submitContact() {
 @media (max-width: 750px) {
   .about-page {
     --gutter: 12px;
-    font-size: 12px;
-  }
-  .stats-row {
-    padding: 6px var(--gutter);
-  }
-  .stat-strip {
-    gap: 4px 14px;
-    font-size: 12px;
-    line-height: 19px;
-  }
-  .info-tabs {
-    gap: 14px;
-    padding: 6px var(--gutter);
-    /* The tab moves to the panel's bottom edge here — nothing to align to. */
-    min-height: 0;
-  }
-  .info-tab {
     font-size: 12px;
   }
   .about-content h1 {

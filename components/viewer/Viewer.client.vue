@@ -191,7 +191,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
 
       <div class="overlay-right">
         <!-- View mode: single circle that changes icon -->
-        <div class="ctrl-group">
+        <div class="ctrl-group view-mode-group">
           <button
             class="ctrl-btn"
             :title="
@@ -246,7 +246,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
         <!-- Annotation controls: hidden without a slug (e.g. an in-progress
         submission preview, which has nothing to annotate yet). Otherwise
         toggle always visible; add button signed-in users only. -->
-        <div v-if="props.slug" class="ctrl-group">
+        <div v-if="props.slug" class="ctrl-group annotation-group">
           <button
             class="ctrl-toggle"
             :class="{ active: markersVisible }"
@@ -535,14 +535,28 @@ canvas {
     padding: 0.75rem;
     z-index: 4;
   }
+  /* Bottom row: view-mode pill hugs the left, annotations the right. The row
+  spans the full width, so it stays transparent to pointer events in the middle
+  where the layout's bottom nav sits. */
   .overlay-right {
     position: absolute;
     bottom: 0.75rem;
+    left: 0.75rem;
     right: 0.75rem;
-    flex-direction: column;
+    flex-direction: row;
     align-items: flex-end;
+    justify-content: space-between;
     gap: 8px;
+    pointer-events: none;
+  }
+  .overlay-right > * {
     pointer-events: auto;
+  }
+  .view-mode-group {
+    margin-right: auto;
+  }
+  .annotation-group {
+    margin-left: auto;
   }
   .crosshair-hint {
     top: 2.75rem;
