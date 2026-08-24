@@ -4,9 +4,12 @@ const { loggedIn } = useAuth();
 const isHome = computed(() => route.path === "/");
 const menuOpen = ref(false);
 
-watch(() => route.path, () => {
-  menuOpen.value = false;
-});
+watch(
+  () => route.path,
+  () => {
+    menuOpen.value = false;
+  },
+);
 </script>
 
 <template>
@@ -23,12 +26,16 @@ watch(() => route.path, () => {
         >
         <NuxtLink
           to="/"
-          :class="{ active: route.path === '/' || route.path.startsWith('/r/') }"
+          :class="{
+            active: route.path === '/' || route.path.startsWith('/r/'),
+          }"
           >Catalog</NuxtLink
         >
-        <NuxtLink to="/account" :class="{ active: route.path === '/account' }">{{
-          loggedIn ? "Account" : "Login"
-        }}</NuxtLink>
+        <NuxtLink
+          to="/account"
+          :class="{ active: route.path === '/account' }"
+          >{{ loggedIn ? "Account" : "Login" }}</NuxtLink
+        >
       </nav>
       <button
         type="button"
@@ -48,12 +55,16 @@ watch(() => route.path, () => {
         >
         <NuxtLink
           to="/"
-          :class="{ active: route.path === '/' || route.path.startsWith('/r/') }"
+          :class="{
+            active: route.path === '/' || route.path.startsWith('/r/'),
+          }"
           >Catalog</NuxtLink
         >
-        <NuxtLink to="/account" :class="{ active: route.path === '/account' }">{{
-          loggedIn ? "Account" : "Login"
-        }}</NuxtLink>
+        <NuxtLink
+          to="/account"
+          :class="{ active: route.path === '/account' }"
+          >{{ loggedIn ? "Account" : "Login" }}</NuxtLink
+        >
       </nav>
     </div>
   </header>
@@ -102,12 +113,11 @@ watch(() => route.path, () => {
   color: #595959;
 }
 
-/* Matches the catalog control bar's hover; pointer devices only so a tap
-   doesn't leave the underline stuck on. */
+/* Matches the account tabs' hover (color tint, no underline); pointer
+   devices only so a tap doesn't leave the tint stuck on. */
 @media (hover: hover) {
   .top-nav a:hover {
-    text-decoration: underline;
-    text-underline-offset: 3px;
+    color: #595959;
   }
 }
 
@@ -131,8 +141,7 @@ watch(() => route.path, () => {
 /* Same hover treatment as the nav links; pointer devices only. */
 @media (hover: hover) {
   .menu-toggle:hover {
-    text-decoration: underline;
-    text-underline-offset: 3px;
+    color: #595959;
   }
 }
 
@@ -167,6 +176,7 @@ watch(() => route.path, () => {
   .mobile-nav {
     overflow: hidden;
     display: flex;
+    justify-content: flex-end;
     gap: 20px;
     padding: 0 8px;
     font-size: 14px;
@@ -174,7 +184,7 @@ watch(() => route.path, () => {
   }
 
   .mobile-nav-wrap.open .mobile-nav {
-    padding: 8px 8px;
+    padding: 0 8px 8px 8px;
   }
 
   .mobile-nav a {
@@ -190,8 +200,7 @@ watch(() => route.path, () => {
      `hover: hover` is false and this never applies. */
   @media (hover: hover) {
     .mobile-nav a:hover {
-      text-decoration: underline;
-      text-underline-offset: 3px;
+      color: #595959;
     }
   }
 }

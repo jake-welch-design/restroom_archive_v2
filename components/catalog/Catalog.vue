@@ -592,14 +592,12 @@ watch(
   color: #595959;
 }
 
-/* Hover underline for the control bar's text buttons. Gated on a real pointer
-   so a tap on a touch device doesn't leave one stuck until the next tap. The
-   caret in `.filter-btn` escapes it by being inline-block — text decoration
-   doesn't propagate into atomic inlines. */
+/* Hover tint for the control bar's text buttons — previews the `.active`
+   color. Gated on a real pointer so a tap on a touch device doesn't leave it
+   stuck until the next tap. */
 @media (hover: hover) {
   .link-btn:hover {
-    text-decoration: underline;
-    text-underline-offset: 3px;
+    color: #595959;
   }
 }
 
