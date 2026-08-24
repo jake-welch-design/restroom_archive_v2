@@ -296,7 +296,7 @@ watch(
       </div>
     </div>
 
-    <div v-if="filterOpen && allTags.length" class="filter-panel">
+    <div v-if="filterOpen && allTags.length" class="filter-panel thin-scroll">
       <button
         v-for="t in allTags"
         :key="t"
@@ -697,13 +697,14 @@ watch(
   color: #c33;
 }
 
-@media (max-width: 750px) {
+/* Compact scale, keyed to the panel's width at the same 560px where
+   `ListView`'s own container queries step down — so the controls strip and the
+   list shrink together instead of the list going alone at a 1120px viewport. */
+@container panel (max-width: 560px) {
   .catalog {
     font-size: 12px;
   }
   .controls {
-    flex-direction: row;
-    align-items: center;
     gap: 8px;
     padding: 6px 8px;
   }
@@ -716,10 +717,17 @@ watch(
     flex-shrink: 0;
     gap: 12px;
   }
+  /* Matches `ListView`'s `.thead` padding. The two are alternates of the same
+     strip row — `measureStrip` sizes the expand tab off whichever one is
+     mounted — so a mismatch resizes the tab when switching views. */
   .sub-header {
-    padding: 6px 8px;
+    padding: 8px 12px;
   }
-  .link-btn {
+  .link-btn,
+  .sort-btn,
+  .date-range,
+  .date-field,
+  .date-val {
     font-size: 12px;
   }
   .search input {
@@ -728,6 +736,13 @@ watch(
   }
   .filter-panel {
     padding: 8px 8px;
+  }
+}
+
+/* Sheet layout, not a width step: the panel is a short top-anchored sheet, so
+   the filter panel caps its own height rather than crowding out the list. */
+@media (max-width: 750px) {
+  .filter-panel {
     max-height: 75px;
     overflow: auto;
   }

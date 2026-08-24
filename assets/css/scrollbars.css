@@ -1,0 +1,36 @@
+/* Narrow scrollbar utility — opt in with `class="thin-scroll"`.
+   Global rather than per-component so every scroll area that opts in gets the
+   identical bar; scoped styles can't share the pseudo-elements.
+
+   Note: customising a scrollbar at all opts out of macOS's overlay scrollbars,
+   so the bar is always visible and reserves its width instead of fading in over
+   the content. That's why the track is transparent and the thumb is light —
+   at rest it should read as a hairline, not a chrome element. */
+.thin-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.thin-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.thin-scroll::-webkit-scrollbar-thumb {
+  background: #c4c4c4;
+  border-radius: 4px;
+}
+.thin-scroll::-webkit-scrollbar-thumb:hover {
+  background: #9a9a9a;
+}
+.thin-scroll::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Firefox has no per-pixel control, only `thin`. Kept out of the rules above
+   because Chrome 121+ drops the `::-webkit-scrollbar` styling entirely once
+   `scrollbar-width`/`scrollbar-color` are set — this way each engine uses the
+   most precise option it has. */
+@supports not selector(::-webkit-scrollbar) {
+  .thin-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: #c4c4c4 transparent;
+  }
+}

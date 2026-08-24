@@ -62,7 +62,7 @@ function formatShortDate(iso: string) {
 </script>
 
 <template>
-  <div class="map-panel">
+  <div class="map-panel thin-scroll">
     <div class="panel-header">
       <div class="panel-info">
         <span class="panel-name">{{ restroom.name }}</span>
@@ -336,6 +336,8 @@ function formatShortDate(iso: string) {
   color: #999;
 }
 
+/* Sheet layout: the panel moves off the map's bottom edge and onto its side.
+   Geometry only — the type below follows the panel's width instead. */
 @media (max-width: 750px) {
   .map-panel {
     top: 8px;
@@ -346,10 +348,17 @@ function formatShortDate(iso: string) {
     box-sizing: border-box;
     width: 50%;
     max-height: none;
+  }
+}
+
+/* Same panel-width step as the catalog chrome and the list. */
+@container panel (max-width: 560px) {
+  .map-panel {
     padding: 8px 12px 16px;
     font-size: 12px;
   }
 
+  /* No room for name · location · date on one line at this width. */
   .panel-meta {
     display: flex;
     flex-direction: column;
@@ -359,14 +368,8 @@ function formatShortDate(iso: string) {
     display: none;
   }
 
-  .panel-name {
-    font-size: 12px;
-  }
-
-  .annotation-body {
-    font-size: 12px;
-  }
-
+  .panel-name,
+  .annotation-body,
   .annotations-toggle {
     font-size: 12px;
   }

@@ -295,7 +295,19 @@ function goPrev() {
   overflow: hidden;
   transition: margin-left 0.35s ease;
   position: relative;
-  z-index: 2;
+  /* Above `.expand-tab` (11), which overlaps the panel's last 4px — that sliver
+     is where the list's scrollbar sits, so with the tab on top it clipped the
+     bar's right edge. Stacking the panel over it hides the tab's overlap
+     instead, which costs nothing: both are white and the tab's left corners are
+     square, so the tab still reads as starting exactly at the panel's edge.
+     Everywhere else the tab pokes past the panel and stays above the viewer. */
+  z-index: 12;
+  /* The panel's contents scale off the panel's own width rather than the
+     viewport's — at a 1120px viewport this 50% panel is 560px, which is where
+     `ListView`'s container queries already switch to the compact scale, so the
+     chrome around the list has to switch on the same measurement. Named so the
+     pages inside can query it past the nearer container on `.table-wrap`. */
+  container: panel / inline-size;
 }
 
 .panel.closed {

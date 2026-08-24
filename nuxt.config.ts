@@ -4,7 +4,11 @@ export default defineNuxtConfig({
 
   modules: ["nuxt-auth-utils", "@nuxtjs/turnstile"],
 
-  css: ["maplibre-gl/dist/maplibre-gl.css", "~/assets/css/a11y.css"],
+  css: [
+    "maplibre-gl/dist/maplibre-gl.css",
+    "~/assets/css/a11y.css",
+    "~/assets/css/scrollbars.css",
+  ],
 
   nitro: {
     preset: "cloudflare-pages",

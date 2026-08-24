@@ -8,7 +8,6 @@ const description =
   "An on-going repository of public restrooms dedicated to documenting the humorous, chaotic, and often scary nature of these publicly accessible private spaces.";
 
 useSeoMeta({
-  title: "The Restroom Archive",
   description,
   ogTitle: "The Restroom Archive",
   ogDescription: description,

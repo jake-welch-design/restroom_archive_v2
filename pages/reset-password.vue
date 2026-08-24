@@ -43,7 +43,7 @@ async function submit() {
 <template>
   <div class="auth-page">
     <CatalogHeader />
-    <div class="auth-content">
+    <div class="auth-content thin-scroll">
       <h1 class="auth-title">Reset your password</h1>
 
       <div v-if="!token" class="auth-msg">
@@ -194,7 +194,9 @@ async function submit() {
   color: #999;
 }
 
-@media (max-width: 750px) {
+/* Same panel-width step as the catalog and its header — the page scales with
+   the panel it sits in, not with the window. */
+@container panel (max-width: 560px) {
   .auth-page {
     font-size: 12px;
   }

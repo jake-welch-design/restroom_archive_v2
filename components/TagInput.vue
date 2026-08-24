@@ -154,7 +154,12 @@ function onBlur() {
         @blur="onBlur"
       />
     </div>
-    <ul v-if="showDropdown" ref="listRef" class="tag-suggestions" role="listbox">
+    <ul
+      v-if="showDropdown"
+      ref="listRef"
+      class="tag-suggestions thin-scroll"
+      role="listbox"
+    >
       <li
         v-for="(s, i) in filteredSuggestions"
         :key="s"

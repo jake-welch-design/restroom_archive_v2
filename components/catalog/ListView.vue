@@ -91,6 +91,26 @@ function shortDate(iso: string) {
 }
 
 const tbodyRef = ref<HTMLUListElement | null>(null);
+const theadRef = ref<HTMLElement | null>(null);
+
+// The header is stuck to the top of the scroll box, so a row scrolled to
+// `block: "start"` would land underneath it. Measured rather than hardcoded —
+// the header's height changes with the container-query breakpoints.
+const theadHeight = ref(0);
+let theadRo: ResizeObserver | null = null;
+
+onMounted(() => {
+  if (!theadRef.value) return;
+  theadRo = new ResizeObserver(() => {
+    theadHeight.value = theadRef.value?.offsetHeight ?? 0;
+  });
+  theadRo.observe(theadRef.value);
+});
+
+onBeforeUnmount(() => {
+  theadRo?.disconnect();
+  theadRo = null;
+});
 
 async function scrollToSelected(slug: string | null | undefined) {
   if (!slug || !tbodyRef.value) return;
@@ -179,8 +199,11 @@ function formatShortDate(iso: string) {
 </script>
 
 <template>
-  <div class="table-wrap">
-    <div class="thead">
+  <div
+    class="table-wrap thin-scroll"
+    :style="{ scrollPaddingTop: `${theadHeight}px` }"
+  >
+    <div ref="theadRef" class="thead">
       <button
         type="button"
         class="th col-date"
@@ -412,13 +435,24 @@ function formatShortDate(iso: string) {
 .table-wrap {
   flex: 1 1 auto;
   min-width: 0;
-  overflow: hidden;
+  min-height: 0;
+  /* The scroll lives here, with the header stuck to the top, rather than on
+     `.tbody`. Scrolling `.tbody` alone puts the scrollbar inside the rows' box
+     only — so wherever it takes layout width (macOS with a mouse attached,
+     Windows, Linux) the rows' three columns are laid out across ~15px less
+     than the header's and drift left of their labels. */
+  overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
   font-family: Arial, Helvetica, sans-serif;
   container-type: inline-size;
 }
 .thead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #fff;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
@@ -470,8 +504,7 @@ function formatShortDate(iso: string) {
   list-style: none;
   margin: 0;
   padding: 0;
-  overflow-y: auto;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
 }
 .row {
   border-bottom: 1px solid #000;
@@ -710,6 +743,7 @@ function formatShortDate(iso: string) {
 .edit-actions {
   display: flex;
   gap: 10px;
+  margin-bottom: 12px;
 }
 .edit-btn {
   background: transparent;
@@ -760,6 +794,12 @@ function formatShortDate(iso: string) {
     font-size: 12px;
   }
   .annotations-toggle {
+    font-size: 12px;
+  }
+  .edit-input {
+    font-size: 12px;
+  }
+  .edit-error {
     font-size: 12px;
   }
 }

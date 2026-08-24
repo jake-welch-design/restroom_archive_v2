@@ -82,7 +82,8 @@ defineEmits<{ (e: "update:modelValue", id: string): void }>();
   color: #000;
 }
 
-@media (max-width: 750px) {
+/* Same panel-width step as the account page these sit in. */
+@container panel (max-width: 560px) {
   .subtab-btn {
     padding: 5px 10px;
   }

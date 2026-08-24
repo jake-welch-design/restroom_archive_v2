@@ -196,18 +196,37 @@ async function confirmDeleteAccount() {
   deleteLoading.value = true;
   deleteError.value = "";
   try {
-    await $fetch("/api/me", {
-      method: "DELETE",
+    await $fetch("/api/me/delete", {
+      method: "POST",
       body: { password: deletePasswordDraft.value },
     });
-    await refreshSession();
-    await navigateTo("/");
   } catch (e: unknown) {
-    const err = e as { data?: { statusMessage?: string } };
-    deleteError.value = err.data?.statusMessage ?? "Could not delete account.";
+    // Fall through the response body first, then the fetch error itself — a 500
+    // from Nitro has no `statusMessage`, and without the fallbacks every server
+    // fault reads as the same useless "Could not delete account."
+    const err = e as {
+      data?: { statusMessage?: string; message?: string } | string;
+      statusMessage?: string;
+      message?: string;
+    };
+    const fromBody =
+      typeof err.data === "object" && err.data
+        ? (err.data.statusMessage ?? err.data.message)
+        : undefined;
+    deleteError.value =
+      fromBody ||
+      err.statusMessage ||
+      err.message ||
+      "Could not delete account.";
+    return;
   } finally {
     deleteLoading.value = false;
   }
+  // Past this point the account is gone and the server has already cleared the
+  // session, so a failure here is a navigation problem — keeping it inside the
+  // try above reported a successful delete as "Could not delete account."
+  await refreshSession();
+  await navigateTo("/");
 }
 
 async function saveNewPassword() {
@@ -1282,7 +1301,7 @@ watch(
     <CatalogHeader />
 
     <!-- Logged-out: auth forms -->
-    <div v-if="!loggedIn" class="body-section">
+    <div v-if="!loggedIn" class="body-section thin-scroll">
       <div ref="alignEl" class="auth-tabs">
         <button
           type="button"
@@ -1399,7 +1418,7 @@ watch(
     </div>
 
     <!-- Logged-in -->
-    <div v-else class="body-section">
+    <div v-else class="body-section thin-scroll">
       <div v-if="adminMessage" class="admin-message-banner">
         <strong>From admin:</strong> {{ adminMessage }}
       </div>
@@ -1685,7 +1704,8 @@ watch(
             </form>
           </div>
 
-          <!-- Request deletion -->
+          <!-- Delete account. Self-service and immediate — no admin approval
+               step sits behind this, so the label mustn't imply one. -->
           <div v-if="!isAdmin" class="settings-row settings-row-danger">
             <span class="settings-label">Delete</span>
             <template v-if="!deletingAccount">
@@ -1697,7 +1717,7 @@ watch(
                 class="btn btn-danger-outline settings-change"
                 @click="startDeleteAccount"
               >
-                Request deletion
+                Delete account
               </button>
             </template>
             <form
@@ -3435,15 +3455,11 @@ dd {
   font-style: italic;
 }
 
-@media (max-width: 750px) {
+/* Same panel-width step as the catalog and its header — these all track how
+   much room the panel has, so they follow its width rather than the window's. */
+@container panel (max-width: 560px) {
   .body-section {
     --gutter: 12px;
-  }
-  /* The tab moves to the panel's bottom edge here — nothing to align to, so
-     the row keeps its natural height and the normal gutter above it. */
-  .account-tabs,
-  .auth-tabs {
-    min-height: 0;
   }
   .account-tabs {
     gap: 14px;
@@ -3452,15 +3468,8 @@ dd {
   .account-tabs .tab-btn {
     font-size: 12px;
   }
-  .body-section > .account-header:first-child,
-  .body-section > .auth-tabs:first-child {
-    margin-top: 0;
-  }
   .tab-btn {
     padding: 6px 10px 7px;
-  }
-  .field-input {
-    font-size: 16px; /* keep 16px — iOS zooms into inputs below 16px */
   }
   .queue-head,
   .queue-main {
@@ -3470,6 +3479,23 @@ dd {
   .queue-head span:last-child,
   .queue-cell:last-child {
     display: none;
+  }
+}
+
+/* Sheet layout and touch behaviour — neither follows the panel's width. */
+@media (max-width: 750px) {
+  /* The tab moves to the panel's bottom edge here — nothing to align to, so
+     the row keeps its natural height and the normal gutter above it. */
+  .account-tabs,
+  .auth-tabs {
+    min-height: 0;
+  }
+  .body-section > .account-header:first-child,
+  .body-section > .auth-tabs:first-child {
+    margin-top: 0;
+  }
+  .field-input {
+    font-size: 16px; /* keep 16px — iOS zooms into inputs below 16px */
   }
 }
 </style>

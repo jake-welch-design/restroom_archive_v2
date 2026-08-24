@@ -78,7 +78,7 @@ onMounted(() => scrollToSelected(props.selectedSlug));
 </script>
 
 <template>
-  <div ref="gridWrapRef" class="grid-wrap">
+  <div ref="gridWrapRef" class="grid-wrap thin-scroll">
     <div class="grid">
       <button
         v-for="r in rows"
@@ -91,7 +91,7 @@ onMounted(() => scrollToSelected(props.selectedSlug));
       >
         <div class="thumb">
           <template v-if="r.slug === selectedSlug">
-            <div class="expanded" @click.stop>
+            <div class="expanded thin-scroll" @click.stop>
               <div class="tile-info selected">
                 <span class="tile-name">{{ r.name }}</span>
                 <span class="tile-date">{{ formatShortDate(r.isoDate) }}</span>
@@ -200,19 +200,20 @@ onMounted(() => scrollToSelected(props.selectedSlug));
   grid-template-columns: repeat(3, 1fr);
   gap: 12px;
 }
-@media (max-width: 750px) {
+/* The grid fills the panel, so its margin and column count follow the panel's
+   width on the same steps as the rest of the panel — not the window's. Keyed to
+   the window these went the wrong way at the 750px layout switch: a 376px panel
+   still got three columns (107px tiles) while a 700px one dropped to two. */
+@container panel (max-width: 560px) {
   .grid-wrap {
     margin: 8px;
   }
-}
-@media (max-width: 700px) {
   .grid {
     grid-template-columns: repeat(2, 1fr);
   }
 }
-@media (max-width: 500px) {
+@container panel (max-width: 400px) {
   .grid {
-    /* grid-template-columns: 1fr; */
     gap: 8px;
   }
 }

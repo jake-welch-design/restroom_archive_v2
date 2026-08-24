@@ -90,7 +90,7 @@ async function submitContact() {
   <div class="about-page">
     <CatalogHeader />
 
-    <article class="about-content">
+    <article class="about-content thin-scroll">
       <section>
         <h1>About</h1>
         <p>
@@ -328,7 +328,9 @@ async function submitContact() {
   line-height: 1.4;
 }
 
-@media (max-width: 750px) {
+/* Same panel-width step as the catalog and its header — the page scales with
+   the panel it sits in, not with the window. */
+@container panel (max-width: 560px) {
   .about-page {
     --gutter: 12px;
     font-size: 12px;
