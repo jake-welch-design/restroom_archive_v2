@@ -32,14 +32,12 @@ watch(() => route.path, () => {
       </nav>
       <button
         type="button"
-        class="hamburger"
+        class="menu-toggle"
         :aria-label="menuOpen ? 'Close menu' : 'Open menu'"
         :aria-expanded="menuOpen"
         @click="menuOpen = !menuOpen"
       >
-        <span class="bar" :class="{ open: menuOpen }" />
-        <span class="bar" :class="{ open: menuOpen }" />
-        <span class="bar" :class="{ open: menuOpen }" />
+        {{ menuOpen ? "✕" : "Menu" }}
       </button>
     </div>
 
@@ -113,41 +111,29 @@ watch(() => route.path, () => {
   }
 }
 
-/* Hamburger — hidden on desktop */
-.hamburger {
+/* Menu toggle — hidden on desktop */
+.menu-toggle {
   display: none;
-  flex-direction: column;
-  justify-content: center;
-  gap: 5px;
+  align-items: center;
+  justify-content: flex-end;
   background: none;
   border: none;
   cursor: pointer;
   padding: 4px;
-  width: 28px;
-  height: 28px;
+  /* Fixed width so the row doesn't shift when the label swaps to the ✕. */
+  min-width: 44px;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1;
+  color: #000;
 }
 
-.bar {
-  display: block;
-  width: 20px;
-  height: 1.5px;
-  background: #000;
-  transform-origin: center;
-  transition:
-    transform 0.2s ease,
-    opacity 0.2s ease;
-}
-
-/* X state */
-.bar:nth-child(1).open {
-  transform: translateY(6.5px) rotate(45deg);
-}
-.bar:nth-child(2).open {
-  opacity: 0;
-  transform: scaleX(0);
-}
-.bar:nth-child(3).open {
-  transform: translateY(-6.5px) rotate(-45deg);
+/* Same hover treatment as the nav links; pointer devices only. */
+@media (hover: hover) {
+  .menu-toggle:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
 }
 
 /* Mobile nav drawer — hidden on desktop */
@@ -164,7 +150,7 @@ watch(() => route.path, () => {
     display: none;
   }
 
-  .hamburger {
+  .menu-toggle {
     display: flex;
   }
 
