@@ -3,6 +3,12 @@ import { useDb, schema } from '~~/server/utils/db'
 
 // Temporary local-only helper for manual QA. Not part of the app — delete after testing.
 export default defineEventHandler(async (event) => {
+  // Hard gate: unguarded, this hands a full admin session to any unauthenticated
+  // caller. `import.meta.dev` is compiled out of the production build.
+  if (!import.meta.dev) {
+    throw createError({ statusCode: 404, statusMessage: 'Not found' })
+  }
+
   const db = useDb(event)
   const user = await db
     .select()

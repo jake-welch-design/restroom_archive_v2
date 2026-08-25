@@ -91,25 +91,31 @@ function shortDate(iso: string) {
 }
 
 const tbodyRef = ref<HTMLUListElement | null>(null);
-const theadRef = ref<HTMLElement | null>(null);
 
-// The header is stuck to the top of the scroll box, so a row scrolled to
-// `block: "start"` would land underneath it. Measured rather than hardcoded —
-// the header's height changes with the container-query breakpoints.
-const theadHeight = ref(0);
-let theadRo: ResizeObserver | null = null;
+// Only the rows scroll, so the bar starts under the header instead of running
+// the table's full height beside it. That does put the bar inside the rows'
+// box — width the header doesn't lose — so the header is pulled in by the same
+// amount (see `.thead`'s `margin-right`) and the two stay column-aligned.
+// Measured off the live scroller rather than assumed: the reserved width is
+// `.thin-scroll`'s 8px in Chrome/Safari but Firefox's own `thin` metric there.
+const scrollbarWidth = ref(0);
+let tbodyRo: ResizeObserver | null = null;
+
+function measureScrollbar() {
+  const el = tbodyRef.value;
+  if (el) scrollbarWidth.value = el.offsetWidth - el.clientWidth;
+}
 
 onMounted(() => {
-  if (!theadRef.value) return;
-  theadRo = new ResizeObserver(() => {
-    theadHeight.value = theadRef.value?.offsetHeight ?? 0;
-  });
-  theadRo.observe(theadRef.value);
+  measureScrollbar();
+  if (!tbodyRef.value) return;
+  tbodyRo = new ResizeObserver(measureScrollbar);
+  tbodyRo.observe(tbodyRef.value);
 });
 
 onBeforeUnmount(() => {
-  theadRo?.disconnect();
-  theadRo = null;
+  tbodyRo?.disconnect();
+  tbodyRo = null;
 });
 
 async function scrollToSelected(slug: string | null | undefined) {
@@ -199,11 +205,8 @@ function formatShortDate(iso: string) {
 </script>
 
 <template>
-  <div
-    class="table-wrap thin-scroll"
-    :style="{ scrollPaddingTop: `${theadHeight}px` }"
-  >
-    <div ref="theadRef" class="thead">
+  <div class="table-wrap" :style="{ '--sbw': `${scrollbarWidth}px` }">
+    <div class="thead">
       <button
         type="button"
         class="th col-date"
@@ -230,7 +233,7 @@ function formatShortDate(iso: string) {
       </button>
     </div>
 
-    <ul ref="tbodyRef" class="tbody">
+    <ul ref="tbodyRef" class="tbody thin-scroll">
       <li
         v-for="r in rows"
         :key="r.id"
@@ -436,22 +439,22 @@ function formatShortDate(iso: string) {
   flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
-  /* The scroll lives here, with the header stuck to the top, rather than on
-     `.tbody`. Scrolling `.tbody` alone puts the scrollbar inside the rows' box
-     only — so wherever it takes layout width (macOS with a mouse attached,
-     Windows, Linux) the rows' three columns are laid out across ~15px less
-     than the header's and drift left of their labels. */
-  overflow-y: auto;
-  overflow-x: hidden;
+  /* Just stacks the header above the rows — `.tbody` owns the scroll, so the
+     bar starts below the header rather than running up alongside it. The catch
+     that used to keep the scroll here: a bar inside the rows' box lays their
+     three columns out across less width than the header's, drifting them left
+     of their labels. `.thead` gives that width back as a right margin. */
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   font-family: Arial, Helvetica, sans-serif;
   container-type: inline-size;
 }
 .thead {
-  position: sticky;
-  top: 0;
-  z-index: 1;
+  /* Held off the edge by exactly the width the rows' scrollbar takes (measured
+     into `--sbw`), which lines the header's columns up with the rows' and ends
+     its bottom rule flush with theirs instead of 8px past them. */
+  margin-right: var(--sbw, 0px);
   background: #fff;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -504,7 +507,13 @@ function formatShortDate(iso: string) {
   list-style: none;
   margin: 0;
   padding: 0;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  /* `scroll` rather than `auto` so the gutter is reserved whether or not the
+     list currently overflows — otherwise filtering down to a handful of rows
+     would drop the bar and slide every column 8px right. */
+  overflow-y: scroll;
+  overflow-x: hidden;
 }
 .row {
   border-bottom: 1px solid #000;
