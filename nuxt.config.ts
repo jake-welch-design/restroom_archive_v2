@@ -104,7 +104,7 @@ export default defineNuxtConfig({
         {
           name: "description",
           content:
-            "An on-going repository of public restrooms dedicated to documenting the humorous, chaotic, and often scary nature of these publicly accessible private spaces.",
+            "The Restroom Archive is an ongoing repository of publicly accessible restrooms.",
         },
 
         // Open Graph
@@ -114,7 +114,7 @@ export default defineNuxtConfig({
         {
           property: "og:description",
           content:
-            "An on-going repository of public restrooms dedicated to documenting the humorous, chaotic, and often scary nature of these publicly accessible private spaces.",
+            "The Restroom Archive is an ongoing repository of publicly accessible restrooms.",
         },
         {
           property: "og:image",
@@ -135,7 +135,7 @@ export default defineNuxtConfig({
         {
           name: "twitter:description",
           content:
-            "An on-going repository of public restrooms dedicated to documenting the humorous, chaotic, and often scary nature of these publicly accessible private spaces.",
+            "The Restroom Archive is an ongoing repository of publicly accessible restrooms.",
         },
         {
           name: "twitter:image",

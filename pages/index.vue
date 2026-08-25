@@ -5,7 +5,7 @@ const { toAbsolute } = useAbsoluteUrl();
 
 const siteUrl = "https://restroomarchive.com";
 const description =
-  "An on-going repository of public restrooms dedicated to documenting the humorous, chaotic, and often scary nature of these publicly accessible private spaces.";
+  "The Restroom Archive is an ongoing repository of publicly accessible restrooms.";
 
 useSeoMeta({
   description,
