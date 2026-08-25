@@ -120,6 +120,8 @@ export default defineNuxtConfig({
           property: "og:image",
           content: "https://restroomarchive.com/metatag.jpg",
         },
+        { property: "og:image:width", content: "1200" },
+        { property: "og:image:height", content: "590" },
         {
           property: "og:image:alt",
           content: "Preview of The Restroom Archive",
