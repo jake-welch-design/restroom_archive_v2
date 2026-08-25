@@ -155,10 +155,10 @@ onBeforeRouteLeave(() => {
   }
 });
 
-// Expanding a pending submission auto-previews its scan in the same
-// right-panel viewer the submission wizard uses — no separate "preview"
-// button. Not treated as "unsaved progress": it's read-only, so leaving
-// doesn't need a confirm.
+// Expanding a pending submission previews its scan in the same right-hand
+// viewer the submission wizard uses, so there is no separate "preview" button.
+// Not treated as unsaved progress: the preview is read-only, so leaving needs
+// no confirmation.
 watch(expandedPendingId, (id) => {
   const r =
     id == null ? null : pendingRestrooms.value?.find((p) => p.id === id);
@@ -331,9 +331,9 @@ applySectionFromQuery();
         <strong>From admin:</strong> {{ adminMessage }}
       </div>
 
-      <!-- Top row sits where the catalog's search bar does: left-clustered,
-           no border, flush under the site header — like `.controls`. Sign out
-           sits on the right, same line, like it used to. -->
+      <!-- Top row sits where the catalog's search bar does: left-clustered, no
+           border, flush under the site header, the same position `.controls`
+           holds there. Sign out sits on the right, on the same line. -->
       <header class="account-header">
         <div class="account-identity">
           <span v-if="roleLabel" class="account-role">{{ roleLabel }}</span>
@@ -351,8 +351,8 @@ applySectionFromQuery();
         </button>
       </header>
 
-      <!-- Bottom row is what the expand tab frames — same band position, and
-           same flat/color-only styling, as the Info page's tabs. -->
+      <!-- Bottom row is what the expand tab frames. Same band position and the
+           same flat, colour-only styling as the Info page's tabs. -->
       <nav ref="accountTabsEl" class="account-tabs" role="tablist">
         <button
           v-if="isAdmin"
@@ -453,13 +453,11 @@ applySectionFromQuery();
 </template>
 
 <style scoped>
-/* Type scale — four steps, each with one job. Nothing on this page should
-   introduce a fifth size.
-     15px  identity + main tabs   (the only "large" text)
-     13px  content: titles, values, prose, buttons, inputs   (inherited base)
-     12px  support: labels, meta, column heads, sub-tabs
-     11px  micro: counts, pills, chips, hints
-   Spacing runs on a 4px grid: 4 / 8 / 12 / 16 / 20. */
+/* Only the page's own chrome lives here: the shell, the header band, and the
+   two tab rows. Everything the tab panels use is shared with the components
+   that render them, and lives in assets/css/account.css. The type scale those
+   sizes belong to is documented there. */
+
 .account-page {
   display: flex;
   flex-direction: column;
@@ -471,6 +469,7 @@ applySectionFromQuery();
   color: #000;
   overflow: hidden;
 }
+
 .body-section {
   --gutter: 20px;
   flex: 1 1 auto;
@@ -479,9 +478,9 @@ applySectionFromQuery();
 }
 
 /* Full-bleed rules: the header stack pulls out to the panel edges and puts the
-   gutter back as padding, so the borders span the panel the way the catalog's
-   sub-header does, while the content stays on the same left edge as everything
-   else. */
+   gutter back as padding, so its borders span the panel the way the catalog's
+   sub-header does while the content stays on the same left edge as everything
+   below it. */
 .account-header,
 .account-tabs {
   margin-inline: calc(-1 * var(--gutter));
@@ -496,9 +495,10 @@ applySectionFromQuery();
   margin-top: calc(-1 * var(--gutter));
 }
 
-/* Identity row — top of the band, no border, content-sized: the same role
-   `.controls` plays in the catalog (search bar sits here, left-clustered,
-   flush under the header). Sign out sits on the right, same line. */
+/* Identity row: the top of the band, no border, sized by its content. It plays
+   the same role the controls strip does in the catalog, where the search bar
+   sits left-clustered and flush under the header. Sign out sits on the right,
+   on the same line. */
 .account-header {
   display: flex;
   justify-content: space-between;
@@ -507,15 +507,18 @@ applySectionFromQuery();
   gap: 12px;
   flex-wrap: wrap;
 }
+
 .account-identity {
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
 }
+
 .account-email {
   font-size: 15px;
 }
+
 .account-role {
   font-size: 11px;
   line-height: 1.4;
@@ -525,23 +528,23 @@ applySectionFromQuery();
   border-radius: 3px;
 }
 
-/* Caps the width of anything that reads as a form, so settings rows and
-   checklists don't stretch the full panel on a wide viewport. */
-/* Account tabs — bottom of the band the expand tab frames (see
-   useAlignToStrip), same position as the Info page's tabs. Styled the same
-   flat, color-only way: `.tab-btn`'s #999/#595959/#000 states already match
-   `.info-tab`'s, so only the underline/padding need overriding away. */
+/* Account tabs: the bottom of the band the expand tab frames, in the same
+   position as the Info page's tabs and styled the same flat, colour-only way.
+   The shared `.tab-btn` states already match, so only the underline and the
+   padding are overridden away. `min-height` is what lets the row grow to meet
+   the expand tab; see useAlignToStrip. */
 .account-tabs {
   display: flex;
   align-items: flex-end;
   gap: 20px;
   border-bottom: 1px solid #000;
-  padding: 10px var(--gutter);
+  padding-block: 10px;
   margin-bottom: 16px;
   overflow-x: auto;
   box-sizing: border-box;
   min-height: var(--strip-align-height, 0px);
 }
+
 .account-tabs .tab-btn {
   display: flex;
   align-items: center;
@@ -549,188 +552,41 @@ applySectionFromQuery();
   padding: 0;
   border-bottom: 0;
   margin-bottom: 0;
-  /* Overrides the shared `.tab-btn`'s 15px — sized for the underlined auth
-     tabs — down to the 14px the Info page's tabs and the catalog's headings
-     use. Tight line-height for the same reason `.account-actions .link-btn`
-     needed it: `.account-page`'s inherited 1.4 (unlike the Info page, which
-     doesn't set line-height above `.about-content`) was enough on its own to
-     push the row's natural height past `min-height`, so the row grew past
-     the tab instead of the tab framing the row. */
+  /* Steps the shared 15px, which is sized for the underlined auth tabs, down to
+     the 14px the Info page's tabs and the catalog's headings use. The tight
+     line-height matters as much as the size: the page's inherited 1.4 was on
+     its own enough to push the row's natural height past `min-height`, so the
+     row grew past the expand tab instead of the tab framing the row. */
   font-size: 14px;
   line-height: 1;
   white-space: nowrap;
   flex-shrink: 0;
 }
+
 .account-tabs .tab-btn:not(.active) .count {
   background: #999;
 }
 
-/* Settings rows — label stacked over value, action on the right. Used by the
-   Profile tab and by the admin account controls, which are the same kind of
-   thing seen from the other side. */
-/* Explains what a row's action does, on its own line under it — the row is
-   `flex-wrap`, so a full-basis child always breaks below the button. */
-/* Rows whose action can't be walked back. Only the label carries the colour —
-   a full red row would shout louder than a ban warrants at rest. */
-/* Named runs of rows. The heading is the micro step so it groups the rows
-   without competing with their labels. */
 /* Banners */
+
 .muted-banner {
   background: #fff4e5;
 }
+
 .admin-message-banner {
   background: #c33;
   color: #fff;
   padding: 10px 12px;
   margin-bottom: 12px;
 }
+
 .admin-message-banner strong {
   font-weight: 700;
   margin-right: 4px;
 }
-/* Sign-up intro */
-/* Submission access request */
-/* Shared form */
-/* Buttons — row-level actions (Change, Save, Cancel, admin queue actions) sit
-   at 12px with tight padding so they match the labels they sit beside rather
-   than outweighing them. Only the primary/danger CTAs stay content-level. */
-/* Row-level actions sit a step below the content they label, so the shared
-   link button is tightened and stepped down here rather than page-wide. */
-/* An anchor, not a button, so it takes none of the shared .link-btn reset and
-   states the ink colour itself rather than inheriting the user agent's blue. */
-/* Counts, pills and chips — the micro step. */
-/* Account status badges: filled = a standing fact about the account, outlined
-   = something waiting on an admin. */
-/* Pending submission queue — the catalog's expand-in-place row, so the
-   admin list reads the same way the public browse list does. */
-.queue {
-  display: flex;
-  flex-direction: column;
-}
-.queue-head,
-.queue-main {
-  display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr);
-  gap: 12px;
-  text-align: left;
-}
-.queue-head {
-  padding: 0 0 6px;
-  border-bottom: 1px solid #000;
-  font-size: 12px;
-  color: #666;
-}
-.queue-row {
-  border-bottom: 1px solid #e8e8e8;
-}
-.queue-main {
-  width: 100%;
-  background: transparent;
-  border: 0;
-  padding: 8px 0;
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
-  align-items: start;
-}
-.queue-main:hover:not(.active) {
-  background: #f9f9f9;
-}
-.queue-cell {
-  font-size: 12px;
-  color: #666;
-}
-.queue-expanded {
-  padding: 2px 0 12px;
-}
-.detail-list {
-  margin: 0;
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 4px 12px;
-  align-content: start;
-}
-dt {
-  color: #666;
-  white-space: nowrap;
-}
-dd {
-  margin: 0;
-  word-break: break-word;
-}
-.dd-description {
-  white-space: pre-wrap;
-}
-.detail-actions {
-  padding-top: 12px;
-  display: flex;
-  gap: 8px;
-}
 
-/* Row lists */
-.inline-reject-form {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.inline-reject-form {
-  padding: 8px 0 4px;
-}
-/* Audit log */
-.audit-action {
-  color: #000;
-}
-.audit-target {
-  color: #888;
-  font-family: ui-monospace, Menlo, monospace;
-  font-size: 12px;
-  margin-left: 4px;
-}
-.audit-meta-summary {
-  color: #666;
-  word-break: break-word;
-}
-/* Admin accounts list */
-.account-row {
-  display: flex;
-  flex-direction: column;
-  border-bottom: 1px solid #e8e8e8;
-}
-.account-row > .simple-row {
-  border-bottom: 0;
-}
-/* Capped to the same measure as the account's own settings form: these are a
-   form, not a table, and a full-panel-wide row of controls was most of why the
-   old layout read as a pile of buttons. */
-.account-options {
-  padding: 12px 0 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  border-top: 1px solid #e8e8e8;
-  max-width: 480px;
-}
-.badge-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 0;
-  margin-top: 2px;
-}
-/* A row whose action needs an input beside the button. */
-.mod-action {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.mute-days {
-  width: 64px;
-  border: 1px solid #000;
-  padding: 5px 6px;
-  font: inherit;
-}
-.admin-msg-preview,
-/* Same panel-width step as the catalog and its header — these all track how
-   much room the panel has, so they follow its width rather than the window's. */
+/* Same panel-width step as the catalog and its header. These track how much
+   room the panel has, not the window. */
 @container panel (max-width: 560px) {
   .body-section {
     --gutter: 12px;
@@ -742,24 +598,12 @@ dd {
   .account-tabs .tab-btn {
     font-size: 12px;
   }
-  .tab-btn {
-    padding: 6px 10px 7px;
-  }
-  .queue-head,
-  .queue-main {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  }
-  /* Location is the least useful column when there's no room for three. */
-  .queue-head span:last-child,
-  .queue-cell:last-child {
-    display: none;
-  }
 }
 
-/* Sheet layout and touch behaviour — neither follows the panel's width. */
+/* Sheet layout, which follows the window rather than the panel: below this the
+   expand tab moves to the panel's bottom edge, so there is nothing for the tab
+   row to align to. It keeps its natural height and its normal gutter. */
 @media (max-width: 750px) {
-  /* The expand tab moves to the panel's bottom edge here, so there is nothing
-     to align to. The row keeps its natural height and its normal gutter. */
   .account-tabs {
     min-height: 0;
   }

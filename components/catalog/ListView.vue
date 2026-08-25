@@ -21,7 +21,7 @@ const emit = defineEmits<{
 }>();
 
 // Previously-used descriptors across all loaded restrooms, ordered by
-// frequency — feeds the tag suggestion dropdown when editing an entry.
+// frequency. Feeds the tag suggestion dropdown when editing an entry.
 const descriptorSuggestions = computed(() => {
   const counts = new Map<string, { display: string; count: number }>();
   for (const r of props.rows) {
@@ -51,7 +51,7 @@ const tbodyRef = ref<HTMLUListElement | null>(null);
 
 // Only the rows scroll, so the bar starts under the header instead of running
 // the table's full height beside it. That does put the bar inside the rows'
-// box — width the header doesn't lose — so the header is pulled in by the same
+// box, width the header does not lose, so the header is pulled in by the same
 // amount (see `.thead`'s `margin-right`) and the two stay column-aligned.
 // Measured off the live scroller rather than assumed: the reserved width is
 // `.thin-scroll`'s 8px in Chrome/Safari but Firefox's own `thin` metric there.
@@ -330,7 +330,7 @@ function sortArrow(key: SortKey) {
   flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
-  /* Just stacks the header above the rows — `.tbody` owns the scroll, so the
+  /* Just stacks the header above the rows. `.tbody` owns the scroll, so the
      bar starts below the header rather than running up alongside it. The catch
      that used to keep the scroll here: a bar inside the rows' box lays their
      three columns out across less width than the header's, drifting them left
@@ -383,7 +383,7 @@ function sortArrow(key: SortKey) {
 .col-loc {
   order: 3;
 }
-/* Row cells only — `.col-loc` is also the `.thead` sort button, which must keep
+/* Row cells only. `.col-loc` is also the `.thead` sort button, which must keep
    its arrow next to the label rather than pushed to the far edge. */
 .row-main .col-loc {
   display: flex;
@@ -401,7 +401,7 @@ function sortArrow(key: SortKey) {
   flex: 1 1 auto;
   min-height: 0;
   /* `scroll` rather than `auto` so the gutter is reserved whether or not the
-     list currently overflows — otherwise filtering down to a handful of rows
+     list currently overflows. Otherwise filtering down to a handful of rows
      would drop the bar and slide every column 8px right. */
   overflow-y: scroll;
   overflow-x: hidden;
@@ -428,7 +428,7 @@ function sortArrow(key: SortKey) {
 .row-expanded {
   padding: 0 24px 0;
 }
-/* Section rules, in place of the old "Description:"/"Descriptors:" headers —
+/* Section rules, in place of the old "Description:" and "Descriptors:" headers:
    the same light divider the account tab uses. The top padding lives here
    rather than on `.row-expanded` so the rule sits directly under the row. */
 .description,

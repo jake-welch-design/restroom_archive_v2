@@ -129,10 +129,10 @@ export function useThreeScene(
   let lastProbeAt = 0;
   const probeRaycaster = new THREE.Raycaster();
   const probeDir = new THREE.Vector3();
-  // Raycasting a photogrammetry mesh is O(triangles) — there's no BVH here, so
+  // Raycasting a photogrammetry mesh is O(triangles) and there is no BVH here, so
   // the probe only runs on interaction start and never more than this often.
   const PROBE_INTERVAL_MS = 250;
-  // How much farther the geometry has to be than the pivot before we correct.
+  // How much farther the geometry has to be than the pivot before correcting.
   // Kept high so ordinary orbiting from outside the model keeps its centre pivot.
   const PROBE_RATIO = 2.5;
 
@@ -170,7 +170,7 @@ export function useThreeScene(
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setClearColor(0x000000);
     // Photogrammetry scans have lighting baked into their base color texture, so
-    // the viewer renders unlit (see toUnlitMaterial). No tone mapping either —
+    // the viewer renders unlit (see toUnlitMaterial). No tone mapping either:
     // it would remap those baked values and wash the scan out.
     renderer.toneMapping = THREE.NoToneMapping;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -228,7 +228,7 @@ export function useThreeScene(
       if (!userInteracted && currentModel) {
         currentModel.rotation.y += 0.001;
       }
-      // Skip controls.update() during flyTo — OrbitControls recomputes camera.position
+      // Skip controls.update() during flyTo. OrbitControls recomputes camera.position
       // from its internal spherical state each update, which overwrites tween values.
       if (!tweenActive) controls.update();
     }
@@ -237,7 +237,7 @@ export function useThreeScene(
 
   // Scans are photographed, not lit: the base color texture already contains the
   // real-world lighting. Rendering them with a PBR material means three re-lights
-  // an already-lit image — dark surfaces pick up ambient/environment fill and the
+  // an already-lit image: dark surfaces pick up ambient and environment fill, and the
   // whole model reads faded. MeshBasicMaterial shows the texture exactly as
   // authored, and sidesteps the metallicFactor-defaults-to-1 black-model problem
   // entirely since metalness/roughness no longer participate.
@@ -257,7 +257,7 @@ export function useThreeScene(
       toneMapped: false,
     });
     // Textures are handed to the new material, so only the material shell is
-    // released here — disposeMaterial() would take the maps down with it.
+    // released here, since disposeMaterial() would take the maps down with it.
     src.dispose();
     return flat;
   }
@@ -381,7 +381,7 @@ export function useThreeScene(
   }
 
   // OrbitControls sizes both the dolly step and the pan step from the distance
-  // between the camera and controls.target — so the pivot, not the geometry,
+  // between the camera and controls.target, so the pivot, not the geometry,
   // decides how fast the viewer moves. The target sits at the scan's centre,
   // which for a room scan is empty air: zoom in past a wall and the radius
   // collapses toward zero while the surfaces on screen are still metres away.
@@ -391,7 +391,7 @@ export function useThreeScene(
   // Fix the pivot rather than the speeds: push the target back out onto whatever
   // surface lies along the camera's forward axis, so the radius tracks what's
   // actually on screen. The camera is never touched, and OrbitControls recomputes
-  // its offset from the live target each update() — so the view is identical
+  // its offset from the live target each update(), so the view is identical
   // before and after, only the step size is corrected.
   function reanchorOrbitTarget(force = false) {
     if (!camera || !controls || !currentModel) return;
@@ -402,8 +402,8 @@ export function useThreeScene(
     // makes the controls overshoot instead.
     const maxWanted = orbitDistance * 2;
     // Exact early-out: past this radius no hit distance could clear PROBE_RATIO,
-    // so there's nothing to correct and we skip the raycast. Keeps the common
-    // case — orbiting at a normal distance — free of any per-click mesh work.
+    // so there is nothing to correct and the raycast is skipped. Keeps the common
+    // case, orbiting at a normal distance, free of any per-click mesh work.
     if (radius * PROBE_RATIO > maxWanted) return;
 
     const now = performance.now();
@@ -417,8 +417,8 @@ export function useThreeScene(
     probeRaycaster.far = orbitDistance * 4;
     const hit = probeRaycaster.intersectObject(currentModel, true)[0];
 
-    // A miss means we're staring into empty space (out a doorway, off the edge of
-    // the scan) — fall back to the model's own scale rather than leaving the
+    // A miss means the camera is looking into empty space (out a doorway, off the edge of
+    // the scan), so fall back to the model's own scale rather than leaving the
     // pivot collapsed.
     const surfaceDistance = hit ? hit.distance : modelRadius;
     const wanted = Math.min(surfaceDistance, maxWanted);
@@ -639,7 +639,7 @@ export function useThreeScene(
     if (mode.value !== "pov") return;
     if (tweenActive) return;
     if (activePointers.size === 2) {
-      // Second finger landed — switch from drag to pinch
+      // A second finger landed, so switch from drag to pinch.
       povState.dragging = false;
       pinchStartDist = getPinchDist();
       pinchStartFov = povState.fov;
@@ -654,7 +654,7 @@ export function useThreeScene(
     activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (mode.value !== "pov" || !camera || tweenActive) return;
     if (activePointers.size >= 2) {
-      // Pinch — adjust FOV
+      // Pinching adjusts the field of view.
       const dist = getPinchDist();
       if (pinchStartDist > 0) {
         povState.fov = Math.max(
@@ -717,7 +717,7 @@ export function useThreeScene(
   }
 
   function disposeMaterial(material: THREE.Material) {
-    // material.dispose() does NOT cascade to textures, so we have to do it
+    // material.dispose() does NOT cascade to textures, so they are released
     // manually. Skipping this leaves photogrammetry-sized textures resident
     // on the GPU after a model swap, which tanks interactive perf.
     for (const key of Object.keys(material)) {

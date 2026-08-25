@@ -129,7 +129,7 @@ const emit = defineEmits<{
 }
 
 /* Sheet layout: the panel moves off the map's bottom edge and onto its side.
-   Geometry only — the type below follows the panel's width instead. */
+   Geometry only; the type below follows the panel's width instead. */
 @media (max-width: 750px) {
   .map-panel {
     top: 8px;

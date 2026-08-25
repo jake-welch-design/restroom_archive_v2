@@ -23,7 +23,7 @@ useHead({
   link: [{ rel: "canonical", href: `${siteUrl}/about` }],
 });
 
-// Running totals, read as the closing sentence of the bio — cheap server-side
+// Running totals, read as the closing sentence of the bio. Cheap server-side
 // counts, not derived from the (much larger) catalog list. Built as a string so
 // the counts agree with their nouns: the archivist count is still low enough
 // that "1 archivists" is a real case, not a hypothetical.
@@ -54,8 +54,7 @@ const contactSubmitted = ref(false);
 
 async function submitContact() {
   if (!(await waitForTurnstileToken(contactTurnstileToken))) {
-    contactError.value =
-      "Still verifying — please wait a moment and try again.";
+    contactError.value = "Still verifying. Please wait a moment and try again.";
     return;
   }
   contactError.value = "";
@@ -109,7 +108,7 @@ async function submitContact() {
         <h1>Contact</h1>
 
         <div v-if="contactSubmitted" class="contact-msg">
-          <p>Thanks — your message is on its way.</p>
+          <p>Thanks, your message is on its way.</p>
           <p class="dim">
             We'll reply to {{ contactEmail }} if a reply is needed.
           </p>
@@ -281,7 +280,7 @@ async function submitContact() {
   line-height: 1.4;
 }
 
-/* Same panel-width step as the catalog and its header — the page scales with
+/* Same panel-width step as the catalog and its header. The page scales with
    the panel it sits in, not with the window. */
 @container panel (max-width: 560px) {
   .about-page {

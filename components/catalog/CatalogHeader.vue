@@ -145,7 +145,7 @@ watch(
   }
 }
 
-/* Menu toggle — hidden on desktop */
+/* Menu toggle. Hidden on desktop. */
 .menu-toggle {
   display: none;
   align-items: center;
@@ -169,13 +169,14 @@ watch(
   }
 }
 
-/* Mobile nav drawer — hidden on desktop */
+/* Mobile nav drawer. Hidden on desktop. */
 .mobile-nav-wrap {
   display: none;
 }
 
 /* Compact scale, on the same panel-width step as the catalog controls and the
-   list. The title holds at 24px — it's the brand anchor, not part of the type
+   list. The title holds at 24px, because it is the brand anchor rather than part
+   of the type
    scale. */
 @container panel (max-width: 560px) {
   .catalog-head {
@@ -186,7 +187,7 @@ watch(
 
 /* Whether the links fit is a question about the panel, not the window: the
    title plus the three links need ~384px of row, which the panel stops having
-   at about 390px wide — reached at a 790px viewport, while a viewport-keyed
+   at about 390px wide, reached at a 790px viewport, while a viewport-keyed
    switch was still showing them down to 750px and wrapping the title onto two
    lines. Handing off at 440px leaves slack for font metrics that differ by
    platform rather than sitting on the exact fit. */
@@ -234,7 +235,7 @@ watch(
     color: #595959;
   }
 
-  /* Reached with a mouse in a narrow panel — on a phone `hover: hover` is
+  /* Reached with a mouse in a narrow panel. On a phone `hover: hover` is
      false and this never applies. */
   @media (hover: hover) {
     .mobile-nav a:hover {

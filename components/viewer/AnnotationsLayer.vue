@@ -58,7 +58,7 @@ async function confirmReport(id: number) {
   }
 }
 
-// Reactive projected positions — recomputed every animation frame
+// Reactive projected positions, recomputed every animation frame.
 const positions = ref<Map<number, { x: number; y: number; inFront: boolean }>>(
   new Map(),
 );

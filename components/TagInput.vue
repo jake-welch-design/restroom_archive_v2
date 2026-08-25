@@ -95,7 +95,7 @@ watch(filteredSuggestions, () => {
   activeIndex.value = -1;
 });
 
-// The list scrolls now that it holds every previously-used tag — keep the
+// The list scrolls now that it holds every previously used tag, so keep the
 // arrow-key cursor inside the visible part of it.
 watch(activeIndex, async (i) => {
   if (i < 0) return;

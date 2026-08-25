@@ -2,7 +2,7 @@ import type { Ref } from "vue";
 import type { Annotation } from "~/types/annotation";
 
 export function useAnnotations(slug: Ref<string | null | undefined>) {
-  // `watch: false` because we drive fetching ourselves below: letting useFetch's
+  // `watch: false` because the fetch is driven explicitly below. Letting useFetch's
   // own reactive-URL tracking fire automatically would issue a request even when
   // slug goes falsy (e.g. an in-progress submission preview with no restroom
   // yet), and an empty request string resolves relative to the current page,

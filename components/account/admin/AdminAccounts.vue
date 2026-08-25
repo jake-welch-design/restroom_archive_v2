@@ -40,7 +40,7 @@ function toggleOptions(id: number) {
   openId.value = id;
   noteToUser.value = "";
   muteDays.value = null;
-  // A rename left open on another account should not greet you on this one.
+  // A rename left open on another account should not carry over to this one.
   cancelRename();
 }
 

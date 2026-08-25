@@ -36,7 +36,7 @@ function onFileChange(e: Event) {
   hasUnsavedSubmission.value = !!file;
 }
 
-// Native "leave site?" prompt for tab close/refresh while a scan is loaded —
+// Native "leave site?" prompt for a tab close or refresh while a scan is loaded.
 // in-app navigation (route change, account tab switch) is guarded separately.
 function onBeforeUnload(e: BeforeUnloadEvent) {
   if (!hasUnsavedSubmission.value) return;
@@ -53,7 +53,7 @@ onBeforeUnmount(() => {
 
 const step1Valid = computed(() => !!uploadFile.value);
 
-// Trailing ", XX" region code — matches "Salt Lake City, UT" and "Amsterdam, NL"
+// Trailing ", XX" region code. Matches "Salt Lake City, UT" and "Amsterdam, NL".
 const locationFormatValid = computed(() =>
   /^.+,\s*[A-Za-z]{2}$/.test(uploadLocation.value.trim()),
 );
@@ -102,7 +102,7 @@ function onCoordsPaste(e: ClipboardEvent) {
   uploadLng.value = match[2];
 }
 
-// Always shown — falls back to a plain Google Maps search until Name/Location
+// Always shown. Falls back to a plain Google Maps search until name and location
 // are filled in, so the link isn't hidden before the user has a reason to use it.
 const googleMapsUrl = computed(() => {
   const query = [uploadName.value.trim(), uploadLocation.value.trim()]
@@ -175,7 +175,7 @@ function resetUpload() {
 <template>
   <div class="submit-wizard">
     <div v-if="uploadSuccess" class="success-message">
-      <p>{{ isAdmin ? "Published." : "Submitted — awaiting approval." }}</p>
+      <p>{{ isAdmin ? "Published." : "Submitted for approval." }}</p>
       <button type="button" class="link-btn" @click="resetUpload">
         Submit another
       </button>
@@ -210,7 +210,7 @@ function resetUpload() {
           />
         </label>
         <p v-if="uploadFile" class="field-hint">
-          {{ uploadFile?.name }} selected — see the preview on the right.
+          {{ uploadFile?.name }} selected. See the preview on the right.
         </p>
 
         <div class="step-actions">
@@ -253,8 +253,8 @@ function resetUpload() {
             v-if="uploadLocation && !locationFormatValid"
             class="field-hint field-hint-warn"
           >
-            Use the format "City, ST" or "City, CC" — e.g. "Salt Lake City, UT"
-            or "Amsterdam, NL".
+            Use the format "City, ST" or "City, CC", for example "Salt Lake
+            City, UT" or "Amsterdam, NL".
           </p>
         </label>
 
@@ -467,7 +467,7 @@ function resetUpload() {
   max-width: 420px;
 }
 
-/* Step tabs — deliberately quieter than the account sub-tabs that sit
+/* Step tabs, deliberately quieter than the account sub-tabs that sit
    directly above the wizard: underlined text rather than a second filled
    segmented control, so the two rows don't read at the same level. */
 .step-tabs {

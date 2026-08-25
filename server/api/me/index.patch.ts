@@ -4,8 +4,8 @@ import { useDb, schema } from "~~/server/utils/db";
 import { requireActiveUser } from "~~/server/utils/requireActiveUser";
 import { rateLimitByUser } from "~~/server/utils/rateLimit";
 
-// Vue's `{{ }}` interpolation escapes HTML, but we still strip ASCII control
-// chars so a stray newline or NUL can't sneak into a stored identifier.
+// Vue's `{{ }}` interpolation escapes HTML, but ASCII control characters are
+// stripped as well, so a stray newline or NUL cannot reach a stored identifier.
 function hasControlChars(s: string) {
   for (let i = 0; i < s.length; i++) {
     const c = s.charCodeAt(i);

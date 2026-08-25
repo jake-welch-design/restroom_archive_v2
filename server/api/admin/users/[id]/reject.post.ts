@@ -20,7 +20,7 @@ export default defineEventHandler(async (event) => {
 
   const db = useDb(event);
 
-  // Clear the submission request without deleting the account — the user keeps
+  // Clear the submission request without deleting the account. The user keeps
   // their annotations and login. Only acts on un-approved users so an active
   // submitter isn't accidentally demoted by a stale click.
   const row = await db

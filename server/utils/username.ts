@@ -1,4 +1,4 @@
-// Reserved identifiers we never let users register. Includes route-collision
+// Reserved identifiers that can never be registered. Includes route-collision
 // risks (login, account, r, …), role-impersonation words (admin, moderator),
 // and the two pre-existing accounts' handles so they can't be re-claimed if
 // renamed away.

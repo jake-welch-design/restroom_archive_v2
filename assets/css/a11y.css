@@ -1,4 +1,5 @@
-/* Focus indicators — background highlight on focus */
+/* Focus indicators: a background highlight rather than an outline ring, which
+   would sit awkwardly against the archive's hairline borders. */
 :focus-visible {
   outline: none;
   background-color: #ebebeb;
@@ -11,7 +12,7 @@ select:focus-visible {
   background-color: #ebebeb;
 }
 
-/* Skip link — visually hidden until focused */
+/* Skip link. Visually hidden until focused. */
 .skip-link {
   position: absolute;
   top: -100%;
@@ -44,7 +45,8 @@ select:focus-visible {
   border: 0;
 }
 
-/* Reduced motion — disable all transitions/animations for users who request it */
+/* Reduced motion: transitions and animations are disabled for anyone who has
+   asked their system for less of them. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

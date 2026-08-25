@@ -74,7 +74,7 @@ function updateThumbKey(slug: string) {
 }
 
 // ---------------------------------------------------------------------------
-// Local HTTP server — serves the viewer HTML + GLB from a temp dir
+// Local HTTP server. Serves the viewer HTML and the GLB from a temp directory.
 // ---------------------------------------------------------------------------
 function getFreePort(): Promise<number> {
   return new Promise((resolve) => {

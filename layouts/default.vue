@@ -31,7 +31,7 @@ const CLOSE_FRAC = 0.15;
 const FULL_SNAP = 0.08;
 /**
  * Clearance (px) the grabber keeps from the bottom of the screen when the
- * viewer's control row can't be measured — the row's 12px bottom offset, a tall
+ * viewer's control row cannot be measured: the row's 12px bottom offset, a tall
  * reading of the row itself, another 12px, and the 18px grabber. Deliberately
  * generous: erring low would put the grabber on top of the controls.
  */
@@ -39,7 +39,7 @@ const FALLBACK_CLEARANCE = 78;
 /**
  * How far the sheet can push the viewer down; past this it overlays instead.
  * Pinned to the resting height so the default view is exactly the pre-drag
- * layout — the viewer only stops shrinking once the sheet is dragged past where
+ * layout. The viewer only stops shrinking once the sheet is dragged past where
  * it normally sits.
  */
 const PUSH_MAX = DEFAULT_FRAC;
@@ -51,7 +51,8 @@ const panelFrac = ref(DEFAULT_FRAC);
 
 function togglePanel() {
   // Closing keeps the current height so the sheet slides out by exactly its own
-  // height. Opening always returns to the default — a height reached by dragging
+  // height. Opening always returns to the default, because a height reached by
+  // dragging
   // is for that session with the sheet, not a new resting place.
   if (!panelOpen.value) panelFrac.value = DEFAULT_FRAC;
   panelOpen.value = !panelOpen.value;
@@ -62,7 +63,7 @@ const dragging = ref(false);
 const activeFrac = computed(() => dragFrac.value ?? panelFrac.value);
 
 // Mid-drag the sheet is wherever the finger is, so "closed" follows the live
-// height rather than the committed open/closed flag — otherwise the viewer's
+// height rather than the committed open/closed flag. Otherwise the viewer's
 // closed-state chrome (title, gradient, bottom nav) would flicker.
 const isClosed = computed(() => {
   if (inProgress.value) return false;
@@ -76,7 +77,7 @@ const sheetStyle = computed(() => ({
   // Sheet height.
   "--panel-frac": String(activeFrac.value),
   // How far the viewer is pushed down. It tracks the sheet only up to
-  // `PUSH_MAX` — beyond that the sheet slides over the viewer rather than
+  // `PUSH_MAX`. Beyond that the sheet slides over the viewer rather than
   // squeezing it, so the model keeps the space it has at rest no matter how
   // tall the sheet gets (and stops being re-laid-out on every drag frame).
   "--push-frac": String(
@@ -156,7 +157,7 @@ function endDrag(e: PointerEvent, commit: boolean) {
   dragFrac.value = null;
   dragPointerId = null;
 
-  if (!dragMoved) return; // a tap — let the click handler toggle
+  if (!dragMoved) return; // A tap, so let the click handler toggle.
 
   // The drag consumed the gesture; swallow the click browsers synthesise after
   // it, with a timer in case this one never fires.
@@ -297,7 +298,7 @@ function goPrev() {
   position: relative;
   z-index: 2;
   /* The panel's contents scale off the panel's own width rather than the
-     viewport's — at a 1120px viewport this 50% panel is 560px, which is where
+     viewport's. At a 1120px viewport this 50% panel is 560px, which is where
      `ListView`'s container queries already switch to the compact scale, so the
      chrome around the list has to switch on the same measurement. Named so the
      pages inside can query it past the nearer container on `.table-wrap`. */
@@ -344,7 +345,7 @@ function goPrev() {
   transform: rotate(180deg);
 }
 
-/* Sheet grabber — mobile only (see the media query below). */
+/* Sheet grabber. Mobile only; see the media query below. */
 .grabber {
   display: none;
 }
@@ -456,7 +457,7 @@ function goPrev() {
      by the layout script. The sheet starts at 0.55 and the grabber can take it
      from 0 (closed) up to its measured cap, but `--push-frac` stops at the
      resting 0.55, so past that the sheet slides over the viewer instead of
-     squeezing it — the default view is the plain un-dragged layout.
+     squeezing it, so the default view is the plain un-dragged layout.
      Both are out of flow: in flow the sheet would push the viewer off-screen. */
   .panel {
     position: absolute;
@@ -467,7 +468,7 @@ function goPrev() {
     height: calc(100dvh * var(--panel-frac, 0.55));
     /* Height is animated as well as the offset because reopening can change
        both at once (dragged to some height, tapped shut, reopens at the
-       default) — animating them together keeps the sheet's edge continuous. */
+       default), and animating them together keeps the sheet's edge continuous. */
     transition:
       margin-top 0.35s ease,
       height 0.35s ease;

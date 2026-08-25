@@ -6,7 +6,7 @@ export default defineEventHandler(async (event) => {
   const db = useDb(event);
 
   // Admins also see pending entries so they can preview them via /r/<slug>
-  // — same rendering path as published models, just hidden from the directory
+  // through the same rendering path as published models, just hidden from the directory
   // for everyone else by client-side filtering.
   const isAdmin = event.context.user?.role === "admin";
   const statuses = isAdmin ? ["published", "pending"] : ["published"];
@@ -50,7 +50,7 @@ export default defineEventHandler(async (event) => {
       ? { username: r.submitterUsername, displayName: r.submitterDisplayName }
       : null,
     status: r.status,
-    // Relative URLs — resolved against document.baseURI on the client.
+    // Relative URLs, resolved against document.baseURI on the client.
     // Avoids SSR-time host confusion (Nitro internal fetch reports localhost).
     modelUrl: `/api/r2/models/${r.file}`,
     thumbUrl: r.thumbKey ? `/api/r2/thumbs/${r.thumbKey}` : null,

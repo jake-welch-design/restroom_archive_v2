@@ -18,7 +18,7 @@ let sourceReady = false;
 let hoverPopup: maplibregl.Popup | null = null;
 let needsInitialFit = false;
 let initialPins: RestroomSummary[] = [];
-// True while the camera still shows the position we put it in; cleared as soon
+// True while the camera still shows the position the app put it in; cleared as soon
 // as the user pans/zooms themselves, so resize-driven re-centring doesn't fight
 // them for control of the view.
 let cameraOwned = true;
@@ -40,7 +40,7 @@ function loadBasemap() {
     if (localStorage.getItem(BASEMAP_KEY) === "satellite")
       basemap.value = "satellite";
   } catch {
-    // Ignore unavailable storage — the default basemap is fine.
+    // Ignore unavailable storage: the default basemap is fine.
   }
 }
 
@@ -61,7 +61,7 @@ function loadViewedSlugs() {
       for (const s of arr) if (typeof s === "string") viewedSlugs.add(s);
     }
   } catch {
-    // Ignore malformed / unavailable storage — viewed state is best-effort.
+    // Ignore malformed or unavailable storage. Viewed state is best effort.
   }
 }
 
@@ -139,7 +139,7 @@ function initMap() {
         satellite: {
           type: "raster",
           tiles: [
-            // Note the {y}/{x} order — Esri's REST tile scheme, not {x}/{y}.
+            // Note the {y}/{x} order: Esri's REST tile scheme, not {x}/{y}.
             "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
           ],
           tileSize: 256,
@@ -151,7 +151,7 @@ function initMap() {
       // Both basemaps are declared up front and toggled by visibility. Swapping
       // via setStyle would tear down the `restrooms` source and pin layer on
       // every switch; this way only one layout property changes. Attribution
-      // follows automatically — MapLibre credits only sources whose layers are
+      // follows automatically, because MapLibre credits only sources whose layers are
       // visible.
       layers: [
         {
@@ -253,7 +253,7 @@ function initMap() {
     map.resize();
   });
 
-  // Track whether the camera is still showing what we last put there. Once the
+  // Track whether the camera is still showing the last position the app set. Once the
   // user pans or zooms by hand the view is theirs, and resize must not yank it
   // back to the selected pin.
   for (const ev of ["dragstart", "zoomstart", "rotatestart"] as const) {
@@ -265,7 +265,7 @@ function initMap() {
   // Resize the map whenever the container (or its parent) changes size.
   // This also handles the on-refresh case: the flex layout resolves after
   // mount, ResizeObserver fires, resize() corrects the canvas, and if the
-  // initial fitView was deferred we run it now.
+  // initial fitView was deferred, it runs now.
   resizeObs = new ResizeObserver(() => {
     if (!map) return;
     map.resize();
@@ -275,7 +275,7 @@ function initMap() {
       return;
     }
     // resize() keeps the raw viewport centre, which is not the padded centre the
-    // pin was placed at — so the pin drifts every time the container changes
+    // pin was placed at, so the pin drifts every time the container changes
     // size. On iOS Safari that is constant: the panel is sized in dvh and the
     // collapsing URL bar re-runs this on almost every scroll. Put the pin back.
     if (cameraOwned) scheduleRecenter();
@@ -290,7 +290,7 @@ onMounted(() => {
   nextTick(initMap);
 });
 
-// Data-only update on row changes — never moves the camera so flyTo is never
+// Data-only update on row changes. The camera is never moved, so a fly-to is never
 // overridden by data refreshes (e.g. thumbnail auto-capture → refreshNuxtData).
 watch(
   () => props.rows,
@@ -299,7 +299,7 @@ watch(
 
 // Layout box of `el` relative to `ancestor`, walking the offsetParent chain.
 // offset* is used rather than getBoundingClientRect because it ignores CSS
-// transforms — the panel is mid slide-in when this runs, and its visual rect is
+// transforms: the panel is mid slide-in when this runs, and its visual rect is
 // still off-screen at that point.
 function offsetBox(el: HTMLElement, ancestor: HTMLElement) {
   let x = 0;
@@ -319,7 +319,7 @@ function offsetBox(el: HTMLElement, ancestor: HTMLElement) {
 }
 
 // Camera padding that keeps the selected pin centred in the part of the map the
-// info panel doesn't cover — a side sheet on mobile, a bottom sheet on desktop.
+// info panel does not cover: a side sheet on mobile, a bottom sheet on desktop.
 //
 // This is measured from the rendered elements rather than derived from the CSS
 // percentages. The old version multiplied `window.innerWidth` by the panel's
@@ -333,7 +333,7 @@ function getPanelPadding(): maplibregl.PaddingOptions {
 
   // Fallback for when the panel can't be measured (not in the DOM yet, or a
   // browser that reports the offset chain differently): estimate from the CSS
-  // the panel is laid out with. documentElement.clientWidth, not innerWidth —
+  // the panel is laid out with. documentElement.clientWidth, not innerWidth,
   // on iOS the latter tracks the visual viewport and shrinks when Safari zooms.
   const estimate = (): maplibregl.PaddingOptions => {
     const w = el.clientWidth;
@@ -366,13 +366,13 @@ function getPanelPadding(): maplibregl.PaddingOptions {
         : { ...zero, right: cap(m.right - p.left, el.clientWidth) }
       : { ...zero, bottom: cap(m.bottom - p.top, el.clientHeight) };
 
-  // If the panel is open, it covers something — padding of 0 on every side means
+  // If the panel is open it covers something, so padding of 0 on every side means
   // the measurement went wrong, and using it would leave the pin under the panel.
   const total = measured.left + measured.right + measured.top + measured.bottom;
   return total > 0 ? measured : estimate();
 }
 
-// Returns whether the camera actually moved — callers use that to fall back to
+// Returns whether the camera actually moved. Callers use that to fall back to
 // a fit-all view when there's nothing selected (or it has no coordinates).
 function flyToSelected(slug: string | null, animate = true) {
   if (!slug || !map || !sourceReady) return false;
@@ -387,7 +387,7 @@ function flyToSelected(slug: string | null, animate = true) {
   // The `duration` key is omitted (not set to undefined) for the animated case:
   // MapLibre does `+options.duration` whenever the key is present, so passing
   // undefined yields NaN, and the animation then writes NaN into the transform's
-  // zoom/centre — every later camera move throws and the map stops responding.
+  // zoom or centre, every later camera move throws and the map stops responding.
   // jumpTo isn't an option for the instant case: it sets the raw viewport centre
   // and ignores `padding`, which would drop the pin behind the info panel.
   map.flyTo(animate ? camera : { ...camera, duration: 0 });
@@ -396,7 +396,7 @@ function flyToSelected(slug: string | null, animate = true) {
 
 // Re-centre the selected pin at the current zoom. Used when the info panel
 // opens or closes: the panel covers part of the map, so the pin has to shift to
-// stay centred in whatever is still visible. Zoom is deliberately untouched —
+// stay centred in whatever is still visible. Zoom is deliberately untouched:
 // toggling a panel should pan, never zoom.
 function recenterSelected(duration = 400) {
   if (!map || !sourceReady) return;
@@ -412,7 +412,7 @@ function recenterSelected(duration = 400) {
 
 // Resize can fire many times in a row (iOS toolbar, orientation change, the
 // flex layout settling), so coalesce and correct once it stops. The correction
-// itself is instant — an animation here would read as the map wobbling.
+// itself is instant, and an animation here would read as the map wobbling.
 function scheduleRecenter() {
   if (recenterTimer) clearTimeout(recenterTimer);
   recenterTimer = setTimeout(() => {
@@ -530,7 +530,7 @@ watch(
 watch(() => props.selectedSlug, updateActivePin);
 
 // Selection and panel visibility are watched together because clicking a pin
-// changes both in the same tick — two separate watchers would fire two camera
+// changes both in the same tick. Two separate watchers would fire two camera
 // moves and the second would cancel the first.
 //
 // flush: "post" so the panel element is in the DOM by the time getPanelPadding
@@ -548,7 +548,7 @@ watch(
     }
     // Only when the panel itself just opened: it slides in over 300ms, so
     // measure again once its layout has settled. Deliberately not done on a
-    // selection change — that would cut the fly-to animation short.
+    // selection change, which would cut the fly-to animation short.
     if (open && !prevOpen) {
       setTimeout(() => cameraOwned && recenterSelected(0), 360);
     }
@@ -590,7 +590,7 @@ onBeforeUnmount(() => {
     <!-- Rendered here rather than registered as a maplibre IControl: the
          control containers put this in the wrong corner on iOS Safari, and a
          plain absolutely-positioned element lands where the CSS says on every
-         browser. It sits in the top-left of the *visible* map — which on mobile
+         browser. It sits in the top-left of the visible map, which on mobile
          means clearing the info panel's half when that panel is open. -->
     <div class="basemap-switch" :class="{ 'panel-open': panelOpen }">
       <button
@@ -697,7 +697,7 @@ onBeforeUnmount(() => {
   }
 
   /* With the info panel open it covers the left half of the map, so the visible
-     map is the right half — put the switcher in the top-left corner of *that*.
+     map is the right half, so the switcher goes in that half's top-left corner.
      The panel is 50% of .map-area and .map-wrap fills .map-area, so 50% here is
      the panel's right edge; +16px keeps the 8px inset plus an 8px gap. */
   .basemap-switch.panel-open {

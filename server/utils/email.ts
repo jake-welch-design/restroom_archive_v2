@@ -83,7 +83,7 @@ export async function sendPasswordResetEmail(to: string, token: string) {
         </a>
       </p>
       <p style="text-align:center;font-size:12px;color:#999;margin:0 0 30px">
-        If you didn't request this, you can ignore this email — your password won't change.
+        If you didn't request this, you can ignore this email. Your password won't change.
       </p>
     `),
   );

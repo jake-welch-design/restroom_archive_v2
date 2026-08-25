@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { useDb, schema } from "~~/server/utils/db";
 
 export default defineEventHandler(async (event) => {
-  // Clear any pending admin message — signing out is the user-side
+  // Clear any pending admin message. Signing out is the user-side
   // acknowledgement that they've seen it.
   const userId = event.context.user?.id;
   if (userId) {
@@ -13,7 +13,7 @@ export default defineEventHandler(async (event) => {
         .set({ adminMessage: null, adminMessageAt: null })
         .where(eq(schema.users.id, userId));
     } catch {
-      // DB unavailable — proceed with logout regardless
+      // No database binding. Proceed with the logout regardless.
     }
   }
 

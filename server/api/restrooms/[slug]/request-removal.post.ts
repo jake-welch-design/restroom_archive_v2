@@ -32,7 +32,8 @@ export default defineEventHandler(async (event) => {
   if (!restroom)
     throw createError({ statusCode: 404, statusMessage: "Restroom not found" });
 
-  // The UI only offers this on your own entries; enforce it here too.
+  // The interface only offers this on a submitter's own entries; enforced here
+  // too, since the interface is not the boundary.
   if (restroom.submittedBy !== user.id && user.role !== "admin") {
     throw createError({
       statusCode: 403,

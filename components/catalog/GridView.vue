@@ -116,7 +116,7 @@ onMounted(() => scrollToSelected(props.selectedSlug));
   gap: 12px;
 }
 /* The grid fills the panel, so its margin and column count follow the panel's
-   width on the same steps as the rest of the panel — not the window's. Keyed to
+   width on the same steps as the rest of the panel, not the window's. Keyed to
    the window these went the wrong way at the 750px layout switch: a 376px panel
    still got three columns (107px tiles) while a 700px one dropped to two. */
 @container panel (max-width: 560px) {

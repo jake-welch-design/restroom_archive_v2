@@ -32,7 +32,7 @@ export default defineEventHandler(async (event) => {
     .where(eq(schema.users.email, email))
     .get();
 
-  // Always 200 — don't leak whether the email is registered.
+  // Always 200, so the response does not leak whether the email is registered.
   if (!user) return { ok: true };
 
   const now = new Date().toISOString().replace("T", " ").slice(0, 19);
@@ -58,7 +58,8 @@ export default defineEventHandler(async (event) => {
   try {
     await sendPasswordResetEmail(user.email, token);
   } catch {
-    // Don't tell the client the email send failed — still return ok.
+    // A failed send is not reported either, for the same reason: the difference
+    // would be observable. Still returns ok.
   }
 
   return { ok: true };

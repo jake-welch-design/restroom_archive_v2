@@ -4,7 +4,7 @@ export function useSelection() {
   const { data } = useRestrooms();
   const route = useRoute();
 
-  // Explicit selection override — set by select() or inferred from the URL slug.
+  // Explicit selection override, set by select() or inferred from the URL slug.
   // Initializer runs synchronously: picks up a deep-linked slug on first render.
   const override = useState<string | null>("selectedSlug", () => {
     const param = route.params.slug as string | undefined;
@@ -20,7 +20,7 @@ export function useSelection() {
   );
 
   // selectedSlug is a COMPUTED (lazy), not a stored ref.
-  // It evaluates at render time — after all async data is resolved on the server —
+  // It evaluates at render time, after all async data has resolved on the server,
   // so `data.value?.[0]` is always available without relying on a watcher.
   const selectedSlug = computed<string | null>(
     () => override.value ?? data.value?.[0]?.slug ?? null,

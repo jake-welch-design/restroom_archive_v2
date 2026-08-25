@@ -138,8 +138,8 @@ watch(data, maybeAutoSelect);
 // --- Header-strip geometry ----------------------------------------------
 // The layout's `.expand-tab` must line up with the header strip (`.controls`
 // through the sub-header / list `.thead`). Rather than matching hand-tuned
-// pixel constants — which drift across platforms because of font metrics and
-// native control sizing — we measure the real rendered strip and publish it so
+// pixel constants, which drift across platforms because of font metrics and
+// native control sizing, the real rendered strip is measured and published so
 // the tab derives its top/height from the same source of truth.
 const stripGeom = useStripGeom();
 const catalogEl = ref<HTMLElement | null>(null);
@@ -158,7 +158,7 @@ function measureStrip() {
   // Sum the two strip rows rather than spanning from one's top to the other's
   // bottom: the filter panel opens *between* them, and a span would swallow it
   // and stretch the tab. They're adjacent rows of the same flex column, so with
-  // the filter closed the sum is the span — it just stops the tab resizing when
+  // the filter closed the sum is the span; it only stops the tab resizing when
   // the filter opens under it.
   const height =
     cRect.height + (bottomEl ? bottomEl.getBoundingClientRect().height : 0);
@@ -172,7 +172,7 @@ onMounted(() => {
   ro = new ResizeObserver(() => measureStrip());
   if (catalogEl.value) ro.observe(catalogEl.value);
   if (controlsEl.value) ro.observe(controlsEl.value);
-  // Web-font swap is a primary source of cross-platform drift — re-measure once
+  // Web-font swap is a primary source of cross-platform drift, so re-measure once
   // fonts are ready.
   document.fonts?.ready.then(measureStrip).catch(() => {});
 });
@@ -184,7 +184,7 @@ onBeforeUnmount(() => {
 
 // The strip's bottom element swaps between views (thead ↔ sub-header), the
 // filter panel inserts a row, and in list view the `.thead` only mounts once
-// rows exist — re-measure after the DOM settles for any of these.
+// rows exist. Re-measure after the DOM settles for any of these.
 watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
   nextTick(measureStrip),
 );
@@ -575,7 +575,7 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
   color: #595959;
 }
 
-/* Hover tint for the control bar's text buttons — previews the `.active`
+/* Hover tint for the control bar's text buttons, previewing the `.active`
    color. Gated on a real pointer so a tap on a touch device doesn't leave it
    stuck until the next tap. */
 @media (hover: hover) {
@@ -681,7 +681,7 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
 }
 
 /* Compact scale, keyed to the panel's width at the same 560px where
-   `ListView`'s own container queries step down — so the controls strip and the
+   `ListView`'s own container queries step down, so the controls strip and the
    list shrink together instead of the list going alone at a 1120px viewport. */
 @container panel (max-width: 560px) {
   .catalog {
@@ -701,8 +701,8 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
     gap: 12px;
   }
   /* Matches `ListView`'s `.thead` padding. The two are alternates of the same
-     strip row — `measureStrip` sizes the expand tab off whichever one is
-     mounted — so a mismatch resizes the tab when switching views. */
+     strip row. `measureStrip` sizes the expand tab off whichever one is
+     mounted, so a mismatch resizes the tab when switching views. */
   .sub-header {
     padding: 8px 12px;
   }

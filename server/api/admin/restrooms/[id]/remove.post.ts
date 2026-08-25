@@ -7,7 +7,7 @@ import { deleteRestroomBlobs } from "~~/server/utils/r2";
 import { now } from "~~/server/utils/sqlTime";
 
 // Grants a removal request: the entry leaves the archive and the request leaves
-// the queue. Deliberately not `reject` — that status means "this submission
+// the queue. Deliberately not `reject`, because that status means "this submission
 // wasn't accepted", which is the wrong story to tell someone who asked for
 // their own scan to be taken down (and it left the request in the queue).
 export default defineEventHandler(async (event) => {

@@ -56,7 +56,7 @@ function place() {
   } else if (box.height <= below) {
     pos.value = { top: anchor.bottom + GAP, left: centredLeft() };
   } else if (box.width <= right) {
-    // Too tall for either gap — go out to the side, right first.
+    // Too tall for either gap, so go out to the side, right first.
     pos.value = { top: centredTop(), left: anchor.right + GAP };
   } else if (box.width <= left) {
     pos.value = { top: centredTop(), left: anchor.left - box.width - GAP };
