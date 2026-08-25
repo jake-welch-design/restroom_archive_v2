@@ -128,7 +128,7 @@ const emit = defineEmits<{
 /* Divider matches the one under `.panel-header`, so the panel reads as three
    sections: name/date/location, description + descriptors, annotations. */
 .annotations-section {
-  margin-top: 12px;
+  margin-top: 8px;
   padding-top: 12px;
   border-top: 1px solid #e8e8e8;
 }

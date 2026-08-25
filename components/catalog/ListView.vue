@@ -466,7 +466,7 @@ function sortArrow(key: SortKey) {
 
 /* Annotations */
 .annotations-section {
-  margin-top: 12px;
+  margin-top: 10px;
   margin-bottom: 12px;
   padding-top: 12px;
   border-top: 1px solid #e8e8e8;
