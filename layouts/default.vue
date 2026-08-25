@@ -370,7 +370,6 @@ function goPrev() {
   font-weight: 400;
   color: #fff;
   text-shadow: 0px 0px 5px rgba(0, 0, 0, 0.2);
-  /* mix-blend-mode: difference; */
   pointer-events: none;
   z-index: 1;
 }
@@ -466,7 +465,6 @@ function goPrev() {
     right: 0;
     width: auto;
     height: calc(100dvh * var(--panel-frac, 0.55));
-    /* box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2); */
     /* Height is animated as well as the offset because reopening can change
        both at once (dragged to some height, tapped shut, reopens at the
        default) — animating them together keeps the sheet's edge continuous. */

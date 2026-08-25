@@ -531,14 +531,6 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
   transform: rotate(180deg);
 }
 
-.date-range {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  font: inherit;
-  font-size: 14px;
-}
-
 .date-field {
   font: inherit;
   font-size: 14px;
@@ -724,7 +716,6 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
   }
   .link-btn,
   .sort-btn,
-  .date-range,
   .date-field,
   .date-val {
     font-size: 12px;

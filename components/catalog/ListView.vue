@@ -423,10 +423,6 @@ function formatShortDate(iso: string) {
                 No annotations yet.
               </p>
             </div>
-
-            <div class="submitter-line">
-              <!-- <UserAttribution :user="r.submitter" /> -->
-            </div>
           </div>
         </div>
       </li>
@@ -691,13 +687,6 @@ function formatShortDate(iso: string) {
   margin: 4px 0 0;
   font-size: 13px;
   color: #999;
-}
-.submitter-line {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 16px;
-  font-size: 13px;
-  color: #666;
 }
 
 /* Edit form */

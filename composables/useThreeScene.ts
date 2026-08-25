@@ -20,6 +20,88 @@ export interface CameraSnapshot {
   rotationY?: number;
 }
 
+/**
+ * Timing and scene-census logging for one model load.
+ *
+ * Returns null outside a development build. Callers reach it through optional
+ * chaining, so `import.meta.dev` being statically false lets the bundler drop
+ * both this factory and every call site. That matters more than usual here:
+ * `census` walks the entire scene graph and every material key on it purely to
+ * produce a log line, which on a photogrammetry scan is real work.
+ *
+ * `phase` reports the time since the previous phase (or since the load began)
+ * and then resets the marker, so phases read as a contiguous timeline.
+ */
+/* eslint-disable no-console -- Logging is this factory's entire purpose, and
+   the early return above means none of it is reachable in a production build. */
+function createLoadProfiler(url: string) {
+  if (!import.meta.dev) return null;
+
+  const tag = `[viewer] load ${url.split("/").pop()}`;
+  const started = performance.now();
+  let phaseStart = started;
+  const elapsed = (from: number) =>
+    `${(performance.now() - from).toFixed(0)}ms`;
+
+  return {
+    phase(label: string) {
+      console.log(`${tag} ${label}: ${elapsed(phaseStart)}`);
+      phaseStart = performance.now();
+    },
+
+    total() {
+      console.log(`${tag} TOTAL: ${elapsed(started)}`);
+    },
+
+    census(model: THREE.Object3D, renderer: THREE.WebGLRenderer | null) {
+      let meshCount = 0;
+      let triangles = 0;
+      let vertices = 0;
+      const textures = new Set<THREE.Texture>();
+
+      model.traverse((child) => {
+        const mesh = child as THREE.Mesh;
+        if (!mesh.isMesh || !mesh.geometry) return;
+        meshCount++;
+
+        const index = mesh.geometry.index;
+        const position = mesh.geometry.attributes.position;
+        if (index) triangles += index.count / 3;
+        else if (position) triangles += position.count / 3;
+        if (position) vertices += position.count;
+
+        const materials = Array.isArray(mesh.material)
+          ? mesh.material
+          : [mesh.material];
+        for (const material of materials) {
+          if (!material) continue;
+          for (const value of Object.values(material)) {
+            if (value && typeof value === "object" && value.isTexture) {
+              textures.add(value as THREE.Texture);
+            }
+          }
+        }
+      });
+
+      console.log(
+        `${tag} stats: ${meshCount} meshes · ` +
+          `${Math.round(triangles).toLocaleString()} tris · ` +
+          `${vertices.toLocaleString()} verts · ${textures.size} textures`,
+      );
+
+      if (renderer) {
+        // Cloned through JSON so the console snapshots the counts at this
+        // instant rather than live-updating them as frames render.
+        console.log(
+          `${tag} renderer.info before frame:`,
+          JSON.parse(JSON.stringify(renderer.info)),
+        );
+      }
+    },
+  };
+}
+/* eslint-enable no-console */
+
 export function useThreeScene(
   canvasRef: Ref<HTMLCanvasElement | null>,
   modelUrl: Ref<string | null | undefined>,
@@ -197,29 +279,21 @@ export function useThreeScene(
     userInteracted = false;
     const myId = ++loadId;
 
-    const tag = `[viewer] load ${url.split("/").pop()}`;
-    const t0 = performance.now();
+    const profile = createLoadProfiler(url);
 
     if (currentModel) {
-      const tDispose = performance.now();
       scene.remove(currentModel);
       disposeObject(currentModel);
       currentModel = null;
-      console.log(
-        `${tag} dispose: ${(performance.now() - tDispose).toFixed(0)}ms`,
-      );
+      profile?.phase("dispose");
     }
 
     try {
       const loader = new GLTFLoader();
-      const tFetch = performance.now();
       const gltf = await loader.loadAsync(url);
       if (myId !== loadId) return;
-      console.log(
-        `${tag} fetch+parse: ${(performance.now() - tFetch).toFixed(0)}ms`,
-      );
+      profile?.phase("fetch+parse");
 
-      const tAdd = performance.now();
       currentModel = gltf.scene;
       applyFlatMaterials(currentModel);
       scene.add(currentModel);
@@ -257,51 +331,9 @@ export function useThreeScene(
         }
         camera.updateProjectionMatrix();
       }
-      console.log(
-        `${tag} scene add+frame: ${(performance.now() - tAdd).toFixed(0)}ms`,
-      );
-      console.log(`${tag} TOTAL: ${(performance.now() - t0).toFixed(0)}ms`);
-
-      let meshCount = 0;
-      let triangles = 0;
-      let vertices = 0;
-      const textures = new Set<THREE.Texture>();
-      currentModel.traverse((child) => {
-        const mesh = child as THREE.Mesh;
-        if (!mesh.isMesh || !mesh.geometry) return;
-        meshCount++;
-        const idx = mesh.geometry.index;
-        const pos = mesh.geometry.attributes.position;
-        if (idx) triangles += idx.count / 3;
-        else if (pos) triangles += pos.count / 3;
-        if (pos) vertices += pos.count;
-        const mats = Array.isArray(mesh.material)
-          ? mesh.material
-          : [mesh.material];
-        for (const m of mats) {
-          if (!m) continue;
-          for (const key of Object.keys(m)) {
-            const v = (m as unknown as Record<string, unknown>)[key];
-            if (
-              v &&
-              typeof v === "object" &&
-              (v as { isTexture?: boolean }).isTexture
-            ) {
-              textures.add(v as THREE.Texture);
-            }
-          }
-        }
-      });
-      console.log(
-        `${tag} stats: ${meshCount} meshes · ${Math.round(triangles).toLocaleString()} tris · ${vertices.toLocaleString()} verts · ${textures.size} textures`,
-      );
-      const renderInfo = renderer?.info;
-      if (renderInfo) {
-        console.log(
-          `${tag} renderer.info before frame:`,
-          JSON.parse(JSON.stringify(renderInfo)),
-        );
-      }
+      profile?.phase("scene add+frame");
+      profile?.total();
+      profile?.census(currentModel, renderer);
     } catch (e) {
       if (myId === loadId)
         error.value = (e as Error).message ?? "Failed to load model";

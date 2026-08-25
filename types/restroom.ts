@@ -8,7 +8,6 @@ export interface RestroomSummary {
   slug: string;
   name: string;
   location: string;
-  coords: string;
   lat: number | null;
   lng: number | null;
   date: string;

@@ -10,7 +10,7 @@
 //
 import puppeteer from "puppeteer";
 import { execSync } from "node:child_process";
-import { readFileSync, writeFileSync, unlinkSync, mkdtempSync } from "node:fs";
+import { readFileSync, unlinkSync, mkdtempSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import http from "node:http";
@@ -235,12 +235,15 @@ async function renderThumb(row: DbRow) {
     updateThumbKey(row.slug);
     console.log("done ✓");
   } finally {
-    try {
-      unlinkSync(glbPath);
-    } catch {}
-    try {
-      unlinkSync(imgPath);
-    } catch {}
+    // Best-effort temp-file cleanup: a failure here must not mask the
+    // outcome of the render itself.
+    for (const path of [glbPath, imgPath]) {
+      try {
+        unlinkSync(path);
+      } catch {
+        // Already gone, or never written.
+      }
+    }
   }
 }
 

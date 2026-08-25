@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import * as THREE from "three";
 import type { Annotation } from "~/types/annotation";
-import type { CameraSnapshot } from "~/composables/useThreeScene";
 
 const props = defineProps<{
   annotations: Annotation[];

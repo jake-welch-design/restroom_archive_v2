@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import * as THREE from "three";
+import type * as THREE from "three";
 import { useThreeScene } from "~/composables/useThreeScene";
 import type { CameraSnapshot } from "~/composables/useThreeScene";
 
@@ -187,8 +187,6 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
     <canvas ref="canvasRef" @pointerdown="onCanvasPointerDown" />
 
     <div class="overlay">
-      <div class="overlay-left" />
-
       <div class="overlay-right">
         <!-- View mode: single circle that changes icon -->
         <div class="ctrl-group view-mode-group">
@@ -363,18 +361,12 @@ canvas {
   z-index: 2;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 10px;
   pointer-events: none;
 }
 .overlay > * {
   pointer-events: auto;
-}
-.overlay-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
 }
 .overlay-right {
   display: flex;
@@ -407,7 +399,6 @@ canvas {
     color 0.12s;
 }
 .ctrl-btn:hover {
-  /* background: rgba(0, 0, 0, 0.08); */
   color: #666;
 }
 .ctrl-btn.active {

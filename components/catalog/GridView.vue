@@ -164,10 +164,6 @@ onMounted(() => scrollToSelected(props.selectedSlug));
                   No annotations yet.
                 </p>
               </div>
-
-              <div class="submitter-line">
-                <!-- <UserAttribution :user="r.submitter" /> -->
-              </div>
             </div>
           </template>
           <template v-else>
@@ -329,13 +325,6 @@ onMounted(() => scrollToSelected(props.selectedSlug));
 }
 .annotations-section {
   margin-top: auto;
-}
-.submitter-line {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 4px;
-  font-size: 11px;
-  color: #666;
 }
 .annotations-toggle {
   background: transparent;

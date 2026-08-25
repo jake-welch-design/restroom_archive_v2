@@ -134,7 +134,6 @@ watch(
   background: none;
   border: none;
   cursor: pointer;
-  /* padding: 4px; */
   padding: 0;
   /* Fixed width so the row doesn't shift when the label swaps to the ✕. */
   min-width: 44px;
