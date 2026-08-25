@@ -1,3 +1,5 @@
+import { escapeHtml } from "~~/shared/utils/html";
+
 const FROM_EMAIL = "noreply@restroomarchive.com";
 const FROM_NAME = "The Restroom Archive";
 const HEADER_IMG =
@@ -6,15 +8,6 @@ const CONTACT_EMAIL = "hello@restroomarchive.com";
 
 function siteUrl() {
   return useRuntimeConfig().public.siteUrl || "https://restroomarchive.com";
-}
-
-function escapeHtml(s: string) {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
 }
 
 function template(body: string) {

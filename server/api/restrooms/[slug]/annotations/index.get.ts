@@ -1,10 +1,9 @@
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { useDb, schema } from "~~/server/utils/db";
+import { getRouterString } from "~~/server/utils/routeParams";
 
 export default defineEventHandler(async (event) => {
-  const slug = getRouterParam(event, "slug");
-  if (!slug)
-    throw createError({ statusCode: 400, statusMessage: "Missing slug" });
+  const slug = getRouterString(event, "slug");
 
   const db = useDb(event);
 

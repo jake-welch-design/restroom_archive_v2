@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import type { RestroomSummary } from "~/types/restroom";
 import type { Annotation } from "~/types/annotation";
+import {
+  formatDayMonthYear,
+  formatMonthDayYear,
+} from "~~/shared/utils/formatDate";
 
 type SortKey = "isoDate" | "name" | "location";
 type SortDir = "asc" | "desc";
@@ -77,17 +81,6 @@ async function deleteAnnotation(slug: string, id: number) {
 
 function authorLabel(a: Annotation) {
   return a.author.displayName ?? `@${a.author.username}`;
-}
-
-function shortDate(iso: string) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  return d.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "UTC",
-  });
 }
 
 const tbodyRef = ref<HTMLUListElement | null>(null);
@@ -192,16 +185,6 @@ function sortArrow(key: SortKey) {
   if (props.sortKey !== key) return "";
   return props.sortDir === "asc" ? "▲" : "▼";
 }
-
-function formatShortDate(iso: string) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  const day = String(d.getUTCDate()).padStart(2, "0");
-  const month = d.toLocaleString("en-US", { month: "short", timeZone: "UTC" });
-  const year = d.getUTCFullYear();
-  return `${day} ${month} ${year}`;
-}
 </script>
 
 <template>
@@ -243,7 +226,7 @@ function formatShortDate(iso: string) {
         @click="emit('select', r.slug)"
       >
         <div class="row-main">
-          <div class="col-date">{{ formatShortDate(r.isoDate) }}</div>
+          <div class="col-date">{{ formatDayMonthYear(r.isoDate) }}</div>
           <div class="col-name">{{ r.name }}</div>
           <div class="col-loc">
             <span class="col-loc-text">{{ r.location }}</span>
@@ -405,7 +388,8 @@ function formatShortDate(iso: string) {
                   <div class="annotation-main">
                     <span class="annotation-body">{{ a.body }}</span>
                     <span class="annotation-meta"
-                      >{{ authorLabel(a) }} · {{ shortDate(a.createdAt) }}</span
+                      >{{ authorLabel(a) }} ·
+                      {{ formatMonthDayYear(a.createdAt) }}</span
                     >
                   </div>
                   <button

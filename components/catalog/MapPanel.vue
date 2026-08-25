@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import type { RestroomSummary } from "~/types/restroom";
 import type { Annotation } from "~/types/annotation";
+import {
+  formatDayMonthYear,
+  formatMonthDayYear,
+} from "~~/shared/utils/formatDate";
 
 const props = defineProps<{
   restroom: RestroomSummary;
@@ -38,27 +42,6 @@ function isTagActive(tag: string) {
 function authorLabel(a: Annotation) {
   return a.author.displayName ?? `@${a.author.username}`;
 }
-
-function shortDate(iso: string) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  return d.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "UTC",
-  });
-}
-
-function formatShortDate(iso: string) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  const day = String(d.getUTCDate()).padStart(2, "0");
-  const month = d.toLocaleString("en-US", { month: "short", timeZone: "UTC" });
-  const year = d.getUTCFullYear();
-  return `${day} ${month} ${year}`;
-}
 </script>
 
 <template>
@@ -69,7 +52,7 @@ function formatShortDate(iso: string) {
         <span class="panel-meta">
           <span>{{ restroom.location }}</span>
           <span class="panel-meta-sep"> · </span>
-          <span>{{ formatShortDate(restroom.isoDate) }}</span>
+          <span>{{ formatDayMonthYear(restroom.isoDate) }}</span>
         </span>
       </div>
       <button class="panel-close" aria-label="Close" @click="emit('close')">
@@ -115,7 +98,8 @@ function formatShortDate(iso: string) {
           <div class="annotation-main">
             <span class="annotation-body">{{ a.body }}</span>
             <span class="annotation-meta"
-              >{{ authorLabel(a) }} · {{ shortDate(a.createdAt) }}</span
+              >{{ authorLabel(a) }} ·
+              {{ formatMonthDayYear(a.createdAt) }}</span
             >
           </div>
           <button

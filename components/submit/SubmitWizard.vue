@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { apiErrorMessage } from "~~/shared/utils/apiError";
 const emit = defineEmits<{ submitted: [] }>();
 
 const { isAdmin } = useAuth();
@@ -147,9 +148,7 @@ async function submitUpload() {
     hasUnsavedSubmission.value = false;
     if (isAdmin.value) setTimeout(() => resetUpload(), 2000);
   } catch (e: unknown) {
-    const err = e as { data?: { statusMessage?: string }; message?: string };
-    uploadError.value =
-      err.data?.statusMessage ?? err.message ?? "Upload failed.";
+    uploadError.value = apiErrorMessage(e, "Upload failed.");
   } finally {
     uploadLoading.value = false;
   }
@@ -460,16 +459,6 @@ function resetUpload() {
   flex-direction: column;
   gap: 12px;
 }
-.link-btn {
-  background: transparent;
-  border: 0;
-  padding: 4px 8px;
-  font: inherit;
-  color: #000;
-  cursor: pointer;
-  text-decoration: underline;
-  align-self: flex-start;
-}
 
 .wizard {
   display: flex;
@@ -517,83 +506,11 @@ function resetUpload() {
 }
 
 /* Shared form */
-.form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.field-label-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.field-label {
-  font-size: 12px;
-  color: #666;
-}
-.req {
-  color: #000;
-}
-.field-input {
-  border: 1px solid #000;
-  padding: 5px 6px;
-  font: inherit;
-  background: transparent;
-  outline: none;
-  color: #000;
-}
-.field-textarea {
-  resize: vertical;
-  padding: 6px;
-}
-.char-count {
-  font-size: 11px;
-  color: #999;
-  text-align: right;
-}
-.field-hint {
-  margin: 0;
-  font-size: 11px;
-  color: #999;
-}
-.field-hint-warn {
-  color: #c33;
-}
-.field-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
 .maps-link {
   margin-left: auto;
   font-size: 11px;
   color: #000;
   white-space: nowrap;
-}
-.form-error {
-  margin: 0;
-  color: #c33;
-}
-
-.primary-btn {
-  background: #000;
-  color: #fff;
-  border: 0;
-  padding: 8px 18px;
-  font: inherit;
-  cursor: pointer;
-}
-.primary-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.primary-btn:hover:not(:disabled) {
-  background: #333;
 }
 
 .step-actions {
@@ -631,11 +548,5 @@ function resetUpload() {
   color: #fff;
   font-size: 11px;
   padding: 2px 6px;
-}
-
-@media (max-width: 750px) {
-  .field-input {
-    font-size: 16px; /* keep 16px — iOS zooms into inputs below 16px */
-  }
 }
 </style>

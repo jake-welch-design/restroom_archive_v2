@@ -2,6 +2,8 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { useDb, schema } from "~~/server/utils/db";
 import { requireRole } from "~~/server/utils/requireRole";
+import { getRouterString } from "~~/server/utils/routeParams";
+import { useR2 } from "~~/server/utils/r2";
 
 // ~1.5 MB decoded; base64 overhead is ~4/3 so cap the string at ~2 MB.
 const MAX_IMAGE_BASE64_CHARS = 2_000_000;
@@ -34,9 +36,7 @@ function isValidImageMagic(buf: Buffer): boolean {
 export default defineEventHandler(async (event) => {
   requireRole(event, "admin");
 
-  const slug = getRouterParam(event, "slug");
-  if (!slug)
-    throw createError({ statusCode: 400, statusMessage: "Missing slug" });
+  const slug = getRouterString(event, "slug");
 
   const { imageData } = await readValidatedBody(
     event,
@@ -59,15 +59,9 @@ export default defineEventHandler(async (event) => {
   }
   const thumbKey = `${slug}.jpg`;
 
-  const env = event.context.cloudflare?.env as
-    { THUMBS?: R2Bucket } | undefined;
-  if (!env?.THUMBS)
-    throw createError({
-      statusCode: 500,
-      statusMessage: "THUMBS bucket not available",
-    });
+  const thumbs = useR2(event, "THUMBS");
 
-  await env.THUMBS.put(thumbKey, buffer, {
+  await thumbs.put(thumbKey, buffer, {
     httpMetadata: {
       contentType: "image/jpeg",
       cacheControl: "public, max-age=31536000, immutable",

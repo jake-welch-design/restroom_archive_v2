@@ -3,6 +3,7 @@ import { z } from "zod";
 import { useDb, schema } from "~~/server/utils/db";
 import { requireActiveUser } from "~~/server/utils/requireActiveUser";
 import { rateLimitByUser } from "~~/server/utils/rateLimit";
+import { getRouterString } from "~~/server/utils/routeParams";
 
 const OrbitSnapshot = z.object({
   cameraMode: z.literal("orbit"),
@@ -45,9 +46,7 @@ export default defineEventHandler(async (event) => {
   const user = requireActiveUser(event);
   await rateLimitByUser(event, "annotation", { max: 30, windowSec: 3600 });
 
-  const slug = getRouterParam(event, "slug");
-  if (!slug)
-    throw createError({ statusCode: 400, statusMessage: "Missing slug" });
+  const slug = getRouterString(event, "slug");
 
   const body = await readValidatedBody(event, Body.parse);
 

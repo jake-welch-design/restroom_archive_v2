@@ -1,9 +1,11 @@
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { useDb, schema } from "~~/server/utils/db";
 import { requireRole } from "~~/server/utils/requireRole";
 import { adminMessagePatch } from "~~/server/utils/adminMessage";
 import { recordAdminAction } from "~~/server/utils/auditLog";
+import { getRouterId } from "~~/server/utils/routeParams";
+import { daysFromNow } from "~~/server/utils/sqlTime";
 
 const Body = z.object({
   days: z.number().int().positive().max(3650),
@@ -13,8 +15,7 @@ const Body = z.object({
 export default defineEventHandler(async (event) => {
   const actor = requireRole(event, "admin");
 
-  const id = Number(getRouterParam(event, "id"));
-  if (!id) throw createError({ statusCode: 400, statusMessage: "Invalid id" });
+  const id = getRouterId(event);
   if (id === actor.id)
     throw createError({
       statusCode: 400,
@@ -42,7 +43,7 @@ export default defineEventHandler(async (event) => {
   await db
     .update(schema.users)
     .set({
-      mutedUntil: sql`datetime('now', ${`+${body.days} days`})`,
+      mutedUntil: daysFromNow(body.days),
       ...adminMessagePatch(body.message),
     })
     .where(eq(schema.users.id, id));

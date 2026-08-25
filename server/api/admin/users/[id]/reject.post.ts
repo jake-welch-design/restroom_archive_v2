@@ -4,6 +4,8 @@ import { useDb, schema } from "~~/server/utils/db";
 import { requireRole } from "~~/server/utils/requireRole";
 import { adminMessagePatch } from "~~/server/utils/adminMessage";
 import { recordAdminAction } from "~~/server/utils/auditLog";
+import { getRouterId } from "~~/server/utils/routeParams";
+import { readOptionalBody } from "~~/server/utils/validation";
 
 const Body = z.object({
   message: z.string().max(500).optional(),
@@ -12,13 +14,9 @@ const Body = z.object({
 export default defineEventHandler(async (event) => {
   requireRole(event, "admin");
 
-  const id = Number(getRouterParam(event, "id"));
-  if (!id) throw createError({ statusCode: 400, statusMessage: "Invalid id" });
+  const id = getRouterId(event);
 
-  const body = await readValidatedBody(event, async (raw) => {
-    if (raw == null) return {};
-    return Body.parse(raw);
-  });
+  const body = await readOptionalBody(event, Body);
 
   const db = useDb(event);
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import * as THREE from "three";
 import type { Annotation } from "~/types/annotation";
+import { apiErrorMessage } from "~~/shared/utils/apiError";
 
 const props = defineProps<{
   annotations: Annotation[];
@@ -53,8 +54,7 @@ async function confirmReport(id: number) {
     reportedIds.value.add(id);
     confirmingReportId.value = null;
   } catch (e: unknown) {
-    const err = e as { data?: { statusMessage?: string } };
-    reportError.value = err.data?.statusMessage ?? "Could not submit report.";
+    reportError.value = apiErrorMessage(e, "Could not submit report.");
   }
 }
 

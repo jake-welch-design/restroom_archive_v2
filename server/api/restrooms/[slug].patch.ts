@@ -1,8 +1,10 @@
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { useDb, schema } from "~~/server/utils/db";
 import { requireActiveUser } from "~~/server/utils/requireActiveUser";
 import { serializeDescriptors } from "~~/server/utils/descriptors";
+import { getRouterString } from "~~/server/utils/routeParams";
+import { now } from "~~/server/utils/sqlTime";
 
 const Body = z.object({
   name: z.string().min(1).max(200),
@@ -27,9 +29,7 @@ function formatDisplayDate(isoDate: string) {
 export default defineEventHandler(async (event) => {
   const user = requireActiveUser(event);
 
-  const slug = getRouterParam(event, "slug");
-  if (!slug)
-    throw createError({ statusCode: 400, statusMessage: "Missing slug" });
+  const slug = getRouterString(event, "slug");
 
   const body = await readValidatedBody(event, Body.parse);
 
@@ -71,7 +71,7 @@ export default defineEventHandler(async (event) => {
       coords,
       description: body.description ?? null,
       descriptors: serializeDescriptors(body.descriptors),
-      updatedAt: sql`(datetime('now'))`,
+      updatedAt: now(),
     })
     .where(eq(schema.restrooms.id, row.id));
 

@@ -1,17 +1,12 @@
+import { useR2 } from "~~/server/utils/r2";
 export default defineEventHandler(async (event) => {
   const key = getRouterParam(event, "key");
   if (!key)
     throw createError({ statusCode: 400, statusMessage: "Missing key" });
 
-  const env = event.context.cloudflare?.env as
-    { THUMBS?: R2Bucket } | undefined;
-  if (!env?.THUMBS)
-    throw createError({
-      statusCode: 500,
-      statusMessage: 'R2 binding "THUMBS" not available',
-    });
+  const thumbs = useR2(event, "THUMBS");
 
-  const object = await env.THUMBS.get(key);
+  const object = await thumbs.get(key);
   if (!object)
     throw createError({
       statusCode: 404,

@@ -1,13 +1,14 @@
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { useDb, schema } from "~~/server/utils/db";
 import { requireRole } from "~~/server/utils/requireRole";
 import { recordAdminAction } from "~~/server/utils/auditLog";
+import { getRouterId } from "~~/server/utils/routeParams";
+import { now } from "~~/server/utils/sqlTime";
 
 export default defineEventHandler(async (event) => {
   const actor = requireRole(event, "admin");
 
-  const id = Number(getRouterParam(event, "id"));
-  if (!id) throw createError({ statusCode: 400, statusMessage: "Invalid id" });
+  const id = getRouterId(event);
   if (id === actor.id)
     throw createError({
       statusCode: 400,
@@ -33,7 +34,7 @@ export default defineEventHandler(async (event) => {
   // Null out FK references so restrooms stay in the archive (unattributed)
   await db
     .update(schema.restrooms)
-    .set({ submittedBy: null, updatedAt: sql`(datetime('now'))` })
+    .set({ submittedBy: null, updatedAt: now() })
     .where(eq(schema.restrooms.submittedBy, id));
 
   await db

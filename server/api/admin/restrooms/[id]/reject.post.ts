@@ -1,8 +1,12 @@
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { useDb, schema } from "~~/server/utils/db";
 import { requireRole } from "~~/server/utils/requireRole";
 import { recordAdminAction } from "~~/server/utils/auditLog";
+import { getRouterId } from "~~/server/utils/routeParams";
+import { deleteRestroomBlobs } from "~~/server/utils/r2";
+import { now } from "~~/server/utils/sqlTime";
+import { readOptionalBody } from "~~/server/utils/validation";
 
 const Body = z.object({
   message: z.string().trim().max(500).optional(),
@@ -11,13 +15,9 @@ const Body = z.object({
 export default defineEventHandler(async (event) => {
   requireRole(event, "admin");
 
-  const id = Number(getRouterParam(event, "id"));
-  if (!id) throw createError({ statusCode: 400, statusMessage: "Invalid id" });
+  const id = getRouterId(event);
 
-  const body = await readValidatedBody(event, async (raw) => {
-    if (raw == null) return {};
-    return Body.parse(raw);
-  });
+  const body = await readOptionalBody(event, Body);
   const message = body.message ?? null;
 
   const db = useDb(event);
@@ -27,7 +27,7 @@ export default defineEventHandler(async (event) => {
     .set({
       status: "rejected",
       rejectionMessage: message || null,
-      updatedAt: sql`(datetime('now'))`,
+      updatedAt: now(),
     })
     .where(eq(schema.restrooms.id, id))
     .returning({
@@ -40,13 +40,9 @@ export default defineEventHandler(async (event) => {
   if (!row)
     throw createError({ statusCode: 404, statusMessage: "Restroom not found" });
 
-  // Clean up R2 blobs for rejected submissions so storage doesn't accumulate orphaned files.
-  const env = event.context.cloudflare?.env as
-    { MODELS?: R2Bucket; THUMBS?: R2Bucket } | undefined;
-  await Promise.allSettled([
-    env?.MODELS?.delete(row.file),
-    row.thumbKey ? env?.THUMBS?.delete(row.thumbKey) : Promise.resolve(),
-  ]);
+  // A rejected submission is not coming back, so its blobs would otherwise
+  // sit in R2 unreferenced forever.
+  await deleteRestroomBlobs(event, row);
 
   await recordAdminAction(
     event,

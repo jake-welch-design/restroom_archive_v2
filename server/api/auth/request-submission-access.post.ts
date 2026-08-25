@@ -1,8 +1,9 @@
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { useDb, schema } from "~~/server/utils/db";
 import { requireActiveUser } from "~~/server/utils/requireActiveUser";
 import { rateLimitByUser } from "~~/server/utils/rateLimit";
+import { now } from "~~/server/utils/sqlTime";
 
 const Body = z.object({
   agreements: z.array(z.string()).length(6),
@@ -18,7 +19,7 @@ export default defineEventHandler(async (event) => {
 
   await db
     .update(schema.users)
-    .set({ submissionRequestedAt: sql`(datetime('now'))` })
+    .set({ submissionRequestedAt: now() })
     .where(eq(schema.users.id, user.id));
 
   return { ok: true };

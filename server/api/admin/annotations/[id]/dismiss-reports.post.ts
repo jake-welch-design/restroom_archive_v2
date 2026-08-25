@@ -1,13 +1,14 @@
-import { eq, isNull, and, sql } from "drizzle-orm";
+import { eq, isNull, and } from "drizzle-orm";
 import { useDb, schema } from "~~/server/utils/db";
 import { requireRole } from "~~/server/utils/requireRole";
 import { recordAdminAction } from "~~/server/utils/auditLog";
+import { getRouterId } from "~~/server/utils/routeParams";
+import { now } from "~~/server/utils/sqlTime";
 
 export default defineEventHandler(async (event) => {
   const actor = requireRole(event, "admin");
 
-  const id = Number(getRouterParam(event, "id"));
-  if (!id) throw createError({ statusCode: 400, statusMessage: "Invalid id" });
+  const id = getRouterId(event);
 
   const db = useDb(event);
 
@@ -25,7 +26,7 @@ export default defineEventHandler(async (event) => {
 
   await db
     .update(schema.annotationReports)
-    .set({ resolvedAt: sql`(datetime('now'))`, resolvedBy: actor.id })
+    .set({ resolvedAt: now(), resolvedBy: actor.id })
     .where(
       and(
         eq(schema.annotationReports.annotationId, id),

@@ -1,9 +1,10 @@
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { useDb, schema } from "~~/server/utils/db";
 import { verifyPassword } from "~~/server/utils/hash";
 import { requireActiveUser } from "~~/server/utils/requireActiveUser";
 import { rateLimitByUser } from "~~/server/utils/rateLimit";
+import { now } from "~~/server/utils/sqlTime";
 
 const Body = z.object({
   password: z.string().min(1),
@@ -54,7 +55,7 @@ export default defineEventHandler(async (event) => {
   // annotations are removed, the user row is dropped.
   await db
     .update(schema.restrooms)
-    .set({ submittedBy: null, updatedAt: sql`(datetime('now'))` })
+    .set({ submittedBy: null, updatedAt: now() })
     .where(eq(schema.restrooms.submittedBy, user.id));
 
   await db

@@ -1,0 +1,182 @@
+/* Form primitives, shared by every form surface in the application.
+   ---------------------------------------------------------------------------
+   These rules previously existed as five near-identical copies, one per file
+   that happened to contain a form: the account page, the submission wizard, the
+   two password pages and the contact form on the info page. The copies had
+   already drifted in ways nobody intended.
+
+   Global rather than scoped because a scoped block cannot be shared, and these
+   are the same control in every context.
+
+   Sizing runs through custom properties rather than fixed values. Each surface
+   sets its own base font size (13px on the account page, 16px on the password
+   pages), and the labels and hints around a control are meant to sit a step
+   below whatever that base is. A page adjusts the whole set by redefining the
+   properties on its own root, which is what the password pages do, instead of
+   restating the rules.
+
+   Specificity is deliberately low: every selector here is a single class, so a
+   component's scoped style, which carries an extra attribute selector, wins
+   without needing !important. */
+
+:root {
+  /* Palette. The archive is monochrome by design; the only colour in the
+     system is the error red. */
+  --ink: #000;
+  --paper: #fff;
+  --muted: #666;
+  --dim: #999;
+  --danger: #c33;
+
+  /* Form metrics. Defaults match the account page and submission wizard,
+     which between them account for most forms in the application. */
+  --form-gap: 12px;
+  --field-gap: 4px;
+  --field-label-size: 12px;
+  --field-hint-size: 11px;
+  --field-input-padding: 5px 6px;
+  --primary-btn-padding: 8px 18px;
+  --link-btn-padding: 4px 8px;
+}
+
+/* --- Layout -------------------------------------------------------------- */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--form-gap);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--field-gap);
+}
+
+/* A label with something beside it, such as an info tooltip or a helper link. */
+.field-label-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Two controls that belong together on one line, such as latitude and
+   longitude. Collapses to one column when the panel is too narrow to hold
+   both without crushing them. */
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@container panel (max-width: 400px) {
+  .field-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* --- Labels and helper text ---------------------------------------------- */
+
+.field-label {
+  font-size: var(--field-label-size);
+  color: var(--muted);
+}
+
+/* The asterisk marking a required field. Full-strength ink so it reads against
+   the muted label it sits inside. */
+.req {
+  color: var(--ink);
+}
+
+.field-hint {
+  margin: 0;
+  font-size: var(--field-hint-size);
+  color: var(--dim);
+}
+
+/* A hint that has become a warning, such as a location in the wrong format.
+   Still a hint rather than an error: the value is recoverable and nothing has
+   been rejected yet. */
+.field-hint-warn {
+  color: var(--danger);
+}
+
+.char-count {
+  font-size: var(--field-hint-size);
+  color: var(--dim);
+  text-align: right;
+}
+
+.dim {
+  color: var(--dim);
+}
+
+/* --- Controls ------------------------------------------------------------ */
+
+.field-input {
+  border: 1px solid var(--ink);
+  padding: var(--field-input-padding);
+  font: inherit;
+  background: transparent;
+  outline: none;
+  color: var(--ink);
+}
+
+/* Vertical only. Horizontal resizing escapes the panel the form sits in. */
+.field-textarea {
+  resize: vertical;
+  padding: 6px;
+}
+
+/* iOS zooms the viewport when focusing an input whose text is below 16px, and
+   does not zoom back out. Holding the floor at 16px on touch layouts is the
+   only way to prevent that. */
+@media (max-width: 750px) {
+  .field-input {
+    font-size: 16px;
+  }
+}
+
+.turnstile {
+  margin: 4px 0;
+}
+
+/* --- Buttons ------------------------------------------------------------- */
+
+.primary-btn {
+  background: var(--ink);
+  color: var(--paper);
+  border: 0;
+  padding: var(--primary-btn-padding);
+  font: inherit;
+  cursor: pointer;
+}
+
+.primary-btn:hover:not(:disabled) {
+  background: #333;
+}
+
+.primary-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* A button that reads as a link: used for the secondary action beside a
+   primary one, where a second filled button would give the two equal weight. */
+.link-btn {
+  background: transparent;
+  border: 0;
+  padding: var(--link-btn-padding);
+  font: inherit;
+  color: var(--ink);
+  cursor: pointer;
+  text-decoration: underline;
+  align-self: flex-start;
+}
+
+/* --- Errors -------------------------------------------------------------- */
+
+.form-error {
+  margin: 0;
+  color: var(--danger);
+}

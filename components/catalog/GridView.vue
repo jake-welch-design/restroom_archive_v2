@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import type { RestroomSummary } from "~/types/restroom";
 import type { Annotation } from "~/types/annotation";
+import {
+  formatDayMonthYear,
+  formatMonthDayYear,
+} from "~~/shared/utils/formatDate";
 
 const props = defineProps<{
   rows: RestroomSummary[];
@@ -43,27 +47,6 @@ function authorLabel(a: Annotation) {
   return a.author.displayName ?? `@${a.author.username}`;
 }
 
-function shortDate(iso: string) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  return d.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "UTC",
-  });
-}
-
-function formatShortDate(iso: string) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  const day = String(d.getUTCDate()).padStart(2, "0");
-  const month = d.toLocaleString("en-US", { month: "short", timeZone: "UTC" });
-  const year = d.getUTCFullYear();
-  return `${day} ${month} ${year}`;
-}
-
 const gridWrapRef = ref<HTMLDivElement | null>(null);
 
 async function scrollToSelected(slug: string | null | undefined) {
@@ -96,7 +79,9 @@ onMounted(() => scrollToSelected(props.selectedSlug));
             <div class="expanded thin-scroll" @click.stop>
               <div class="tile-info selected">
                 <span class="tile-name">{{ r.name }}</span>
-                <span class="tile-date">{{ formatShortDate(r.isoDate) }}</span>
+                <span class="tile-date">{{
+                  formatDayMonthYear(r.isoDate)
+                }}</span>
                 <span class="tile-location">{{ r.location }}</span>
               </div>
 
@@ -146,7 +131,8 @@ onMounted(() => scrollToSelected(props.selectedSlug));
                     <div class="annotation-main">
                       <span class="annotation-body">{{ a.body }}</span>
                       <span class="annotation-meta">
-                        {{ authorLabel(a) }} · {{ shortDate(a.createdAt) }}
+                        {{ authorLabel(a) }} ·
+                        {{ formatMonthDayYear(a.createdAt) }}
                       </span>
                     </div>
                     <button
@@ -176,7 +162,7 @@ onMounted(() => scrollToSelected(props.selectedSlug));
             <div v-else class="thumb-placeholder" />
             <div class="tile-info">
               <span class="tile-name">{{ r.name }}</span>
-              <span class="tile-date">{{ formatShortDate(r.isoDate) }}</span>
+              <span class="tile-date">{{ formatDayMonthYear(r.isoDate) }}</span>
               <span class="tile-location">{{ r.location }}</span>
             </div>
           </template>

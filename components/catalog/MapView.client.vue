@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import maplibregl from "maplibre-gl";
+import { escapeHtml } from "~~/shared/utils/html";
 import type { RestroomSummary } from "~/types/restroom";
 
 const props = defineProps<{
@@ -224,20 +225,8 @@ function initMap() {
       const [lng, lat] = f.geometry.coordinates as [number, number];
       const name = (f.properties?.name as string) ?? "";
       const date = (f.properties?.date as string) ?? "";
-      const safe = (s: string) =>
-        s.replace(/[&<>"']/g, (c) =>
-          c === "&"
-            ? "&amp;"
-            : c === "<"
-              ? "&lt;"
-              : c === ">"
-                ? "&gt;"
-                : c === '"'
-                  ? "&quot;"
-                  : "&#39;",
-        );
-      const html = `<div class="hover-name">${safe(name)}</div>${
-        date ? `<div class="hover-date">${safe(date)}</div>` : ""
+      const html = `<div class="hover-name">${escapeHtml(name)}</div>${
+        date ? `<div class="hover-date">${escapeHtml(date)}</div>` : ""
       }`;
       hoverPopup.setLngLat([lng, lat]).setHTML(html).addTo(map);
     });

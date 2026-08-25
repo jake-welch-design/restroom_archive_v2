@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { formatDayMonthYear } from "~~/shared/utils/formatDate";
+import { apiErrorMessage } from "~~/shared/utils/apiError";
+import { waitForTurnstileToken } from "~/composables/useTurnstileToken";
 const {
   user,
   loggedIn,
@@ -42,18 +45,8 @@ const turnstileToken = ref("");
 const authError = ref("");
 const authLoading = ref(false);
 
-// Turnstile sometimes paints its "success" UI a beat before the token reaches
-// the v-model ref. Wait briefly so a fast Enter-key submit (or password manager
-// autofill) doesn't race past it. Returns false if no token ever arrives.
-async function waitForToken(tokenRef: Ref<string>) {
-  for (let i = 0; i < 20 && !tokenRef.value; i++) {
-    await new Promise((r) => setTimeout(r, 100));
-  }
-  return !!tokenRef.value;
-}
-
 async function submitAuth() {
-  if (!(await waitForToken(turnstileToken))) {
+  if (!(await waitForTurnstileToken(turnstileToken))) {
     authError.value = "Still verifying — please wait a moment and try again.";
     return;
   }
@@ -74,9 +67,7 @@ async function submitAuth() {
     await $fetch(url, { method: "POST", body });
     await refreshSession();
   } catch (e: unknown) {
-    const err = e as { data?: { statusMessage?: string }; message?: string };
-    authError.value =
-      err.data?.statusMessage ?? err.message ?? "Something went wrong.";
+    authError.value = apiErrorMessage(e, "Something went wrong.");
     turnstileToken.value = "";
   } finally {
     authLoading.value = false;
@@ -157,8 +148,7 @@ async function saveNewEmail() {
     emailPasswordDraft.value = "";
     emailSuccess.value = true;
   } catch (e: unknown) {
-    const err = e as { data?: { statusMessage?: string } };
-    emailError.value = err.data?.statusMessage ?? "Could not update email.";
+    emailError.value = apiErrorMessage(e, "Could not update email.");
   } finally {
     emailLoading.value = false;
   }
@@ -200,23 +190,7 @@ async function confirmDeleteAccount() {
       body: { password: deletePasswordDraft.value },
     });
   } catch (e: unknown) {
-    // Fall through the response body first, then the fetch error itself — a 500
-    // from Nitro has no `statusMessage`, and without the fallbacks every server
-    // fault reads as the same useless "Could not delete account."
-    const err = e as {
-      data?: { statusMessage?: string; message?: string } | string;
-      statusMessage?: string;
-      message?: string;
-    };
-    const fromBody =
-      typeof err.data === "object" && err.data
-        ? (err.data.statusMessage ?? err.data.message)
-        : undefined;
-    deleteError.value =
-      fromBody ||
-      err.statusMessage ||
-      err.message ||
-      "Could not delete account.";
+    deleteError.value = apiErrorMessage(e, "Could not delete account.");
     return;
   } finally {
     deleteLoading.value = false;
@@ -253,9 +227,7 @@ async function saveNewPassword() {
     newPasswordDraft.value = "";
     confirmPasswordDraft.value = "";
   } catch (e: unknown) {
-    const err = e as { data?: { statusMessage?: string } };
-    passwordError.value =
-      err.data?.statusMessage ?? "Could not update password.";
+    passwordError.value = apiErrorMessage(e, "Could not update password.");
   } finally {
     passwordLoading.value = false;
   }
@@ -286,9 +258,7 @@ async function saveDisplayName() {
     await refreshSession();
     editingDisplayName.value = false;
   } catch (e: unknown) {
-    const err = e as { data?: { statusMessage?: string } };
-    displayNameError.value =
-      err.data?.statusMessage ?? "Could not save display name.";
+    displayNameError.value = apiErrorMessage(e, "Could not save display name.");
   } finally {
     displayNameLoading.value = false;
   }
@@ -322,9 +292,7 @@ async function submitAgreement() {
     await refreshSession();
     showAgreementForm.value = false;
   } catch (e: unknown) {
-    const err = e as { data?: { statusMessage?: string }; message?: string };
-    agreementError.value =
-      err.data?.statusMessage ?? err.message ?? "Could not submit request.";
+    agreementError.value = apiErrorMessage(e, "Could not submit request.");
   } finally {
     agreementLoading.value = false;
   }
@@ -440,9 +408,7 @@ async function submitRemovalRequest(slug: string) {
     removalReason.value = "";
     await refreshMySubmissions();
   } catch (e: unknown) {
-    const err = e as { data?: { statusMessage?: string } };
-    myActionError.value =
-      err.data?.statusMessage ?? "Could not submit request.";
+    myActionError.value = apiErrorMessage(e, "Could not submit request.");
   } finally {
     submissionActionId.value = null;
   }
@@ -458,9 +424,7 @@ async function deleteMyAnnotation(slug: string, id: number) {
     });
     await refreshMyAnnotations();
   } catch (e: unknown) {
-    const err = e as { data?: { statusMessage?: string } };
-    myActionError.value =
-      err.data?.statusMessage ?? "Could not delete annotation.";
+    myActionError.value = apiErrorMessage(e, "Could not delete annotation.");
   } finally {
     annotationActionId.value = null;
   }
@@ -482,9 +446,7 @@ async function dismissRejectedSubmission(
     await $fetch(`/api/restrooms/${slug}`, { method: "DELETE" });
     await refreshMySubmissions();
   } catch (e: unknown) {
-    const err = e as { data?: { statusMessage?: string } };
-    myActionError.value =
-      err.data?.statusMessage ?? "Could not dismiss submission.";
+    myActionError.value = apiErrorMessage(e, "Could not dismiss submission.");
   } finally {
     submissionActionId.value = null;
   }
@@ -675,8 +637,7 @@ async function hideReportedAnnotation(annotationId: number) {
     });
     await refreshAnnotationReports();
   } catch (e: unknown) {
-    const err = e as { data?: { statusMessage?: string } };
-    actionError.value = err.data?.statusMessage ?? "Could not hide annotation.";
+    actionError.value = apiErrorMessage(e, "Could not hide annotation.");
   } finally {
     actionLoading.value = null;
   }
@@ -692,8 +653,7 @@ async function dismissAnnotationReports(annotationId: number) {
     });
     await refreshAnnotationReports();
   } catch (e: unknown) {
-    const err = e as { data?: { statusMessage?: string } };
-    actionError.value = err.data?.statusMessage ?? "Could not dismiss reports.";
+    actionError.value = apiErrorMessage(e, "Could not dismiss reports.");
   } finally {
     actionLoading.value = null;
   }
@@ -710,8 +670,7 @@ async function hideAnnotation(annotationId: number) {
     });
     await Promise.all([refreshAllAnnotations(), refreshAnnotationReports()]);
   } catch (e: unknown) {
-    const err = e as { data?: { statusMessage?: string } };
-    actionError.value = err.data?.statusMessage ?? "Could not hide annotation.";
+    actionError.value = apiErrorMessage(e, "Could not hide annotation.");
   } finally {
     actionLoading.value = null;
   }
@@ -726,9 +685,7 @@ async function unhideAnnotation(annotationId: number) {
     });
     await refreshAllAnnotations();
   } catch (e: unknown) {
-    const err = e as { data?: { statusMessage?: string } };
-    actionError.value =
-      err.data?.statusMessage ?? "Could not unhide annotation.";
+    actionError.value = apiErrorMessage(e, "Could not unhide annotation.");
   } finally {
     actionLoading.value = null;
   }
@@ -744,8 +701,7 @@ async function runAction(key: string, url: string, after: () => Promise<void>) {
     await $fetch(url, { method: "POST" });
     await after();
   } catch (e: unknown) {
-    const err = e as { data?: { statusMessage?: string } };
-    actionError.value = err.data?.statusMessage ?? "Action failed.";
+    actionError.value = apiErrorMessage(e, "Action failed.");
   } finally {
     actionLoading.value = null;
   }
@@ -811,8 +767,7 @@ async function confirmRejectRestroom(id: number) {
     if (expandedPendingId.value === id) expandedPendingId.value = null;
     await refreshRestroomQueue();
   } catch (e: unknown) {
-    const err = e as { data?: { statusMessage?: string } };
-    actionError.value = err.data?.statusMessage ?? "Action failed.";
+    actionError.value = apiErrorMessage(e, "Action failed.");
   } finally {
     actionLoading.value = null;
   }
@@ -890,18 +845,6 @@ function isAccountMuted(account: AccountRow): boolean {
   return Number.isFinite(ms) && ms > Date.now();
 }
 
-// SQLite hands these back as `YYYY-MM-DD HH:MM:SS` in UTC; a raw one in the
-// middle of a sentence reads like debug output.
-function formatAdminDate(value: string | null): string {
-  if (!value) return "";
-  const ms = Date.parse(`${value.replace(" ", "T")}Z`);
-  if (!Number.isFinite(ms)) return value;
-  const d = new Date(ms);
-  const day = String(d.getUTCDate()).padStart(2, "0");
-  const month = d.toLocaleString("en-US", { month: "short", timeZone: "UTC" });
-  return `${day} ${month} ${d.getUTCFullYear()}`;
-}
-
 function accountRoleLabel(account: AccountRow): string {
   if (account.role === "admin") return "Admin";
   if (account.approvedAt) return "Archivist";
@@ -927,7 +870,7 @@ function accountBadges(account: AccountRow): AccountBadge[] {
     badges.push({ label: "Banned", tone: "danger" });
   } else if (isAccountMuted(account)) {
     badges.push({
-      label: `Suspended until ${formatAdminDate(account.mutedUntil)}`,
+      label: `Suspended until ${formatDayMonthYear(account.mutedUntil)}`,
       tone: "warn",
     });
   }
@@ -961,8 +904,7 @@ async function runAccountAction(
     optionsMessage.value = "";
     optionsMuteDays.value = null;
   } catch (e: unknown) {
-    const err = e as { data?: { statusMessage?: string } };
-    actionError.value = err.data?.statusMessage ?? "Action failed.";
+    actionError.value = apiErrorMessage(e, "Action failed.");
   } finally {
     actionLoading.value = null;
   }
@@ -1018,8 +960,7 @@ async function deleteAccount(a: AccountRow) {
     await refreshUserQueue();
     optionsAccountId.value = null;
   } catch (e: unknown) {
-    const err = e as { data?: { statusMessage?: string } };
-    actionError.value = err.data?.statusMessage ?? "Delete failed.";
+    actionError.value = apiErrorMessage(e, "Delete failed.");
   } finally {
     actionLoading.value = null;
   }
@@ -1052,8 +993,7 @@ async function submitRename(a: AccountRow) {
     renamingAccountId.value = null;
     await refreshAccounts();
   } catch (e: unknown) {
-    const err = e as { data?: { statusMessage?: string } };
-    renameError.value = err.data?.statusMessage ?? "Rename failed.";
+    renameError.value = apiErrorMessage(e, "Rename failed.");
   } finally {
     actionLoading.value = null;
   }
@@ -2504,7 +2444,8 @@ watch(
                       <span class="settings-label">Suspension</span>
                       <span class="settings-value">
                         <template v-if="isAccountMuted(a)"
-                          >Until {{ formatAdminDate(a.mutedUntil) }}</template
+                          >Until
+                          {{ formatDayMonthYear(a.mutedUntil) }}</template
                         >
                         <span v-else class="dim">Not suspended</span>
                       </span>
@@ -2557,7 +2498,7 @@ watch(
                       <span class="settings-label">Ban</span>
                       <span class="settings-value">
                         <template v-if="a.bannedAt"
-                          >Banned {{ formatAdminDate(a.bannedAt) }}</template
+                          >Banned {{ formatDayMonthYear(a.bannedAt) }}</template
                         >
                         <span v-else class="dim">Not banned</span>
                       </span>
@@ -2787,9 +2728,6 @@ watch(
    checklists don't stretch the full panel on a wide viewport. */
 .form-column {
   max-width: 480px;
-}
-.dim {
-  color: #999;
 }
 
 /* Auth tabs — underlined, sentence case, weight 400, like the catalog nav.
@@ -3030,45 +2968,6 @@ watch(
 }
 
 /* Shared form */
-.form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  max-width: 340px;
-}
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.field-label {
-  font-size: 12px;
-  color: #666;
-}
-.field-input {
-  border: 1px solid #000;
-  padding: 5px 6px;
-  font: inherit;
-  background: transparent;
-  outline: none;
-  color: #000;
-}
-.field-textarea {
-  resize: vertical;
-  padding: 6px;
-}
-.field-hint {
-  margin: 0;
-  font-size: 11px;
-  color: #999;
-}
-.turnstile {
-  margin: 4px 0;
-}
-.form-error {
-  margin: 0;
-  color: #c33;
-}
 .action-error {
   margin-bottom: 12px;
 }
@@ -3080,24 +2979,11 @@ watch(
 /* Buttons — row-level actions (Change, Save, Cancel, admin queue actions) sit
    at 12px with tight padding so they match the labels they sit beside rather
    than outweighing them. Only the primary/danger CTAs stay content-level. */
-.primary-btn {
-  background: #000;
-  color: #fff;
-  border: 0;
-  padding: 8px 18px;
-  font: inherit;
-  cursor: pointer;
-  align-self: flex-start;
-}
-.primary-btn:disabled,
 .danger-btn:disabled,
 .btn:disabled,
 .icon-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-.primary-btn:hover:not(:disabled) {
-  background: #333;
 }
 .danger-btn {
   background: #c33;
@@ -3160,20 +3046,19 @@ watch(
   border-color: #c33;
   color: #fff;
 }
-.link-btn,
-.forgot-password-link {
-  background: transparent;
-  border: 0;
+/* Row-level actions sit a step below the content they label, so the shared
+   link button is tightened and stepped down here rather than page-wide. */
+.link-btn {
   padding: 2px 4px;
-  font: inherit;
+  font-size: 12px;
+}
+/* An anchor, not a button, so it takes none of the shared .link-btn reset and
+   states the ink colour itself rather than inheriting the user agent's blue. */
+.forgot-password-link {
+  align-self: flex-start;
   font-size: 12px;
   color: #000;
-  cursor: pointer;
   text-decoration: underline;
-  align-self: flex-start;
-}
-.forgot-password-link {
-  padding: 0;
 }
 .icon-btn {
   background: transparent;
@@ -3483,9 +3368,6 @@ dd {
   .body-section > .account-header:first-child,
   .body-section > .auth-tabs:first-child {
     margin-top: 0;
-  }
-  .field-input {
-    font-size: 16px; /* keep 16px — iOS zooms into inputs below 16px */
   }
 }
 </style>

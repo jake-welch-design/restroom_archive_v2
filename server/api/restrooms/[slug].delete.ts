@@ -1,15 +1,15 @@
 import { eq } from "drizzle-orm";
 import { useDb, schema } from "~~/server/utils/db";
 import { requireRole } from "~~/server/utils/requireRole";
+import { getRouterString } from "~~/server/utils/routeParams";
+import { deleteRestroomBlobs } from "~~/server/utils/r2";
 
 // Lets a submitter clear a rejected entry from their "My submissions" list.
 // Admins can also delete in any state. Both paths drop the R2 object.
 export default defineEventHandler(async (event) => {
   const user = requireRole(event, "archivist");
 
-  const slug = getRouterParam(event, "slug");
-  if (!slug)
-    throw createError({ statusCode: 400, statusMessage: "Missing slug" });
+  const slug = getRouterString(event, "slug");
 
   const db = useDb(event);
 
@@ -47,15 +47,8 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const env = event.context.cloudflare?.env as
-    { MODELS?: R2Bucket } | undefined;
-  if (env?.MODELS) {
-    try {
-      await env.MODELS.delete(restroom.file);
-    } catch {
-      /* missing object — proceed with DB delete anyway */
-    }
-  }
+  // Best effort: an already-missing blob must not stop the row being deleted.
+  await deleteRestroomBlobs(event, restroom);
 
   await db.delete(schema.restrooms).where(eq(schema.restrooms.id, restroom.id));
 

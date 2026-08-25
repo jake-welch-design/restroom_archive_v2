@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { apiErrorMessage } from "~~/shared/utils/apiError";
+import { waitForTurnstileToken } from "~/composables/useTurnstileToken";
 const { toAbsolute } = useAbsoluteUrl();
 
 const siteUrl = "https://restroomarchive.com";
@@ -51,15 +53,10 @@ const contactError = ref("");
 const contactSubmitted = ref(false);
 
 async function submitContact() {
-  if (!contactTurnstileToken.value) {
-    for (let i = 0; i < 20 && !contactTurnstileToken.value; i++) {
-      await new Promise((r) => setTimeout(r, 100));
-    }
-    if (!contactTurnstileToken.value) {
-      contactError.value =
-        "Still verifying — please wait a moment and try again.";
-      return;
-    }
+  if (!(await waitForTurnstileToken(contactTurnstileToken))) {
+    contactError.value =
+      "Still verifying — please wait a moment and try again.";
+    return;
   }
   contactError.value = "";
   contactLoading.value = true;
@@ -76,9 +73,7 @@ async function submitContact() {
     });
     contactSubmitted.value = true;
   } catch (e: unknown) {
-    const err = e as { data?: { statusMessage?: string }; message?: string };
-    contactError.value =
-      err.data?.statusMessage ?? err.message ?? "Something went wrong.";
+    contactError.value = apiErrorMessage(e, "Something went wrong.");
     contactTurnstileToken.value = "";
   } finally {
     contactLoading.value = false;
@@ -196,7 +191,11 @@ async function submitContact() {
 </template>
 
 <style scoped>
+/* Prose scale, a step above the account page. Retunes the shared form tokens
+   rather than restating the rules they drive. */
 .about-page {
+  --field-input-padding: 4px 2px;
+  --primary-btn-padding: 10px 24px;
   --gutter: 24px;
   display: flex;
   flex-direction: column;
@@ -259,61 +258,15 @@ async function submitContact() {
 .contact-form p {
   margin: 0;
 }
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.field-label {
-  font-size: 12px;
-  color: #666;
-}
-.field-input {
-  border: 1px solid #000;
-  padding: 4px 2px;
-  font: inherit;
-  font-size: 14px;
-  background: transparent;
-  outline: none;
-  color: #000;
-}
+/* Taller than the shared default: the contact message is expected to run to
+   a paragraph, not a line. */
 .field-textarea {
-  resize: vertical;
   min-height: 90px;
-  font-family: inherit;
-}
-.turnstile {
-  margin: 4px 0;
-}
-.form-error {
-  margin: 0;
-  font-size: 14px;
-  color: #c33;
-}
-.primary-btn {
-  background: #000;
-  color: #fff;
-  border: 0;
-  padding: 10px 24px;
-  font: inherit;
-  font-size: 16px;
-  cursor: pointer;
-  align-self: flex-start;
-}
-.primary-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.primary-btn:hover:not(:disabled) {
-  background: #333;
 }
 .contact-msg p {
   margin: 0 0 8px;
   font-size: 14px;
   line-height: 1.5;
-}
-.dim {
-  color: #999;
 }
 
 .about-footer {

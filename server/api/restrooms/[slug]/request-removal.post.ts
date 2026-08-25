@@ -1,8 +1,10 @@
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { useDb, schema } from "~~/server/utils/db";
 import { requireActiveUser } from "~~/server/utils/requireActiveUser";
 import { rateLimitByUser } from "~~/server/utils/rateLimit";
+import { getRouterString } from "~~/server/utils/routeParams";
+import { now } from "~~/server/utils/sqlTime";
 
 const Body = z.object({
   reason: z.string().max(500).optional(),
@@ -12,9 +14,7 @@ export default defineEventHandler(async (event) => {
   const user = requireActiveUser(event);
   await rateLimitByUser(event, "req-removal", { max: 10, windowSec: 86400 });
 
-  const slug = getRouterParam(event, "slug");
-  if (!slug)
-    throw createError({ statusCode: 400, statusMessage: "Missing slug" });
+  const slug = getRouterString(event, "slug");
 
   const body = await readValidatedBody(event, Body.parse);
 
@@ -45,7 +45,7 @@ export default defineEventHandler(async (event) => {
     .set({
       removalRequestedBy: user.id,
       removalReason: body.reason ?? null,
-      updatedAt: sql`(datetime('now'))`,
+      updatedAt: now(),
     })
     .where(eq(schema.restrooms.id, restroom.id));
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import Fuse from "fuse.js";
 import type { RestroomSummary } from "~/types/restroom";
+import { formatDayMonthYear } from "~~/shared/utils/formatDate";
 
 type SortKey = "isoDate" | "name" | "location";
 type SortDir = "asc" | "desc";
@@ -32,16 +33,6 @@ const allTags = computed(() => {
 function isTagActive(tag: string) {
   const lower = tag.toLowerCase();
   return activeTags.value.some((t) => t.toLowerCase() === lower);
-}
-
-function formatDisplayDate(iso: string) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  const day = String(d.getUTCDate()).padStart(2, "0");
-  const month = d.toLocaleString("en-US", { month: "short", timeZone: "UTC" });
-  const year = d.getUTCFullYear();
-  return `${day} ${month} ${year}`;
 }
 
 function toggleTag(tag: string) {
@@ -336,7 +327,7 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
       <div class="date-field">
         From
         <span class="date-val">{{
-          formatDisplayDate(dateFrom) || "mm/dd/yyyy"
+          formatDayMonthYear(dateFrom) || "mm/dd/yyyy"
         }}</span>
         <span class="date-icon-wrap">
           <input v-model="dateFrom" type="date" class="date-native" />
@@ -359,7 +350,7 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
       <div class="date-field">
         To
         <span class="date-val">{{
-          formatDisplayDate(dateTo) || "mm/dd/yyyy"
+          formatDayMonthYear(dateTo) || "mm/dd/yyyy"
         }}</span>
         <span class="date-icon-wrap">
           <input v-model="dateTo" type="date" class="date-native" />

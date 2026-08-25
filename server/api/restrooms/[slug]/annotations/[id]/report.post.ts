@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { useDb, schema } from "~~/server/utils/db";
 import { requireActiveUser } from "~~/server/utils/requireActiveUser";
 import { rateLimitByUser } from "~~/server/utils/rateLimit";
+import { getRouterId, getRouterString } from "~~/server/utils/routeParams";
 
 export default defineEventHandler(async (event) => {
   const user = requireActiveUser(event);
@@ -10,10 +11,8 @@ export default defineEventHandler(async (event) => {
     windowSec: 86400,
   });
 
-  const slug = getRouterParam(event, "slug");
-  const id = Number(getRouterParam(event, "id"));
-  if (!slug || !id)
-    throw createError({ statusCode: 400, statusMessage: "Missing slug or id" });
+  const slug = getRouterString(event, "slug");
+  const id = getRouterId(event);
 
   const db = useDb(event);
 

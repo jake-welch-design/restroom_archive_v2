@@ -1,7 +1,10 @@
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { useDb, schema } from "~~/server/utils/db";
 import { requireRole } from "~~/server/utils/requireRole";
 import { recordAdminAction } from "~~/server/utils/auditLog";
+import { getRouterId } from "~~/server/utils/routeParams";
+import { deleteRestroomBlobs } from "~~/server/utils/r2";
+import { now } from "~~/server/utils/sqlTime";
 
 // Grants a removal request: the entry leaves the archive and the request leaves
 // the queue. Deliberately not `reject` — that status means "this submission
@@ -10,8 +13,7 @@ import { recordAdminAction } from "~~/server/utils/auditLog";
 export default defineEventHandler(async (event) => {
   requireRole(event, "admin");
 
-  const id = Number(getRouterParam(event, "id"));
-  if (!id) throw createError({ statusCode: 400, statusMessage: "Invalid id" });
+  const id = getRouterId(event);
 
   const db = useDb(event);
 
@@ -21,7 +23,7 @@ export default defineEventHandler(async (event) => {
       status: "removed",
       removalRequestedBy: null,
       removalReason: null,
-      updatedAt: sql`(datetime('now'))`,
+      updatedAt: now(),
     })
     .where(eq(schema.restrooms.id, id))
     .returning({
@@ -34,14 +36,9 @@ export default defineEventHandler(async (event) => {
   if (!row)
     throw createError({ statusCode: 404, statusMessage: "Restroom not found" });
 
-  // The point of an honoured removal is that the scan itself is gone, not just
-  // delisted — drop the R2 blobs the same way a rejection does.
-  const env = event.context.cloudflare?.env as
-    { MODELS?: R2Bucket; THUMBS?: R2Bucket } | undefined;
-  await Promise.allSettled([
-    env?.MODELS?.delete(row.file),
-    row.thumbKey ? env?.THUMBS?.delete(row.thumbKey) : Promise.resolve(),
-  ]);
+  // The point of honouring a removal request is that the scan itself is gone,
+  // not merely delisted, so the blobs go the same way a rejection's do.
+  await deleteRestroomBlobs(event, row);
 
   await recordAdminAction(event, "restroom.remove", "restroom", id);
 

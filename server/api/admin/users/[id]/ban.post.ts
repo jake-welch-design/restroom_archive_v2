@@ -1,9 +1,11 @@
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { useDb, schema } from "~~/server/utils/db";
 import { requireRole } from "~~/server/utils/requireRole";
 import { adminMessagePatch } from "~~/server/utils/adminMessage";
 import { recordAdminAction } from "~~/server/utils/auditLog";
+import { getRouterId } from "~~/server/utils/routeParams";
+import { now } from "~~/server/utils/sqlTime";
 
 const Body = z.object({
   message: z.string().max(500).optional(),
@@ -12,8 +14,7 @@ const Body = z.object({
 export default defineEventHandler(async (event) => {
   const actor = requireRole(event, "admin");
 
-  const id = Number(getRouterParam(event, "id"));
-  if (!id) throw createError({ statusCode: 400, statusMessage: "Invalid id" });
+  const id = getRouterId(event);
   if (id === actor.id)
     throw createError({
       statusCode: 400,
@@ -41,7 +42,7 @@ export default defineEventHandler(async (event) => {
   await db
     .update(schema.users)
     .set({
-      bannedAt: sql`(datetime('now'))`,
+      bannedAt: now(),
       ...adminMessagePatch(body.message),
     })
     .where(eq(schema.users.id, id));
@@ -51,7 +52,7 @@ export default defineEventHandler(async (event) => {
   // the action is reversible (e.g. by manually flipping the status back).
   await db
     .update(schema.restrooms)
-    .set({ status: "hidden", updatedAt: sql`(datetime('now'))` })
+    .set({ status: "hidden", updatedAt: now() })
     .where(eq(schema.restrooms.submittedBy, id));
 
   await recordAdminAction(

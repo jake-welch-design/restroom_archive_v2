@@ -4,6 +4,7 @@ import { useDb, schema } from "~~/server/utils/db";
 import { requireApproved } from "~~/server/utils/requireApproved";
 import { serializeDescriptors } from "~~/server/utils/descriptors";
 import { rateLimitByUser } from "~~/server/utils/rateLimit";
+import { useR2 } from "~~/server/utils/r2";
 
 const MAX_GLB_BYTES = 50 * 1024 * 1024; // 50 MB
 
@@ -120,15 +121,9 @@ export default defineEventHandler(async (event) => {
       statusMessage: "A restroom with this name/location/date already exists",
     });
 
-  const env = event.context.cloudflare?.env as
-    { MODELS?: R2Bucket } | undefined;
-  if (!env?.MODELS)
-    throw createError({
-      statusCode: 500,
-      statusMessage: 'R2 binding "MODELS" not available',
-    });
+  const models = useR2(event, "MODELS");
 
-  await env.MODELS.put(fileKey, glbPart.data, {
+  await models.put(fileKey, glbPart.data, {
     httpMetadata: {
       contentType: "model/gltf-binary",
       cacheControl: "public, max-age=31536000, immutable",
