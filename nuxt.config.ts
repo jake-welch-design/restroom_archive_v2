@@ -9,6 +9,8 @@ export default defineNuxtConfig({
     "~/assets/css/a11y.css",
     "~/assets/css/scrollbars.css",
     "~/assets/css/forms.css",
+    "~/assets/css/tabs.css",
+    "~/assets/css/account.css",
   ],
 
   nitro: {

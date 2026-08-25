@@ -10,3 +10,4 @@ dist
 *.log
 .DS_Store
 .local-seed.sql
+_*.mjs

@@ -1,456 +1,66 @@
 <script setup lang="ts">
 import { formatDayMonthYear } from "~~/shared/utils/formatDate";
 import { apiErrorMessage } from "~~/shared/utils/apiError";
-import { waitForTurnstileToken } from "~/composables/useTurnstileToken";
+import type { SubTab } from "~/components/AccountSubTabs.vue";
 const {
   user,
   loggedIn,
   canSubmit,
-  submissionRequested,
   isAdmin,
   isMuted,
   mutedUntil,
   adminMessage,
-  refreshSession,
   signout,
 } = useAuth();
 const { previewModelUrl, hasUnsavedSubmission } = useSubmissionPreview();
 
-// No controls strip on this page, so the first header rule grows to meet the
-// layout's `.expand-tab` instead of the tab measuring itself against a strip.
-// `alignEl` is whichever tabs row is mounted: the logged-out auth tabs, or the
-// logged-in account tabs.
+// This page has no controls strip of its own, so instead of the layout's expand
+// tab measuring itself against one, the page's first bordered row grows to meet
+// the tab. See useAlignToStrip.
+//
+// That row is whichever tabs row is mounted: the auth form's when logged out,
+// the account tabs when logged in. The auth form exposes its row rather than
+// the page reaching into the component for it.
 const pageEl = ref<HTMLElement | null>(null);
-const alignEl = ref<HTMLElement | null>(null);
+const authFormRef = ref<{ tabsEl: HTMLElement | null } | null>(null);
+const accountTabsEl = ref<HTMLElement | null>(null);
+const alignEl = computed(
+  () => accountTabsEl.value ?? authFormRef.value?.tabsEl ?? null,
+);
 const alignStyle = useAlignToStrip(pageEl, alignEl);
 
-const SUBMISSION_AGREEMENTS = [
-  "Scans will be complete and without too many holes (excluding mirrored surfaces).",
-  "Scans will be cropped to remove any false spaces caused by reflective surfaces.",
-  "Toilets must be flushed before scanning.",
-  "I will avoid scanning restrooms that aren't private/ a single room. I will never scan if there are other people present.",
-  "I will use my best judgement when submitting. I won't submit anything too traumatizing or gross.",
-  "I agree to always be respectful.",
-];
+// The page keeps these two lists only for the sub-tab counts; the tabs
+// themselves render them. Both are keyed fetches, so this shares one request
+// with the components rather than issuing a second.
+const { data: mySubmissions, refresh: refreshMySubmissions } =
+  useMySubmissions();
+const { refresh: refreshMyAnnotations } = useMyAnnotations();
 
-// -------------- Auth form (logged-out) --------------
-// Sign in, or create a new account. New accounts start as Annotators and can
-// request submission access ("Archivist") from their account page afterwards.
-const authTab = ref<"signin" | "signup">("signin");
-const email = ref("");
-const password = ref("");
-const username = ref("");
-const displayName = ref("");
-const turnstileToken = ref("");
-const authError = ref("");
-const authLoading = ref(false);
-
-async function submitAuth() {
-  if (!(await waitForTurnstileToken(turnstileToken))) {
-    authError.value = "Still verifying — please wait a moment and try again.";
-    return;
-  }
-  authError.value = "";
-  authLoading.value = true;
-  try {
-    const url =
-      authTab.value === "signin" ? "/api/auth/signin" : "/api/auth/signup";
-    const body: Record<string, unknown> = {
-      email: email.value,
-      password: password.value,
-      turnstileToken: turnstileToken.value,
-    };
-    if (authTab.value === "signup") {
-      body.username = username.value;
-      if (displayName.value) body.displayName = displayName.value;
-    }
-    await $fetch(url, { method: "POST", body });
-    await refreshSession();
-  } catch (e: unknown) {
-    authError.value = apiErrorMessage(e, "Something went wrong.");
-    turnstileToken.value = "";
-  } finally {
-    authLoading.value = false;
-  }
-}
-
-function switchTab(tab: "signin" | "signup") {
-  authTab.value = tab;
-  authError.value = "";
-  if (tab === "signin") {
-    username.value = "";
-    displayName.value = "";
-  }
-}
-
-// -------------- Change password --------------
-const changingPassword = ref(false);
-const currentPasswordDraft = ref("");
-const newPasswordDraft = ref("");
-const confirmPasswordDraft = ref("");
-const passwordLoading = ref(false);
-const passwordError = ref("");
-const passwordSuccess = ref(false);
-
-function startChangePassword() {
-  changingPassword.value = true;
-  currentPasswordDraft.value = "";
-  newPasswordDraft.value = "";
-  confirmPasswordDraft.value = "";
-  passwordError.value = "";
-  passwordSuccess.value = false;
-}
-
-function cancelChangePassword() {
-  changingPassword.value = false;
-  currentPasswordDraft.value = "";
-  newPasswordDraft.value = "";
-  confirmPasswordDraft.value = "";
-  passwordError.value = "";
-}
-
-// -------------- Change email --------------
-const changingEmail = ref(false);
-const emailDraft = ref("");
-const emailPasswordDraft = ref("");
-const emailLoading = ref(false);
-const emailError = ref("");
-const emailSuccess = ref(false);
-
-function startChangeEmail() {
-  changingEmail.value = true;
-  emailDraft.value = user.value?.email ?? "";
-  emailPasswordDraft.value = "";
-  emailError.value = "";
-  emailSuccess.value = false;
-}
-
-function cancelChangeEmail() {
-  changingEmail.value = false;
-  emailDraft.value = "";
-  emailPasswordDraft.value = "";
-  emailError.value = "";
-}
-
-async function saveNewEmail() {
-  emailLoading.value = true;
-  emailError.value = "";
-  try {
-    await $fetch("/api/me/email", {
-      method: "PATCH",
-      body: {
-        email: emailDraft.value,
-        currentPassword: emailPasswordDraft.value,
-      },
-    });
-    await refreshSession();
-    changingEmail.value = false;
-    emailPasswordDraft.value = "";
-    emailSuccess.value = true;
-  } catch (e: unknown) {
-    emailError.value = apiErrorMessage(e, "Could not update email.");
-  } finally {
-    emailLoading.value = false;
-  }
-}
-
-// -------------- Delete account --------------
-const deletingAccount = ref(false);
-const deletePasswordDraft = ref("");
-const deleteUsernameConfirm = ref("");
-const deleteLoading = ref(false);
-const deleteError = ref("");
-
-function startDeleteAccount() {
-  deletingAccount.value = true;
-  deletePasswordDraft.value = "";
-  deleteUsernameConfirm.value = "";
-  deleteError.value = "";
-}
-
-function cancelDeleteAccount() {
-  deletingAccount.value = false;
-  deletePasswordDraft.value = "";
-  deleteUsernameConfirm.value = "";
-  deleteError.value = "";
-}
-
-async function confirmDeleteAccount() {
-  const expectedUsername = user.value?.username;
-  if (!expectedUsername) return;
-  if (deleteUsernameConfirm.value !== expectedUsername) {
-    deleteError.value = "Username doesn't match.";
-    return;
-  }
-  deleteLoading.value = true;
-  deleteError.value = "";
-  try {
-    await $fetch("/api/me/delete", {
-      method: "POST",
-      body: { password: deletePasswordDraft.value },
-    });
-  } catch (e: unknown) {
-    deleteError.value = apiErrorMessage(e, "Could not delete account.");
-    return;
-  } finally {
-    deleteLoading.value = false;
-  }
-  // Past this point the account is gone and the server has already cleared the
-  // session, so a failure here is a navigation problem — keeping it inside the
-  // try above reported a successful delete as "Could not delete account."
-  await refreshSession();
-  await navigateTo("/");
-}
-
-async function saveNewPassword() {
-  if (newPasswordDraft.value.length < 8) {
-    passwordError.value = "Password must be at least 8 characters.";
-    return;
-  }
-  if (newPasswordDraft.value !== confirmPasswordDraft.value) {
-    passwordError.value = "Passwords do not match.";
-    return;
-  }
-  passwordLoading.value = true;
-  passwordError.value = "";
-  try {
-    await $fetch("/api/me/password", {
-      method: "PATCH",
-      body: {
-        currentPassword: currentPasswordDraft.value,
-        newPassword: newPasswordDraft.value,
-      },
-    });
-    passwordSuccess.value = true;
-    changingPassword.value = false;
-    currentPasswordDraft.value = "";
-    newPasswordDraft.value = "";
-    confirmPasswordDraft.value = "";
-  } catch (e: unknown) {
-    passwordError.value = apiErrorMessage(e, "Could not update password.");
-  } finally {
-    passwordLoading.value = false;
-  }
-}
-
-// -------------- Display name editor --------------
-const editingDisplayName = ref(false);
-const displayNameDraft = ref("");
-const displayNameLoading = ref(false);
-const displayNameError = ref("");
-const dnInput = ref<HTMLInputElement | null>(null);
-
-function startEditDisplayName() {
-  displayNameDraft.value = user.value?.displayName ?? "";
-  displayNameError.value = "";
-  editingDisplayName.value = true;
-  nextTick(() => dnInput.value?.focus());
-}
-
-async function saveDisplayName() {
-  displayNameLoading.value = true;
-  displayNameError.value = "";
-  try {
-    await $fetch("/api/me", {
-      method: "PATCH",
-      body: { displayName: displayNameDraft.value },
-    });
-    await refreshSession();
-    editingDisplayName.value = false;
-  } catch (e: unknown) {
-    displayNameError.value = apiErrorMessage(e, "Could not save display name.");
-  } finally {
-    displayNameLoading.value = false;
-  }
-}
-
-// -------------- Submission access request --------------
-const agreementChecks = ref<boolean[]>(SUBMISSION_AGREEMENTS.map(() => false));
-const showAgreementForm = ref(false);
-const agreementError = ref("");
-const agreementLoading = ref(false);
-
-const allAgreementsChecked = computed(() =>
-  agreementChecks.value.every((v) => v),
+const publishedCount = computed(
+  () =>
+    (mySubmissions.value ?? []).filter(
+      (r) => r.status === "published" || r.status === "removal_requested",
+    ).length,
 );
 
-function openAgreementForm() {
-  agreementChecks.value = SUBMISSION_AGREEMENTS.map(() => false);
-  agreementError.value = "";
-  showAgreementForm.value = true;
-}
+const inactiveCount = computed(
+  () =>
+    (mySubmissions.value ?? []).filter((r) =>
+      ["pending", "rejected", "hidden", "removed"].includes(r.status),
+    ).length,
+);
 
-async function submitAgreement() {
-  if (!allAgreementsChecked.value) return;
-  agreementError.value = "";
-  agreementLoading.value = true;
-  try {
-    await $fetch("/api/auth/request-submission-access", {
-      method: "POST",
-      body: { agreements: SUBMISSION_AGREEMENTS },
-    });
-    await refreshSession();
-    showAgreementForm.value = false;
-  } catch (e: unknown) {
-    agreementError.value = apiErrorMessage(e, "Could not submit request.");
-  } finally {
-    agreementLoading.value = false;
-  }
-}
-
-// -------------- Submit form --------------
-async function onUploadSubmitted() {
-  await refreshMySubmissions();
-  if (isAdmin.value) {
-    await Promise.all([refreshRestroomQueue(), refreshNuxtData("restrooms")]);
-  }
-}
-
-// -------------- My submissions / annotations --------------
-type MySubmission = {
-  id: number;
-  slug: string;
-  name: string;
-  location: string;
-  date: string;
-  isoDate: string;
-  status: string;
-  createdAt: string;
-  removalRequested: boolean;
-  rejectionMessage: string | null;
-};
-
-type MyAnnotation = {
-  id: number;
-  body: string;
-  createdAt: string;
-  restroomSlug: string;
-  restroomName: string;
-  restroomLocation: string;
-  restroomDate: string;
-};
-
-const { data: mySubmissions, refresh: refreshMySubmissions } = await useFetch<
-  MySubmission[]
->("/api/me/submissions", {
-  server: false,
-  immediate: false,
-  default: () => [],
-});
-
-const { data: myAnnotations, refresh: refreshMyAnnotations } = await useFetch<
-  MyAnnotation[]
->("/api/me/annotations", {
-  server: false,
-  immediate: false,
-  default: () => [],
-});
-
+// The lists are fetched with `immediate: false`, so nothing is requested until
+// the session resolves and there is a user to fetch them for.
 watch(
   loggedIn,
-  async (v) => {
-    if (v) {
+  async (isLoggedIn) => {
+    if (isLoggedIn) {
       await Promise.all([refreshMySubmissions(), refreshMyAnnotations()]);
     }
   },
   { immediate: true },
 );
-
-function submissionStatusLabel(status: string) {
-  if (status === "published") return "Published";
-  if (status === "pending") return "Awaiting review";
-  if (status === "rejected" || status === "hidden") return "Rejected";
-  if (status === "removed") return "Removed at your request";
-  if (status === "removal_requested") return "Removal requested";
-  return status;
-}
-
-const publishedSubmissions = computed(() =>
-  (mySubmissions.value ?? []).filter(
-    (r) => r.status === "published" || r.status === "removal_requested",
-  ),
-);
-
-// Everything that isn't live in the archive: awaiting review, turned down, or
-// taken down after a removal request.
-const inactiveSubmissions = computed(() =>
-  (mySubmissions.value ?? []).filter(
-    (r) =>
-      r.status === "pending" ||
-      r.status === "rejected" ||
-      r.status === "hidden" ||
-      r.status === "removed",
-  ),
-);
-
-const removalSlug = ref<string | null>(null);
-const removalReason = ref("");
-const annotationActionId = ref<number | null>(null);
-const submissionActionId = ref<number | null>(null);
-const myActionError = ref("");
-
-function openRemovalForm(slug: string) {
-  removalSlug.value = slug;
-  removalReason.value = "";
-  myActionError.value = "";
-}
-
-async function submitRemovalRequest(slug: string) {
-  submissionActionId.value =
-    (mySubmissions.value ?? []).find((r) => r.slug === slug)?.id ?? null;
-  myActionError.value = "";
-  try {
-    await $fetch(`/api/restrooms/${slug}/request-removal`, {
-      method: "POST",
-      body: { reason: removalReason.value || undefined },
-    });
-    removalSlug.value = null;
-    removalReason.value = "";
-    await refreshMySubmissions();
-  } catch (e: unknown) {
-    myActionError.value = apiErrorMessage(e, "Could not submit request.");
-  } finally {
-    submissionActionId.value = null;
-  }
-}
-
-async function deleteMyAnnotation(slug: string, id: number) {
-  if (!confirm("Delete this annotation?")) return;
-  annotationActionId.value = id;
-  myActionError.value = "";
-  try {
-    await $fetch(`/api/restrooms/${slug}/annotations/${id}`, {
-      method: "DELETE",
-    });
-    await refreshMyAnnotations();
-  } catch (e: unknown) {
-    myActionError.value = apiErrorMessage(e, "Could not delete annotation.");
-  } finally {
-    annotationActionId.value = null;
-  }
-}
-
-async function dismissRejectedSubmission(
-  slug: string,
-  id: number,
-  status: string,
-) {
-  const msg =
-    status === "pending"
-      ? "Withdraw this pending submission? This cannot be undone."
-      : "Clear this submission from your list?";
-  if (!confirm(msg)) return;
-  submissionActionId.value = id;
-  myActionError.value = "";
-  try {
-    await $fetch(`/api/restrooms/${slug}`, { method: "DELETE" });
-    await refreshMySubmissions();
-  } catch (e: unknown) {
-    myActionError.value = apiErrorMessage(e, "Could not dismiss submission.");
-  } finally {
-    submissionActionId.value = null;
-  }
-}
 
 // -------------- Admin queues --------------
 type PendingRestroom = {
@@ -999,10 +609,6 @@ async function submitRename(a: AccountRow) {
   }
 }
 
-// The signed-in user's own handle. Named to avoid colliding with the
-// `username` ref backing the sign-up form.
-const myUsername = computed(() => user.value?.username ?? "");
-
 const roleLabel = computed(() => {
   if (!user.value) return "";
   if (isAdmin.value) return "Admin";
@@ -1125,7 +731,7 @@ const SUBMISSIONS_SECTIONS: SubmissionsSection[] = [
 const adminSection = ref<AdminSection>("submissions");
 const submissionsSection = ref<SubmissionsSection>("new");
 
-const adminSubTabs = computed(() => [
+const adminSubTabs = computed<SubTab[]>(() => [
   {
     id: "submissions",
     label: "Submissions",
@@ -1147,17 +753,17 @@ const adminSubTabs = computed(() => [
   { id: "audit", label: "Audit" },
 ]);
 
-const submissionsSubTabs = computed(() => [
+const submissionsSubTabs = computed<SubTab[]>(() => [
   { id: "new", label: "New" },
   {
     id: "published",
     label: "Published",
-    count: publishedSubmissions.value.length,
+    count: publishedCount.value,
   },
   {
     id: "pending",
     label: "Pending",
-    count: inactiveSubmissions.value.length,
+    count: inactiveCount.value,
   },
 ]);
 
@@ -1236,122 +842,7 @@ watch(
   <div ref="pageEl" class="account-page" :style="alignStyle">
     <CatalogHeader />
 
-    <!-- Logged-out: auth forms -->
-    <div v-if="!loggedIn" class="body-section thin-scroll">
-      <div ref="alignEl" class="auth-tabs">
-        <button
-          type="button"
-          class="tab-btn"
-          :class="{ active: authTab === 'signin' }"
-          @click="switchTab('signin')"
-        >
-          Sign in
-        </button>
-        <button
-          type="button"
-          class="tab-btn"
-          :class="{ active: authTab === 'signup' }"
-          @click="switchTab('signup')"
-        >
-          Create account
-        </button>
-      </div>
-
-      <div v-if="authTab === 'signup'" class="signup-intro">
-        <h2 class="signup-intro-title">Become an archivist</h2>
-        <p>Leave annotations and submit restrooms to be part of the archive.</p>
-      </div>
-
-      <form class="form" @submit.prevent="submitAuth">
-        <label class="field">
-          <span class="field-label">Email</span>
-          <input
-            v-model="email"
-            type="email"
-            required
-            autocomplete="email"
-            class="field-input"
-          />
-        </label>
-
-        <label v-if="authTab === 'signup'" class="field">
-          <span class="field-label">Username</span>
-          <input
-            v-model="username"
-            type="text"
-            required
-            autocomplete="username"
-            minlength="3"
-            maxlength="20"
-            pattern="[a-z0-9_]+"
-            class="field-input"
-          />
-          <span class="field-hint"
-            >3–20 lowercase letters, numbers, or underscores. Cannot be
-            changed.</span
-          >
-        </label>
-
-        <label v-if="authTab === 'signup'" class="field">
-          <span class="field-label">Display name (optional)</span>
-          <input
-            v-model="displayName"
-            type="text"
-            autocomplete="name"
-            maxlength="25"
-            class="field-input"
-          />
-        </label>
-
-        <label class="field">
-          <span class="field-label">Password</span>
-          <input
-            v-model="password"
-            type="password"
-            required
-            :autocomplete="
-              authTab === 'signup' ? 'new-password' : 'current-password'
-            "
-            class="field-input"
-          />
-        </label>
-        <p v-if="authTab === 'signup'" class="field-hint">
-          Minimum 8 characters.
-        </p>
-
-        <NuxtTurnstile
-          v-model="turnstileToken"
-          class="turnstile"
-          :options="{ theme: 'light', appearance: 'interaction-only' }"
-        />
-
-        <p v-if="authError" class="form-error">{{ authError }}</p>
-
-        <button
-          type="submit"
-          class="primary-btn"
-          :disabled="authLoading || !turnstileToken"
-        >
-          {{
-            authLoading
-              ? "…"
-              : !turnstileToken
-                ? "Verifying…"
-                : authTab === "signin"
-                  ? "Sign in"
-                  : "Create account"
-          }}
-        </button>
-
-        <NuxtLink
-          v-if="authTab === 'signin'"
-          to="/forgot-password"
-          class="forgot-password-link"
-        >
-          Forgot your password?
-        </NuxtLink>
-      </form>
-    </div>
+    <AccountAuthForm v-if="!loggedIn" ref="authFormRef" />
 
     <!-- Logged-in -->
     <div v-else class="body-section thin-scroll">
@@ -1381,7 +872,7 @@ watch(
 
       <!-- Bottom row is what the expand tab frames — same band position, and
            same flat/color-only styling, as the Info page's tabs. -->
-      <nav ref="alignEl" class="account-tabs" role="tablist">
+      <nav ref="accountTabsEl" class="account-tabs" role="tablist">
         <button
           v-if="isAdmin"
           type="button"
@@ -1443,511 +934,23 @@ watch(
 
       <!-- Profile -->
       <div v-if="accountTab === 'profile'" class="tab-panel" role="tabpanel">
-        <div class="settings-list form-column">
-          <!-- Name -->
-          <div class="settings-row">
-            <span class="settings-label">Name</span>
-            <template v-if="!editingDisplayName">
-              <span class="settings-value">
-                <template v-if="user?.displayName">{{
-                  user.displayName
-                }}</template>
-                <span v-else class="dim">Not set</span>
-              </span>
-              <button
-                type="button"
-                class="btn settings-change"
-                @click="startEditDisplayName"
-              >
-                Change
-              </button>
-            </template>
-            <form
-              v-else
-              class="settings-edit"
-              @submit.prevent="saveDisplayName"
-            >
-              <label class="field">
-                <span class="field-label">Display name</span>
-                <input
-                  ref="dnInput"
-                  v-model="displayNameDraft"
-                  type="text"
-                  maxlength="25"
-                  class="field-input"
-                  placeholder="Blank to clear"
-                  @keydown.esc="editingDisplayName = false"
-                />
-                <span class="field-hint"
-                  >Shown instead of @{{ user?.username }}.</span
-                >
-              </label>
-              <p v-if="displayNameError" class="form-error">
-                {{ displayNameError }}
-              </p>
-              <div class="settings-edit-actions">
-                <button
-                  type="submit"
-                  class="primary-btn btn-sm"
-                  :disabled="displayNameLoading"
-                >
-                  {{ displayNameLoading ? "…" : "Save" }}
-                </button>
-                <button
-                  type="button"
-                  class="link-btn"
-                  @click="editingDisplayName = false"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
-
-          <!-- Email -->
-          <div class="settings-row">
-            <span class="settings-label">Email</span>
-            <template v-if="!changingEmail">
-              <span class="settings-value">{{ user?.email }}</span>
-              <span v-if="emailSuccess" class="password-success">Updated.</span>
-              <button
-                type="button"
-                class="btn settings-change"
-                @click="startChangeEmail"
-              >
-                Change
-              </button>
-            </template>
-            <form v-else class="settings-edit" @submit.prevent="saveNewEmail">
-              <label class="field">
-                <span class="field-label">New email</span>
-                <input
-                  v-model="emailDraft"
-                  type="email"
-                  required
-                  autocomplete="email"
-                  class="field-input"
-                />
-              </label>
-              <label class="field">
-                <span class="field-label">Current password</span>
-                <input
-                  v-model="emailPasswordDraft"
-                  type="password"
-                  required
-                  autocomplete="current-password"
-                  class="field-input"
-                />
-                <span class="field-hint"
-                  >Confirm it's you before changing your email.</span
-                >
-              </label>
-              <p v-if="emailError" class="form-error">{{ emailError }}</p>
-              <div class="settings-edit-actions">
-                <button
-                  type="submit"
-                  class="primary-btn btn-sm"
-                  :disabled="emailLoading"
-                >
-                  {{ emailLoading ? "Saving…" : "Update email" }}
-                </button>
-                <button
-                  type="button"
-                  class="link-btn"
-                  :disabled="emailLoading"
-                  @click="cancelChangeEmail"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
-
-          <!-- Password -->
-          <div class="settings-row">
-            <span class="settings-label">Password</span>
-            <template v-if="!changingPassword">
-              <span class="settings-value settings-dots">••••••••••</span>
-              <span v-if="passwordSuccess" class="password-success"
-                >Updated.</span
-              >
-              <button
-                type="button"
-                class="btn settings-change"
-                @click="startChangePassword"
-              >
-                Change
-              </button>
-            </template>
-            <form
-              v-else
-              class="settings-edit"
-              @submit.prevent="saveNewPassword"
-            >
-              <label class="field">
-                <span class="field-label">Current password</span>
-                <input
-                  v-model="currentPasswordDraft"
-                  type="password"
-                  autocomplete="current-password"
-                  required
-                  class="field-input"
-                />
-              </label>
-              <label class="field">
-                <span class="field-label">New password</span>
-                <input
-                  v-model="newPasswordDraft"
-                  type="password"
-                  autocomplete="new-password"
-                  required
-                  minlength="8"
-                  class="field-input"
-                />
-                <span class="field-hint">Minimum 8 characters.</span>
-              </label>
-              <label class="field">
-                <span class="field-label">Confirm new password</span>
-                <input
-                  v-model="confirmPasswordDraft"
-                  type="password"
-                  autocomplete="new-password"
-                  required
-                  minlength="8"
-                  class="field-input"
-                />
-              </label>
-              <p v-if="passwordError" class="form-error">
-                {{ passwordError }}
-              </p>
-              <div class="settings-edit-actions">
-                <button
-                  type="submit"
-                  class="primary-btn btn-sm"
-                  :disabled="passwordLoading"
-                >
-                  {{ passwordLoading ? "Saving…" : "Update password" }}
-                </button>
-                <button
-                  type="button"
-                  class="link-btn"
-                  :disabled="passwordLoading"
-                  @click="cancelChangePassword"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
-
-          <!-- Delete account. Self-service and immediate — no admin approval
-               step sits behind this, so the label mustn't imply one. -->
-          <div v-if="!isAdmin" class="settings-row settings-row-danger">
-            <span class="settings-label">Delete</span>
-            <template v-if="!deletingAccount">
-              <span class="settings-value dim"
-                >Permanently remove your account</span
-              >
-              <button
-                type="button"
-                class="btn btn-danger-outline settings-change"
-                @click="startDeleteAccount"
-              >
-                Delete account
-              </button>
-            </template>
-            <form
-              v-else
-              class="settings-edit"
-              @submit.prevent="confirmDeleteAccount"
-            >
-              <p class="danger-warning">
-                This will permanently remove your account, your annotations, and
-                any pending submissions. Published restrooms you submitted will
-                stay in the archive but will no longer show your name.
-                <strong>This cannot be undone.</strong>
-              </p>
-              <label class="field">
-                <span class="field-label">
-                  Type your username
-                  <code class="confirm-code">{{ myUsername }}</code>
-                  to confirm
-                </span>
-                <input
-                  v-model="deleteUsernameConfirm"
-                  type="text"
-                  autocomplete="off"
-                  required
-                  class="field-input"
-                />
-              </label>
-              <label class="field">
-                <span class="field-label">Current password</span>
-                <input
-                  v-model="deletePasswordDraft"
-                  type="password"
-                  autocomplete="current-password"
-                  required
-                  class="field-input"
-                />
-              </label>
-              <p v-if="deleteError" class="form-error">{{ deleteError }}</p>
-              <div class="settings-edit-actions">
-                <button
-                  type="submit"
-                  class="danger-btn btn-sm"
-                  :disabled="deleteLoading"
-                >
-                  {{
-                    deleteLoading ? "Deleting…" : "Permanently delete account"
-                  }}
-                </button>
-                <button
-                  type="button"
-                  class="link-btn"
-                  :disabled="deleteLoading"
-                  @click="cancelDeleteAccount"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <AccountProfile />
       </div>
 
-      <!-- Submissions -->
       <div
         v-if="accountTab === 'submissions'"
         class="tab-panel"
         role="tabpanel"
       >
-        <p v-if="myActionError" class="form-error action-error">
-          {{ myActionError }}
-        </p>
-
-        <!-- New submission -->
-        <div v-show="submissionsSection === 'new'">
-          <!-- Approved: submit form -->
-          <SubmitWizard v-if="canSubmit" @submitted="onUploadSubmitted" />
-
-          <!-- Awaiting submission approval -->
-          <div v-else-if="submissionRequested" class="awaiting">
-            <p>
-              Your request to submit restrooms is awaiting admin review. You can
-              leave annotations on any restroom in the meantime.
-            </p>
-          </div>
-
-          <!-- Submission access request flow -->
-          <div v-else class="form-column">
-            <div v-if="!showAgreementForm" class="request-cta">
-              <p class="request-cta-copy">
-                You can leave annotations on any restroom. To submit your own
-                restroom scans, request access below.
-              </p>
-              <button
-                type="button"
-                class="primary-btn"
-                @click="openAgreementForm"
-              >
-                Request access to submit restroom scans
-              </button>
-            </div>
-
-            <form
-              v-else
-              class="agreement-form"
-              @submit.prevent="submitAgreement"
-            >
-              <p class="agreement-intro">
-                I agree to abide by the following guidelines when submitting
-                restrooms:
-              </p>
-              <label
-                v-for="(text, i) in SUBMISSION_AGREEMENTS"
-                :key="i"
-                class="agreement-row"
-              >
-                <input
-                  v-model="agreementChecks[i]"
-                  type="checkbox"
-                  class="agreement-check"
-                />
-                <span>{{ text }}</span>
-              </label>
-              <p class="agreement-note">
-                Admins reserve the right to deny, remove, and edit any
-                submissions as they see fit, without notice. By submitting this
-                request, you agree to these terms.
-              </p>
-
-              <p v-if="agreementError" class="form-error">
-                {{ agreementError }}
-              </p>
-
-              <div class="agreement-actions">
-                <button
-                  type="button"
-                  class="link-btn"
-                  @click="showAgreementForm = false"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  class="primary-btn"
-                  :disabled="!allAgreementsChecked || agreementLoading"
-                >
-                  {{ agreementLoading ? "…" : "Submit request" }}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-
-        <!-- Published -->
-        <div v-show="submissionsSection === 'published'">
-          <div v-if="!publishedSubmissions.length" class="empty">
-            No approved submissions yet.
-          </div>
-          <ul v-else class="simple-list">
-            <li
-              v-for="r in publishedSubmissions"
-              :key="r.id"
-              class="simple-row"
-            >
-              <div class="simple-main">
-                <NuxtLink class="simple-title link" :to="`/r/${r.slug}`">{{
-                  r.name
-                }}</NuxtLink>
-                <span class="simple-meta">{{ r.date }} · {{ r.location }}</span>
-                <span v-if="r.removalRequested" class="simple-meta"
-                  >Removal requested</span
-                >
-
-                <div v-if="removalSlug === r.slug" class="inline-removal-form">
-                  <textarea
-                    v-model="removalReason"
-                    class="field-input field-textarea"
-                    placeholder="Reason (optional)"
-                    rows="2"
-                    maxlength="500"
-                  />
-                  <div class="inline-actions">
-                    <button
-                      type="button"
-                      class="link-btn"
-                      @click="removalSlug = null"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      class="btn btn-reject"
-                      :disabled="submissionActionId === r.id"
-                      @click="submitRemovalRequest(r.slug)"
-                    >
-                      {{ submissionActionId === r.id ? "…" : "Submit" }}
-                    </button>
-                  </div>
-                </div>
-              </div>
-              <div
-                v-if="!r.removalRequested && removalSlug !== r.slug"
-                class="simple-actions"
-              >
-                <button
-                  type="button"
-                  class="btn btn-reject"
-                  @click="openRemovalForm(r.slug)"
-                >
-                  Request removal
-                </button>
-              </div>
-            </li>
-          </ul>
-        </div>
-
-        <!-- Pending -->
-        <div v-show="submissionsSection === 'pending'">
-          <div v-if="!inactiveSubmissions.length" class="empty">
-            Nothing awaiting review.
-          </div>
-          <ul v-else class="simple-list">
-            <li v-for="r in inactiveSubmissions" :key="r.id" class="simple-row">
-              <div class="simple-main">
-                <span class="simple-title">{{ r.name }}</span>
-                <span class="simple-meta"
-                  >{{ r.date }} · {{ r.location }} ·
-                  {{ submissionStatusLabel(r.status) }}</span
-                >
-                <span
-                  v-if="r.status === 'rejected' && r.rejectionMessage"
-                  class="simple-meta rejection-msg"
-                  >{{ r.rejectionMessage }}</span
-                >
-              </div>
-              <div class="simple-actions">
-                <button
-                  type="button"
-                  class="icon-btn"
-                  :disabled="submissionActionId === r.id"
-                  :title="
-                    r.status === 'pending'
-                      ? 'Withdraw submission'
-                      : 'Clear from list'
-                  "
-                  @click="dismissRejectedSubmission(r.slug, r.id, r.status)"
-                >
-                  {{ submissionActionId === r.id ? "…" : "✕" }}
-                </button>
-              </div>
-            </li>
-          </ul>
-        </div>
+        <AccountSubmissions :section="submissionsSection" />
       </div>
 
-      <!-- Annotations -->
       <div
         v-if="accountTab === 'annotations'"
         class="tab-panel"
         role="tabpanel"
       >
-        <p v-if="myActionError" class="form-error action-error">
-          {{ myActionError }}
-        </p>
-
-        <!-- My annotations -->
-        <div v-if="!myAnnotations?.length" class="empty">
-          No annotations yet.
-        </div>
-        <ul v-else class="simple-list">
-          <li v-for="a in myAnnotations" :key="a.id" class="simple-row">
-            <div class="simple-main">
-              <NuxtLink
-                class="simple-title link"
-                :to="`/r/${a.restroomSlug}`"
-                >{{ a.restroomName }}</NuxtLink
-              >
-              <span class="simple-meta annotation-body">{{ a.body }}</span>
-              <span class="simple-meta"
-                >{{ a.restroomDate }} · {{ a.restroomLocation }}</span
-              >
-            </div>
-            <div class="simple-actions">
-              <button
-                type="button"
-                class="icon-btn"
-                :disabled="annotationActionId === a.id"
-                title="Delete annotation"
-                @click="deleteMyAnnotation(a.restroomSlug, a.id)"
-              >
-                {{ annotationActionId === a.id ? "…" : "✕" }}
-              </button>
-            </div>
-          </li>
-        </ul>
+        <AccountAnnotations />
       </div>
 
       <!-- Admin -->
@@ -2677,21 +1680,20 @@ watch(
 }
 
 /* Full-bleed rules: the header stack pulls out to the panel edges and puts the
-   gutter back as padding, so the borders span the panel like the catalog's
-   sub-header while the content stays on the same left edge as everything else. */
+   gutter back as padding, so the borders span the panel the way the catalog's
+   sub-header does, while the content stays on the same left edge as everything
+   else. */
 .account-header,
-.account-tabs,
-.auth-tabs {
+.account-tabs {
   margin-inline: calc(-1 * var(--gutter));
   padding-inline: var(--gutter);
 }
 
-/* The first row closes the gutter above it too, so the band it starts starts
-   flush under the site header's border — the catalog's `.controls` starts
-   flush under the header the same way. Skipped when the admin banner takes
-   first place, since the row is then not what the tab frames. */
-.body-section > .account-header:first-child,
-.body-section > .auth-tabs:first-child {
+/* The first row closes the gutter above it as well, so the band it starts sits
+   flush under the site header's border, the way the catalog's controls strip
+   does. Skipped when the admin banner takes first place, since the row is then
+   not what the expand tab frames. */
+.body-section > .account-header:first-child {
   margin-top: calc(-1 * var(--gutter));
 }
 
@@ -2726,44 +1728,6 @@ watch(
 
 /* Caps the width of anything that reads as a form, so settings rows and
    checklists don't stretch the full panel on a wide viewport. */
-.form-column {
-  max-width: 480px;
-}
-
-/* Auth tabs — underlined, sentence case, weight 400, like the catalog nav.
-   Logged-out only; they're the first header row, so they're what grows to end
-   level with the expand tab — see useAlignToStrip. The buttons stretch with
-   the row, keeping the active underline on the rule. */
-.auth-tabs {
-  display: flex;
-  margin-bottom: 16px;
-  border-bottom: 1px solid #000;
-  overflow-x: auto;
-  box-sizing: border-box;
-  min-height: var(--strip-align-height, 0px);
-}
-.tab-btn {
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid transparent;
-  margin-bottom: -1px;
-  padding: 6px 14px 7px;
-  font: inherit;
-  font-size: 15px;
-  cursor: pointer;
-  color: #999;
-}
-.tab-btn:first-child {
-  padding-left: 0;
-}
-.tab-btn:hover:not(.active) {
-  color: #595959;
-}
-.tab-btn.active {
-  color: #000;
-  border-bottom-color: #000;
-}
-
 /* Account tabs — bottom of the band the expand tab frames (see
    useAlignToStrip), same position as the Info page's tabs. Styled the same
    flat, color-only way: `.tab-btn`'s #999/#595959/#000 states already match
@@ -2805,88 +1769,13 @@ watch(
 /* Settings rows — label stacked over value, action on the right. Used by the
    Profile tab and by the admin account controls, which are the same kind of
    thing seen from the other side. */
-.settings-list {
-  display: flex;
-  flex-direction: column;
-}
-.settings-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 2px 12px;
-  padding: 12px 0;
-  border-bottom: 1px solid #e8e8e8;
-}
-.settings-row:last-child {
-  border-bottom: 0;
-}
-.settings-label {
-  flex: 1 1 100%;
-  font-size: 12px;
-  color: #666;
-}
-.settings-value {
-  flex: 1 1 auto;
-  min-width: 0;
-  word-break: break-word;
-}
-.settings-dots {
-  letter-spacing: 2px;
-}
-.settings-change {
-  flex: 0 0 auto;
-  margin-left: auto;
-}
-.settings-edit {
-  flex: 1 1 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-top: 8px;
-  max-width: 340px;
-}
-.settings-edit-actions {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-}
 /* Explains what a row's action does, on its own line under it — the row is
    `flex-wrap`, so a full-basis child always breaks below the button. */
-.settings-note {
-  flex: 1 1 100%;
-  margin-top: 2px;
-  font-size: 11px;
-  color: #999;
-}
 /* Rows whose action can't be walked back. Only the label carries the colour —
    a full red row would shout louder than a ban warrants at rest. */
-.settings-row-danger .settings-label {
-  color: #c33;
-}
 /* Named runs of rows. The heading is the micro step so it groups the rows
    without competing with their labels. */
-.settings-group {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.settings-group-label {
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: #999;
-}
-
 /* Banners */
-.awaiting {
-  background: #f4f4f4;
-  padding: 12px;
-  color: #000;
-  margin-bottom: 16px;
-}
-.awaiting p {
-  margin: 0;
-}
 .muted-banner {
   background: #fff4e5;
 }
@@ -2900,241 +1789,19 @@ watch(
   font-weight: 700;
   margin-right: 4px;
 }
-.danger-warning {
-  margin: 0;
-  color: #000;
-  background: #fbeaea;
-  border-left: 3px solid #c33;
-  padding: 8px 12px;
-}
-
 /* Sign-up intro */
-.signup-intro {
-  margin-bottom: 16px;
-  max-width: 340px;
-}
-.signup-intro-title {
-  margin: 0 0 8px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #000;
-  font-size: 15px;
-  font-weight: 400;
-}
-.signup-intro p {
-  margin: 0;
-  font-size: 12px;
-  color: #666;
-}
-
 /* Submission access request */
-.request-cta {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.request-cta-copy {
-  margin: 0;
-  font-size: 12px;
-  color: #666;
-}
-.agreement-form {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.agreement-intro {
-  margin: 0;
-}
-.agreement-row {
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-  cursor: pointer;
-}
-.agreement-check {
-  margin-top: 2px;
-  flex-shrink: 0;
-}
-.agreement-note {
-  margin: 4px 0 0;
-  font-size: 12px;
-  color: #666;
-}
-.agreement-actions {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  margin-top: 4px;
-}
-
 /* Shared form */
-.action-error {
-  margin-bottom: 12px;
-}
-.password-success {
-  color: #666;
-  font-style: italic;
-}
-
 /* Buttons — row-level actions (Change, Save, Cancel, admin queue actions) sit
    at 12px with tight padding so they match the labels they sit beside rather
    than outweighing them. Only the primary/danger CTAs stay content-level. */
-.danger-btn:disabled,
-.btn:disabled,
-.icon-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.danger-btn {
-  background: #c33;
-  color: #fff;
-  border: 0;
-  padding: 8px 18px;
-  font: inherit;
-  cursor: pointer;
-  align-self: flex-start;
-}
-.danger-btn:hover:not(:disabled) {
-  background: #a22;
-}
-.btn {
-  background: transparent;
-  border: 1px solid #000;
-  padding: 3px 8px;
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-}
-.btn.active {
-  background: #000;
-  color: #fff;
-}
-.btn-sm {
-  padding: 3px 10px;
-  font-size: 12px;
-}
-.btn-publish:hover:not(:disabled) {
-  background: #000;
-  color: #fff;
-}
-.btn-reject:hover:not(:disabled) {
-  background: #c33;
-  border-color: #c33;
-  color: #fff;
-}
-.btn-danger-outline {
-  border: 1px solid #c33;
-  color: #c33;
-  background: transparent;
-  padding: 3px 8px;
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-}
-.btn-danger-outline:hover {
-  background: #c33;
-  color: #fff;
-}
-.btn-delete {
-  border-color: #999;
-  color: #666;
-  font-size: 12px;
-  padding: 3px 8px;
-}
-.btn-delete:hover:not(:disabled) {
-  background: #c33;
-  border-color: #c33;
-  color: #fff;
-}
 /* Row-level actions sit a step below the content they label, so the shared
    link button is tightened and stepped down here rather than page-wide. */
-.link-btn {
-  padding: 2px 4px;
-  font-size: 12px;
-}
 /* An anchor, not a button, so it takes none of the shared .link-btn reset and
    states the ink colour itself rather than inheriting the user agent's blue. */
-.forgot-password-link {
-  align-self: flex-start;
-  font-size: 12px;
-  color: #000;
-  text-decoration: underline;
-}
-.icon-btn {
-  background: transparent;
-  border: none;
-  width: 22px;
-  height: 22px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font: inherit;
-  font-size: 11px;
-  cursor: pointer;
-  padding: 0;
-  color: #000;
-}
-.icon-btn:hover:not(:disabled) {
-  color: #ff0000;
-}
-
 /* Counts, pills and chips — the micro step. */
-.count {
-  font-size: 11px;
-  background: #000;
-  color: #fff;
-  border-radius: 6px;
-  padding: 1px 6px;
-}
-.pill {
-  display: inline-block;
-  font-size: 11px;
-  line-height: 1.4;
-  padding: 1px 6px;
-  border-radius: 3px;
-  margin-right: 4px;
-  color: #fff;
-}
-.pill-hidden {
-  background: #666;
-}
-.pill-reported {
-  background: #c33;
-}
 /* Account status badges: filled = a standing fact about the account, outlined
    = something waiting on an admin. */
-.pill-role {
-  background: #000;
-}
-.pill-neutral {
-  background: #999;
-}
-.pill-warn {
-  background: #c60;
-}
-.pill-danger {
-  background: #c33;
-}
-.pill-outline {
-  background: transparent;
-  color: #666;
-  box-shadow: inset 0 0 0 1px #999;
-}
-.admin-tag {
-  display: inline-block;
-  background: #000;
-  color: #fff;
-  font-size: 11px;
-  line-height: 1.2;
-  padding: 2px 6px;
-  margin: 0 4px 4px 0;
-  border-radius: 0;
-}
-.empty {
-  color: #666;
-  font-size: 12px;
-}
-
 /* Pending submission queue — the catalog's expand-in-place row, so the
    admin list reads the same way the public browse list does. */
 .queue {
@@ -3202,69 +1869,14 @@ dd {
 }
 
 /* Row lists */
-.simple-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  border-top: 1px solid #e8e8e8;
-}
-.simple-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 0;
-  border-bottom: 1px solid #e8e8e8;
-}
-.simple-row.is-hidden .simple-main {
-  opacity: 0.55;
-}
-.simple-main {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.simple-title.link {
-  color: #000;
-  text-decoration: underline;
-}
-.simple-meta {
-  font-size: 12px;
-  color: #666;
-}
-.simple-meta.reason,
-.simple-meta.annotation-body {
-  color: #000;
-}
-.simple-meta.annotation-body {
-  white-space: pre-wrap;
-}
-.simple-actions {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
-  align-items: center;
-}
-.inline-removal-form,
 .inline-reject-form {
   display: flex;
   flex-direction: column;
   gap: 8px;
-}
-.inline-removal-form {
-  margin-top: 8px;
 }
 .inline-reject-form {
   padding: 8px 0 4px;
 }
-.inline-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
 /* Audit log */
 .audit-action {
   color: #000;
@@ -3279,13 +1891,6 @@ dd {
   color: #666;
   word-break: break-word;
 }
-.confirm-code {
-  font-family: ui-monospace, Menlo, monospace;
-  background: #f4f4f4;
-  padding: 1px 5px;
-  font-size: 12px;
-}
-
 /* Admin accounts list */
 .account-row {
   display: flex;
@@ -3325,11 +1930,6 @@ dd {
   font: inherit;
 }
 .admin-msg-preview,
-.rejection-msg {
-  color: #c33;
-  font-style: italic;
-}
-
 /* Same panel-width step as the catalog and its header — these all track how
    much room the panel has, so they follow its width rather than the window's. */
 @container panel (max-width: 560px) {
@@ -3359,14 +1959,12 @@ dd {
 
 /* Sheet layout and touch behaviour — neither follows the panel's width. */
 @media (max-width: 750px) {
-  /* The tab moves to the panel's bottom edge here — nothing to align to, so
-     the row keeps its natural height and the normal gutter above it. */
-  .account-tabs,
-  .auth-tabs {
+  /* The expand tab moves to the panel's bottom edge here, so there is nothing
+     to align to. The row keeps its natural height and its normal gutter. */
+  .account-tabs {
     min-height: 0;
   }
-  .body-section > .account-header:first-child,
-  .body-section > .auth-tabs:first-child {
+  .body-section > .account-header:first-child {
     margin-top: 0;
   }
 }

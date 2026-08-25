@@ -1,0 +1,387 @@
+/* The account area's design system.
+   ---------------------------------------------------------------------------
+   Shared by the account page and every component under components/account/.
+   Global rather than scoped for the same reason forms.css is: the page and its
+   children are separate components now, and a scoped block cannot cross that
+   boundary. Splitting the page without moving these left the settings rows
+   unstyled, because a parent's scoped styles do not reach a child's markup.
+
+   Type scale, four steps, each with one job. Nothing in the account area should
+   introduce a fifth:
+
+     15px  identity and main tabs   (the only "large" text)
+     13px  content: titles, values, prose, buttons, inputs   (the inherited base)
+     12px  support: labels, meta, column heads, sub-tabs
+     11px  micro: counts, pills, chips, hints
+
+   Spacing runs on a 4px grid: 4 / 8 / 12 / 16 / 20. */
+
+/* --- Measure ------------------------------------------------------------- */
+
+/* Caps anything that reads as a form, so settings rows and checklists do not
+   stretch the full panel on a wide viewport. */
+.form-column {
+  max-width: 480px;
+}
+
+/* --- Settings rows -------------------------------------------------------- */
+/* Label stacked over value, action on the right. Used by the Profile tab and by
+   the admin account controls, which are the same kind of thing seen from the
+   other side. */
+
+.settings-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid #e8e8e8;
+}
+
+.settings-row:last-child {
+  border-bottom: 0;
+}
+
+.settings-label {
+  /* Full basis, so the label always takes its own line above the value. */
+  flex: 1 1 100%;
+  font-size: 12px;
+  color: #666;
+}
+
+.settings-value {
+  flex: 1 1 auto;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.settings-dots {
+  letter-spacing: 2px;
+}
+
+.settings-change {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.settings-edit {
+  flex: 1 1 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+  max-width: 340px;
+}
+
+.settings-edit-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+/* Explains what a row's action does, on its own line under it. The row wraps,
+   so a full-basis child always breaks below the button. */
+.settings-note {
+  flex: 1 1 100%;
+  margin-top: 2px;
+  font-size: 11px;
+  color: #999;
+}
+
+/* Rows whose action cannot be walked back. Only the label carries the colour:
+   a fully red row would shout louder at rest than the action warrants. */
+.settings-row-danger .settings-label {
+  color: #c33;
+}
+
+/* Named runs of rows. The heading sits at the micro step so it groups the rows
+   without competing with their labels. */
+.settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings-group-label {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #999;
+}
+
+/* --- Buttons -------------------------------------------------------------- */
+/* Row-level actions (Change, Save, Cancel, the admin queue actions) sit at 12px
+   with tight padding, so they match the labels beside them rather than
+   outweighing them. Only the primary and danger calls to action stay at the
+   content step. */
+
+.btn {
+  background: transparent;
+  border: 1px solid #000;
+  padding: 3px 8px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.btn.active {
+  background: #000;
+  color: #fff;
+}
+
+.btn-sm {
+  padding: 3px 10px;
+  font-size: 12px;
+}
+
+.btn-publish:hover:not(:disabled) {
+  background: #000;
+  color: #fff;
+}
+
+.btn-reject:hover:not(:disabled) {
+  background: #c33;
+  border-color: #c33;
+  color: #fff;
+}
+
+.btn-danger-outline {
+  border: 1px solid #c33;
+  color: #c33;
+  background: transparent;
+  padding: 3px 8px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.btn-danger-outline:hover {
+  background: #c33;
+  color: #fff;
+}
+
+.btn-delete {
+  border-color: #999;
+  color: #666;
+  font-size: 12px;
+  padding: 3px 8px;
+}
+
+.btn-delete:hover:not(:disabled) {
+  background: #c33;
+  border-color: #c33;
+  color: #fff;
+}
+
+.danger-btn {
+  background: #c33;
+  color: #fff;
+  border: 0;
+  padding: 8px 18px;
+  font: inherit;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.danger-btn:hover:not(:disabled) {
+  background: #a22;
+}
+
+.icon-btn {
+  background: transparent;
+  border: none;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0;
+  color: #000;
+}
+
+.icon-btn:hover:not(:disabled) {
+  color: #ff0000;
+}
+
+.btn:disabled,
+.danger-btn:disabled,
+.icon-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* The shared form link button, tightened and stepped down for the account
+   area's row-level actions. */
+.account-page .link-btn,
+.body-section .link-btn {
+  padding: 2px 4px;
+  font-size: 12px;
+}
+
+/* --- Banners -------------------------------------------------------------- */
+
+.awaiting {
+  background: #f4f4f4;
+  padding: 12px;
+  color: #000;
+  margin-bottom: 16px;
+}
+
+.awaiting p {
+  margin: 0;
+}
+
+.action-error {
+  margin-bottom: 12px;
+}
+
+/* --- Counts and pills ----------------------------------------------------- */
+/* The micro step. */
+
+.count {
+  font-size: 11px;
+  background: #000;
+  color: #fff;
+  border-radius: 6px;
+  padding: 1px 6px;
+}
+
+.pill {
+  display: inline-block;
+  font-size: 11px;
+  line-height: 1.4;
+  padding: 1px 6px;
+  border-radius: 3px;
+  margin-right: 4px;
+  color: #fff;
+}
+
+.pill-hidden {
+  background: #666;
+}
+
+.pill-reported {
+  background: #c33;
+}
+
+/* Account status badges. Filled reads as a standing fact about the account;
+   outlined reads as something waiting on an admin. */
+.pill-role {
+  background: #000;
+}
+
+.pill-neutral {
+  background: #999;
+}
+
+.pill-warn {
+  background: #c60;
+}
+
+.pill-danger {
+  background: #c33;
+}
+
+.pill-outline {
+  background: transparent;
+  color: #666;
+  box-shadow: inset 0 0 0 1px #999;
+}
+
+.admin-tag {
+  display: inline-block;
+  background: #000;
+  color: #fff;
+  font-size: 11px;
+  line-height: 1.2;
+  padding: 2px 6px;
+  margin: 0 4px 4px 0;
+  border-radius: 0;
+}
+
+.empty {
+  color: #666;
+  font-size: 12px;
+}
+
+/* --- Row lists ------------------------------------------------------------ */
+/* The plain list used by My Submissions, My Annotations and the admin queues
+   that need no expanding row. */
+
+.simple-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid #e8e8e8;
+}
+
+.simple-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #e8e8e8;
+}
+
+/* A hidden annotation stays legible but recedes, so the list still reads as
+   one sequence rather than two. */
+.simple-row.is-hidden .simple-main {
+  opacity: 0.55;
+}
+
+.simple-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.simple-title.link {
+  color: #000;
+  text-decoration: underline;
+}
+
+.simple-meta {
+  font-size: 12px;
+  color: #666;
+}
+
+/* Meta that is the substance of the row rather than context for it, so it
+   reads at full strength. */
+.simple-meta.reason {
+  color: #000;
+}
+
+.simple-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+  align-items: center;
+}
+
+.inline-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* --- Panel-width step ----------------------------------------------------- */
+/* Keyed to the panel rather than the window, like the rest of the panel's
+   chrome: a 50% panel at a 1120px viewport is as tight as a phone. */
+
+@container panel (max-width: 560px) {
+  .settings-edit {
+    max-width: none;
+  }
+}

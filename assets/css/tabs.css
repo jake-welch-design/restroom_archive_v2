@@ -1,0 +1,46 @@
+/* The tab button primitive.
+   ---------------------------------------------------------------------------
+   Two rows in the account area use it and they look different, but only in
+   layout: the auth tabs are underlined and stretch with their row, the account
+   tabs are flat and sit in a bordered band. What they share is the reset and
+   the three colour states, which is what lives here. Each row's own layout
+   stays with the row.
+
+   Global because the two rows are now separate components (the auth form and
+   the account page), and a scoped block cannot be shared between them. */
+
+.tab-btn {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  /* Pulls the transparent underline onto the row's own bottom rule, so the
+     active tab's underline replaces that segment rather than sitting below it. */
+  margin-bottom: -1px;
+  padding: 6px 14px 7px;
+  font: inherit;
+  font-size: 15px;
+  color: #999;
+  cursor: pointer;
+}
+
+/* The row's first tab aligns with the content beneath it rather than being
+   inset by its own padding. */
+.tab-btn:first-child {
+  padding-left: 0;
+}
+
+.tab-btn:hover:not(.active) {
+  color: #595959;
+}
+
+.tab-btn.active {
+  color: #000;
+  border-bottom-color: #000;
+}
+
+/* Same panel-width step as the rest of the panel's chrome. */
+@container panel (max-width: 560px) {
+  .tab-btn {
+    padding: 6px 10px 7px;
+  }
+}
