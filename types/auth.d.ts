@@ -1,38 +1,22 @@
-// Extends the nuxt-auth-utils session type with what's stored in the cookie
+import type { SessionUser } from "~~/server/utils/sessionUser";
+
+// Both declarations below point at the same interface rather than restating its
+// fields. The projection in server/utils/sessionUser.ts is what actually
+// populates them, so deriving the types from it is what stops the two drifting
+// apart: an earlier hand-written copy here carried an emailVerifiedAt field
+// that no query ever selected.
+
 declare module "#auth-utils" {
-  interface User {
-    id: number;
-    email: string;
-    username: string;
-    displayName: string | null;
-    role: string;
-    submissionRequestedAt: string | null;
-    approvedAt: string | null;
-    mutedUntil: string | null;
-    bannedAt: string | null;
-    adminMessage: string | null;
-    adminMessageAt: string | null;
-    emailVerifiedAt: string | null;
-  }
+  // The user as sealed into the session cookie.
+  interface User extends SessionUser {}
 }
 
-// Extends the H3 event context with the full user row (populated by server/middleware/auth.ts)
 declare module "h3" {
   interface H3EventContext {
-    user?: {
-      id: number;
-      email: string;
-      username: string;
-      displayName: string | null;
-      role: string;
-      submissionRequestedAt: string | null;
-      approvedAt: string | null;
-      mutedUntil: string | null;
-      bannedAt: string | null;
-      adminMessage: string | null;
-      adminMessageAt: string | null;
-      emailVerifiedAt: string | null;
-    };
+    // Populated per request by server/middleware/auth.ts, which re-reads the
+    // user from the database so a change of role or a ban takes effect on the
+    // next request rather than on the next sign-in.
+    user?: SessionUser;
   }
 }
 

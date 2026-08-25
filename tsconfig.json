@@ -1,3 +1,10 @@
 {
-  "extends": "./.nuxt/tsconfig.json"
+  "extends": "./.nuxt/tsconfig.json",
+  "compilerOptions": {
+    // D1Database, R2Bucket and the rest of the Workers runtime globals are
+    // ambient declarations. @cloudflare/workers-types is already a devDependency
+    // but Nuxt's generated config does not reference it, so without this the
+    // server layer's bindings type-check as unresolved names.
+    "types": ["@cloudflare/workers-types"]
+  }
 }

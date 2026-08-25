@@ -1,3 +1,20 @@
+import { isFuture } from "~~/shared/utils/sqliteTime";
+
+/**
+ * The signed-in user and the permission questions the interface asks about
+ * them.
+ *
+ * Wraps nuxt-auth-utils' `useUserSession()` so callers never re-derive
+ * permissions from raw fields. "Is this user an admin" is one predicate defined
+ * here, not a `role === "admin"` comparison repeated at each call site, which is
+ * what keeps a rule like "admins can always submit" from being applied in some
+ * places and forgotten in others.
+ *
+ * `user` is typed through the `#auth-utils` module augmentation in
+ * types/auth.d.ts, which derives from the server's session projection. Reading
+ * a field off it is checked, so the casts these predicates used to need are
+ * gone.
+ */
 export function useAuth() {
   const { user, loggedIn, fetch: refreshSession } = useUserSession();
 
@@ -7,42 +24,32 @@ export function useAuth() {
     await navigateTo("/");
   }
 
-  const isAdmin = computed(() => {
-    const u = user.value as { role?: string } | null;
-    return u?.role === "admin";
-  });
+  const isAdmin = computed(() => user.value?.role === "admin");
 
+  /**
+   * Whether the user may submit a scan. Admins always may; everyone else needs
+   * an approval an admin granted.
+   */
   const canSubmit = computed(() => {
-    const u = user.value as {
-      role?: string;
-      approvedAt?: string | null;
-    } | null;
-    if (!u) return false;
-    if (u.role === "admin") return true;
-    return !!u.approvedAt;
+    if (!user.value) return false;
+    return user.value.role === "admin" || !!user.value.approvedAt;
   });
 
-  const submissionRequested = computed(() => {
-    const u = user.value as { submissionRequestedAt?: string | null } | null;
-    return !!u?.submissionRequestedAt;
-  });
+  /** Whether a submission-access request is outstanding. */
+  const submissionRequested = computed(
+    () => !!user.value?.submissionRequestedAt,
+  );
 
-  const mutedUntil = computed(() => {
-    const u = user.value as { mutedUntil?: string | null } | null;
-    return u?.mutedUntil ?? null;
-  });
+  const mutedUntil = computed(() => user.value?.mutedUntil ?? null);
 
-  const isMuted = computed(() => {
-    const value = mutedUntil.value;
-    if (!value) return false;
-    const ms = Date.parse(`${value.replace(" ", "T")}Z`);
-    return Number.isFinite(ms) && ms > Date.now();
-  });
+  /**
+   * Whether the mute is still in force. The column holds the expiry, so a past
+   * timestamp means the mute has lapsed and no longer applies.
+   */
+  const isMuted = computed(() => isFuture(mutedUntil.value));
 
-  const adminMessage = computed(() => {
-    const u = user.value as { adminMessage?: string | null } | null;
-    return u?.adminMessage ?? null;
-  });
+  /** A standing message from an admin, shown as a banner until it expires. */
+  const adminMessage = computed(() => user.value?.adminMessage ?? null);
 
   return {
     user,

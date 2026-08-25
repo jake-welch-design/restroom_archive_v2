@@ -128,7 +128,7 @@ const emailSuccess = ref(false);
 
 function startChangeEmail() {
   changingEmail.value = true;
-  emailDraft.value = (user.value as { email?: string } | null)?.email ?? "";
+  emailDraft.value = user.value?.email ?? "";
   emailPasswordDraft.value = "";
   emailError.value = "";
   emailSuccess.value = false;
@@ -186,8 +186,7 @@ function cancelDeleteAccount() {
 }
 
 async function confirmDeleteAccount() {
-  const expectedUsername = (user.value as { username?: string } | null)
-    ?.username;
+  const expectedUsername = user.value?.username;
   if (!expectedUsername) return;
   if (deleteUsernameConfirm.value !== expectedUsername) {
     deleteError.value = "Username doesn't match.";
@@ -270,8 +269,7 @@ const displayNameError = ref("");
 const dnInput = ref<HTMLInputElement | null>(null);
 
 function startEditDisplayName() {
-  displayNameDraft.value =
-    (user.value as { displayName?: string | null } | null)?.displayName ?? "";
+  displayNameDraft.value = user.value?.displayName ?? "";
   displayNameError.value = "";
   editingDisplayName.value = true;
   nextTick(() => dnInput.value?.focus());
@@ -1063,9 +1061,7 @@ async function submitRename(a: AccountRow) {
 
 // The signed-in user's own handle. Named to avoid colliding with the
 // `username` ref backing the sign-up form.
-const myUsername = computed(
-  () => (user.value as { username?: string } | null)?.username ?? "",
-);
+const myUsername = computed(() => user.value?.username ?? "");
 
 const roleLabel = computed(() => {
   if (!user.value) return "";
@@ -1433,8 +1429,8 @@ watch(
             v-if="user"
             class="account-email"
             :user="{
-              username: (user as any).username,
-              displayName: (user as any).displayName,
+              username: user.username,
+              displayName: user.displayName,
             }"
           />
         </div>
@@ -1513,8 +1509,8 @@ watch(
             <span class="settings-label">Name</span>
             <template v-if="!editingDisplayName">
               <span class="settings-value">
-                <template v-if="(user as any)?.displayName">{{
-                  (user as any).displayName
+                <template v-if="user?.displayName">{{
+                  user.displayName
                 }}</template>
                 <span v-else class="dim">Not set</span>
               </span>
@@ -1543,7 +1539,7 @@ watch(
                   @keydown.esc="editingDisplayName = false"
                 />
                 <span class="field-hint"
-                  >Shown instead of @{{ (user as any)?.username }}.</span
+                  >Shown instead of @{{ user?.username }}.</span
                 >
               </label>
               <p v-if="displayNameError" class="form-error">
@@ -1572,7 +1568,7 @@ watch(
           <div class="settings-row">
             <span class="settings-label">Email</span>
             <template v-if="!changingEmail">
-              <span class="settings-value">{{ (user as any)?.email }}</span>
+              <span class="settings-value">{{ user?.email }}</span>
               <span v-if="emailSuccess" class="password-success">Updated.</span>
               <button
                 type="button"
@@ -2372,7 +2368,7 @@ watch(
                       <template v-if="renamingAccountId !== a.id">
                         <span class="settings-value">@{{ a.username }}</span>
                         <button
-                          v-if="a.id !== (user as any)?.id"
+                          v-if="a.id !== user?.id"
                           type="button"
                           class="btn settings-change"
                           @click="startRename(a)"

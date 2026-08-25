@@ -409,7 +409,7 @@ function formatShortDate(iso: string) {
                     >
                   </div>
                   <button
-                    v-if="isAdmin || (user as any)?.id === a.author.id"
+                    v-if="isAdmin || user?.id === a.author.id"
                     type="button"
                     class="annotation-delete"
                     :disabled="deletingId === a.id"

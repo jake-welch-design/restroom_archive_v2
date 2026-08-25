@@ -1,7 +1,16 @@
 import { eq } from "drizzle-orm";
 import { useDb, schema } from "~~/server/utils/db";
-import { isWithinHours } from "~~/server/utils/sqliteTime";
+import { isWithinHours } from "~~/shared/utils/sqliteTime";
+import { SESSION_USER_COLUMNS } from "~~/server/utils/sessionUser";
 
+/**
+ * Attaches the current user to `event.context.user` for every request.
+ *
+ * The session cookie already carries a user, but it is a snapshot from
+ * sign-in time. Re-reading the row here is what makes moderation take effect
+ * immediately: a ban, a mute, a role change or a revoked approval applies on
+ * the caller's next request rather than whenever their cookie next rotates.
+ */
 export default defineEventHandler(async (event) => {
   const session = await getUserSession(event);
   if (!session.user?.id) return;
@@ -9,31 +18,22 @@ export default defineEventHandler(async (event) => {
   try {
     const db = useDb(event);
     const user = await db
-      .select({
-        id: schema.users.id,
-        email: schema.users.email,
-        username: schema.users.username,
-        displayName: schema.users.displayName,
-        role: schema.users.role,
-        submissionRequestedAt: schema.users.submissionRequestedAt,
-        approvedAt: schema.users.approvedAt,
-        mutedUntil: schema.users.mutedUntil,
-        bannedAt: schema.users.bannedAt,
-        adminMessage: schema.users.adminMessage,
-        adminMessageAt: schema.users.adminMessageAt,
-      })
+      .select(SESSION_USER_COLUMNS)
       .from(schema.users)
       .where(eq(schema.users.id, session.user.id))
       .get();
 
     if (!user) {
-      // User was deleted — clear stale session
+      // The account was deleted while the cookie was still valid. Clearing the
+      // session stops every later request repeating this lookup.
       await clearUserSession(event);
       return;
     }
 
-    // Admin messages auto-expire after 24h. Lazily clear the row on the first
-    // expired read so we're not re-checking the same stale value forever.
+    // Admin messages expire 24 hours after they are set. Clearing the row on
+    // the first expired read, rather than on a schedule, keeps the check to one
+    // comparison per request and means an expired message is never re-evaluated
+    // a second time.
     if (user.adminMessage && !isWithinHours(user.adminMessageAt, 24)) {
       await db
         .update(schema.users)
@@ -45,6 +45,7 @@ export default defineEventHandler(async (event) => {
 
     event.context.user = user;
   } catch {
-    // DB not available (e.g. during build); skip silently
+    // No database binding, which happens during prerender and build. Requests
+    // continue unauthenticated rather than failing outright.
   }
 });

@@ -23,6 +23,13 @@ export default withNuxt(
       ],
       // `any` erases the type safety the rest of the config is trying to buy.
       "@typescript-eslint/no-explicit-any": "error",
+      // Declaration merging into a third-party module (`#auth-utils`) requires
+      // an interface, and one that only re-points the type at ours has no
+      // members of its own. That is the intended shape, not an oversight.
+      "@typescript-eslint/no-empty-object-type": [
+        "error",
+        { allowInterfaces: "with-single-extends" },
+      ],
       // Console output belongs behind `import.meta.dev` in app code. Warnings
       // and errors are left alone: they carry real operational signal.
       "no-console": ["error", { allow: ["warn", "error"] }],

@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { useDb, schema } from "~~/server/utils/db";
+import { toSessionUser } from "~~/server/utils/sessionUser";
 import { verifyPassword } from "~~/server/utils/hash";
 import { verifyTurnstile } from "~~/server/utils/turnstile";
 import { rateLimitByIp } from "~~/server/utils/rateLimit";
@@ -48,21 +49,7 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  await setUserSession(event, {
-    user: {
-      id: user.id,
-      email: user.email,
-      username: user.username,
-      displayName: user.displayName,
-      role: user.role,
-      submissionRequestedAt: user.submissionRequestedAt ?? null,
-      approvedAt: user.approvedAt ?? null,
-      mutedUntil: user.mutedUntil ?? null,
-      bannedAt: user.bannedAt ?? null,
-      adminMessage: user.adminMessage ?? null,
-      adminMessageAt: user.adminMessageAt ?? null,
-    },
-  });
+  await setUserSession(event, { user: toSessionUser(user) });
 
   return { ok: true };
 });
