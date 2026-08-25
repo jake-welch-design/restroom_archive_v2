@@ -1,36 +1,35 @@
 <script setup lang="ts">
-const email = ref('')
-const turnstileToken = ref('')
-const loading = ref(false)
-const error = ref('')
-const submitted = ref(false)
+const email = ref("");
+const turnstileToken = ref("");
+const loading = ref(false);
+const error = ref("");
+const submitted = ref(false);
 
 async function submit() {
   if (!turnstileToken.value) {
     for (let i = 0; i < 20 && !turnstileToken.value; i++) {
-      await new Promise(r => setTimeout(r, 100))
+      await new Promise((r) => setTimeout(r, 100));
     }
     if (!turnstileToken.value) {
-      error.value = 'Still verifying — please wait a moment and try again.'
-      return
+      error.value = "Still verifying — please wait a moment and try again.";
+      return;
     }
   }
-  error.value = ''
-  loading.value = true
+  error.value = "";
+  loading.value = true;
   try {
-    await $fetch('/api/auth/forgot-password', {
-      method: 'POST',
+    await $fetch("/api/auth/forgot-password", {
+      method: "POST",
       body: { email: email.value, turnstileToken: turnstileToken.value },
-    })
-    submitted.value = true
-  }
-  catch (e: unknown) {
-    const err = e as { data?: { statusMessage?: string }; message?: string }
-    error.value = err.data?.statusMessage ?? err.message ?? 'Something went wrong.'
-    turnstileToken.value = ''
-  }
-  finally {
-    loading.value = false
+    });
+    submitted.value = true;
+  } catch (e: unknown) {
+    const err = e as { data?: { statusMessage?: string }; message?: string };
+    error.value =
+      err.data?.statusMessage ?? err.message ?? "Something went wrong.";
+    turnstileToken.value = "";
+  } finally {
+    loading.value = false;
   }
 }
 </script>
@@ -48,7 +47,10 @@ async function submit() {
       </div>
 
       <form v-else class="form" @submit.prevent="submit">
-        <p class="auth-intro">Enter the email you signed up with. We'll send a link to reset your password.</p>
+        <p class="auth-intro">
+          Enter the email you signed up with. We'll send a link to reset your
+          password.
+        </p>
 
         <label class="field">
           <span class="field-label">Email</span>
@@ -69,8 +71,18 @@ async function submit() {
 
         <p v-if="error" class="form-error">{{ error }}</p>
 
-        <button type="submit" class="primary-btn" :disabled="loading || !turnstileToken">
-          {{ loading ? 'Sending…' : !turnstileToken ? 'Verifying…' : 'Send reset link' }}
+        <button
+          type="submit"
+          class="primary-btn"
+          :disabled="loading || !turnstileToken"
+        >
+          {{
+            loading
+              ? "Sending…"
+              : !turnstileToken
+                ? "Verifying…"
+                : "Send reset link"
+          }}
         </button>
 
         <NuxtLink to="/account" class="link-btn">Back to sign in</NuxtLink>

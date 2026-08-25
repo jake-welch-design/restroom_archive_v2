@@ -1,11 +1,11 @@
-import { eq } from 'drizzle-orm'
-import { z } from 'zod'
-import { useDb, schema } from '~~/server/utils/db'
-import { requireActiveUser } from '~~/server/utils/requireActiveUser'
-import { rateLimitByUser } from '~~/server/utils/rateLimit'
+import { eq } from "drizzle-orm";
+import { z } from "zod";
+import { useDb, schema } from "~~/server/utils/db";
+import { requireActiveUser } from "~~/server/utils/requireActiveUser";
+import { rateLimitByUser } from "~~/server/utils/rateLimit";
 
 const OrbitSnapshot = z.object({
-  cameraMode: z.literal('orbit'),
+  cameraMode: z.literal("orbit"),
   cameraFov: z.number().positive(),
   orbitPosX: z.number(),
   orbitPosY: z.number(),
@@ -15,10 +15,10 @@ const OrbitSnapshot = z.object({
   orbitTargetZ: z.number(),
   rotationX: z.null().optional(),
   rotationY: z.null().optional(),
-})
+});
 
 const PovSnapshot = z.object({
-  cameraMode: z.literal('pov'),
+  cameraMode: z.literal("pov"),
   cameraFov: z.number().positive(),
   rotationX: z.number(),
   rotationY: z.number(),
@@ -28,7 +28,7 @@ const PovSnapshot = z.object({
   orbitTargetX: z.null().optional(),
   orbitTargetY: z.null().optional(),
   orbitTargetZ: z.null().optional(),
-})
+});
 
 const Body = z.intersection(
   z.object({
@@ -38,27 +38,29 @@ const Body = z.intersection(
     pointZ: z.number(),
     modelRotationY: z.number().default(0),
   }),
-  z.discriminatedUnion('cameraMode', [OrbitSnapshot, PovSnapshot]),
-)
+  z.discriminatedUnion("cameraMode", [OrbitSnapshot, PovSnapshot]),
+);
 
 export default defineEventHandler(async (event) => {
-  const user = requireActiveUser(event)
-  await rateLimitByUser(event, 'annotation', { max: 30, windowSec: 3600 })
+  const user = requireActiveUser(event);
+  await rateLimitByUser(event, "annotation", { max: 30, windowSec: 3600 });
 
-  const slug = getRouterParam(event, 'slug')
-  if (!slug) throw createError({ statusCode: 400, statusMessage: 'Missing slug' })
+  const slug = getRouterParam(event, "slug");
+  if (!slug)
+    throw createError({ statusCode: 400, statusMessage: "Missing slug" });
 
-  const body = await readValidatedBody(event, Body.parse)
+  const body = await readValidatedBody(event, Body.parse);
 
-  const db = useDb(event)
+  const db = useDb(event);
 
   const restroom = await db
     .select({ id: schema.restrooms.id })
     .from(schema.restrooms)
     .where(eq(schema.restrooms.slug, slug))
-    .get()
+    .get();
 
-  if (!restroom) throw createError({ statusCode: 404, statusMessage: 'Restroom not found' })
+  if (!restroom)
+    throw createError({ statusCode: 404, statusMessage: "Restroom not found" });
 
   const row = await db
     .insert(schema.annotations)
@@ -71,18 +73,18 @@ export default defineEventHandler(async (event) => {
       pointZ: body.pointZ,
       cameraMode: body.cameraMode,
       cameraFov: body.cameraFov,
-      orbitPosX: body.cameraMode === 'orbit' ? body.orbitPosX : null,
-      orbitPosY: body.cameraMode === 'orbit' ? body.orbitPosY : null,
-      orbitPosZ: body.cameraMode === 'orbit' ? body.orbitPosZ : null,
-      orbitTargetX: body.cameraMode === 'orbit' ? body.orbitTargetX : null,
-      orbitTargetY: body.cameraMode === 'orbit' ? body.orbitTargetY : null,
-      orbitTargetZ: body.cameraMode === 'orbit' ? body.orbitTargetZ : null,
-      rotationX: body.cameraMode === 'pov' ? body.rotationX : null,
-      rotationY: body.cameraMode === 'pov' ? body.rotationY : null,
+      orbitPosX: body.cameraMode === "orbit" ? body.orbitPosX : null,
+      orbitPosY: body.cameraMode === "orbit" ? body.orbitPosY : null,
+      orbitPosZ: body.cameraMode === "orbit" ? body.orbitPosZ : null,
+      orbitTargetX: body.cameraMode === "orbit" ? body.orbitTargetX : null,
+      orbitTargetY: body.cameraMode === "orbit" ? body.orbitTargetY : null,
+      orbitTargetZ: body.cameraMode === "orbit" ? body.orbitTargetZ : null,
+      rotationX: body.cameraMode === "pov" ? body.rotationX : null,
+      rotationY: body.cameraMode === "pov" ? body.rotationY : null,
       modelRotationY: body.modelRotationY,
     })
     .returning()
-    .get()
+    .get();
 
-  return { ok: true, id: row.id }
-})
+  return { ok: true, id: row.id };
+});

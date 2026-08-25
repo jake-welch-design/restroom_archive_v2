@@ -1,12 +1,13 @@
-import { eq } from 'drizzle-orm'
-import { useDb, schema } from '~~/server/utils/db'
-import { parseDescriptors } from '~~/server/utils/descriptors'
+import { eq } from "drizzle-orm";
+import { useDb, schema } from "~~/server/utils/db";
+import { parseDescriptors } from "~~/server/utils/descriptors";
 
 export default defineEventHandler(async (event) => {
-  const slug = getRouterParam(event, 'slug')
-  if (!slug) throw createError({ statusCode: 400, statusMessage: 'Missing slug' })
+  const slug = getRouterParam(event, "slug");
+  if (!slug)
+    throw createError({ statusCode: 400, statusMessage: "Missing slug" });
 
-  const db = useDb(event)
+  const db = useDb(event);
 
   const row = await db
     .select({
@@ -30,9 +31,10 @@ export default defineEventHandler(async (event) => {
     .from(schema.restrooms)
     .leftJoin(schema.users, eq(schema.restrooms.submittedBy, schema.users.id))
     .where(eq(schema.restrooms.slug, slug))
-    .get()
+    .get();
 
-  if (!row) throw createError({ statusCode: 404, statusMessage: 'Restroom not found' })
+  if (!row)
+    throw createError({ statusCode: 404, statusMessage: "Restroom not found" });
 
   return {
     id: row.id,
@@ -47,10 +49,13 @@ export default defineEventHandler(async (event) => {
     description: row.description,
     descriptors: parseDescriptors(row.descriptors),
     submitter: row.submitterUsername
-      ? { username: row.submitterUsername, displayName: row.submitterDisplayName }
+      ? {
+          username: row.submitterUsername,
+          displayName: row.submitterDisplayName,
+        }
       : null,
     status: row.status,
     modelUrl: `/api/r2/models/${row.file}`,
     thumbUrl: row.thumbKey ? `/api/r2/thumbs/${row.thumbKey}` : null,
-  }
-})
+  };
+});

@@ -29,7 +29,9 @@ const filteredSuggestions = computed(() => {
   return q ? available.filter((s) => s.toLowerCase().includes(q)) : available;
 });
 
-const showDropdown = computed(() => open.value && filteredSuggestions.value.length > 0);
+const showDropdown = computed(
+  () => open.value && filteredSuggestions.value.length > 0,
+);
 
 function add(tag: string) {
   const max = props.maxLength ?? 40;
@@ -66,7 +68,10 @@ function onKeydown(e: KeyboardEvent) {
         : activeIndex.value - 1;
   } else if (e.key === "Enter" || e.key === ",") {
     e.preventDefault();
-    if (activeIndex.value >= 0 && filteredSuggestions.value[activeIndex.value]) {
+    if (
+      activeIndex.value >= 0 &&
+      filteredSuggestions.value[activeIndex.value]
+    ) {
       add(filteredSuggestions.value[activeIndex.value]);
     } else {
       commit();
@@ -148,7 +153,9 @@ function onBlur() {
         aria-autocomplete="list"
         :aria-expanded="showDropdown"
         :aria-label="ariaLabel ?? 'Add descriptor'"
-        :placeholder="modelValue.length ? '' : (placeholder ?? 'Add descriptor')"
+        :placeholder="
+          modelValue.length ? '' : (placeholder ?? 'Add descriptor')
+        "
         @keydown="onKeydown"
         @focus="onFocus"
         @blur="onBlur"

@@ -2,7 +2,7 @@ export default defineNuxtConfig({
   compatibilityDate: "2025-04-01",
   devtools: { enabled: true },
 
-  modules: ["nuxt-auth-utils", "@nuxtjs/turnstile"],
+  modules: ["nuxt-auth-utils", "@nuxtjs/turnstile", "@nuxt/eslint"],
 
   css: [
     "maplibre-gl/dist/maplibre-gl.css",
@@ -23,8 +23,10 @@ export default defineNuxtConfig({
         "X-Frame-Options": "DENY",
         "X-Content-Type-Options": "nosniff",
         "Referrer-Policy": "strict-origin-when-cross-origin",
-        "Permissions-Policy": "camera=(), microphone=(), geolocation=(), interest-cohort=()",
-        "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload",
+        "Permissions-Policy":
+          "camera=(), microphone=(), geolocation=(), interest-cohort=()",
+        "Strict-Transport-Security":
+          "max-age=63072000; includeSubDomains; preload",
         "Content-Security-Policy": [
           "default-src 'self'",
           "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com",

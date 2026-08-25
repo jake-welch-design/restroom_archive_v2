@@ -9,7 +9,13 @@
 // specifically has unsaved form progress, so the "leaving loses your
 // submission" guard doesn't fire for the read-only admin preview.
 export function useSubmissionPreview() {
-  const previewModelUrl = useState<string | null>('submissionPreviewUrl', () => null)
-  const hasUnsavedSubmission = useState<boolean>('hasUnsavedSubmission', () => false)
-  return { previewModelUrl, hasUnsavedSubmission }
+  const previewModelUrl = useState<string | null>(
+    "submissionPreviewUrl",
+    () => null,
+  );
+  const hasUnsavedSubmission = useState<boolean>(
+    "hasUnsavedSubmission",
+    () => false,
+  );
+  return { previewModelUrl, hasUnsavedSubmission };
 }

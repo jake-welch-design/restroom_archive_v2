@@ -1,11 +1,11 @@
-import { desc, eq } from 'drizzle-orm'
-import { useDb, schema } from '~~/server/utils/db'
-import { requireRole } from '~~/server/utils/requireRole'
+import { desc, eq } from "drizzle-orm";
+import { useDb, schema } from "~~/server/utils/db";
+import { requireRole } from "~~/server/utils/requireRole";
 
 export default defineEventHandler(async (event) => {
-  const user = requireRole(event, 'archivist')
+  const user = requireRole(event, "archivist");
 
-  const db = useDb(event)
+  const db = useDb(event);
 
   const rows = await db
     .select({
@@ -23,9 +23,9 @@ export default defineEventHandler(async (event) => {
     .from(schema.restrooms)
     .where(eq(schema.restrooms.submittedBy, user.id))
     .orderBy(desc(schema.restrooms.createdAt))
-    .all()
+    .all();
 
-  return rows.map(r => ({
+  return rows.map((r) => ({
     id: r.id,
     slug: r.slug,
     name: r.name,
@@ -36,5 +36,5 @@ export default defineEventHandler(async (event) => {
     createdAt: r.createdAt,
     removalRequested: r.removalRequestedBy != null,
     rejectionMessage: r.rejectionMessage ?? null,
-  }))
-})
+  }));
+});

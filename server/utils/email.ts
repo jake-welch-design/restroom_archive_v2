@@ -1,19 +1,20 @@
-const FROM_EMAIL = 'noreply@restroomarchive.com'
-const FROM_NAME = 'The Restroom Archive'
-const HEADER_IMG = 'https://pub-1b76864877c9442db2b46c539ae89ecc.r2.dev/assets/metatag.png'
-const CONTACT_EMAIL = 'hello@restroomarchive.com'
+const FROM_EMAIL = "noreply@restroomarchive.com";
+const FROM_NAME = "The Restroom Archive";
+const HEADER_IMG =
+  "https://pub-1b76864877c9442db2b46c539ae89ecc.r2.dev/assets/metatag.png";
+const CONTACT_EMAIL = "hello@restroomarchive.com";
 
 function siteUrl() {
-  return useRuntimeConfig().public.siteUrl || 'https://restroomarchive.com'
+  return useRuntimeConfig().public.siteUrl || "https://restroomarchive.com";
 }
 
 function escapeHtml(s: string) {
   return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function template(body: string) {
@@ -33,19 +34,22 @@ function template(body: string) {
       </td></tr>
     </table>
   </body>
-</html>`
+</html>`;
 }
 
 async function send(to: string, subject: string, html: string) {
-  const apiKey = useRuntimeConfig().plunkApiKey
+  const apiKey = useRuntimeConfig().plunkApiKey;
   if (!apiKey) {
-    throw createError({ statusCode: 500, statusMessage: 'Email service is not configured.' })
+    throw createError({
+      statusCode: 500,
+      statusMessage: "Email service is not configured.",
+    });
   }
 
-  const res = await fetch('https://next-api.useplunk.com/v1/send', {
-    method: 'POST',
+  const res = await fetch("https://next-api.useplunk.com/v1/send", {
+    method: "POST",
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
@@ -56,19 +60,22 @@ async function send(to: string, subject: string, html: string) {
       name: FROM_NAME,
       from: FROM_EMAIL,
     }),
-  })
+  });
 
   if (!res.ok) {
-    const body = await res.text().catch(() => '')
-    throw createError({ statusCode: 500, statusMessage: `Email send failed: ${res.status} ${body}` })
+    const body = await res.text().catch(() => "");
+    throw createError({
+      statusCode: 500,
+      statusMessage: `Email send failed: ${res.status} ${body}`,
+    });
   }
 }
 
 export async function sendPasswordResetEmail(to: string, token: string) {
-  const link = `${siteUrl()}/reset-password?token=${encodeURIComponent(token)}`
+  const link = `${siteUrl()}/reset-password?token=${encodeURIComponent(token)}`;
   await send(
     to,
-    'Reset your Restroom Archive password',
+    "Reset your Restroom Archive password",
     template(`
       <p style="text-align:center;font-size:20px;font-weight:400;color:#000;margin:40px 0 20px">
         Reset your password
@@ -86,10 +93,15 @@ export async function sendPasswordResetEmail(to: string, token: string) {
         If you didn't request this, you can ignore this email — your password won't change.
       </p>
     `),
-  )
+  );
 }
 
-export async function sendContactEmail(opts: { name: string, email: string, subject: string, body: string }) {
+export async function sendContactEmail(opts: {
+  name: string;
+  email: string;
+  subject: string;
+  body: string;
+}) {
   await send(
     CONTACT_EMAIL,
     `[Contact] ${opts.subject}`,
@@ -104,5 +116,5 @@ export async function sendContactEmail(opts: { name: string, email: string, subj
       </table>
       <p style="white-space:pre-wrap;padding:0 20px;font-size:14px;color:#000;margin:20px 20px 30px;line-height:1.5">${escapeHtml(opts.body)}</p>
     `),
-  )
+  );
 }

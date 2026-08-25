@@ -69,7 +69,9 @@ const gridWrapRef = ref<HTMLDivElement | null>(null);
 async function scrollToSelected(slug: string | null | undefined) {
   if (!slug || !gridWrapRef.value) return;
   await nextTick();
-  const el = gridWrapRef.value.querySelector<HTMLElement>(`[data-slug="${slug}"]`);
+  const el = gridWrapRef.value.querySelector<HTMLElement>(
+    `[data-slug="${slug}"]`,
+  );
   el?.scrollIntoView({ block: "start", behavior: "smooth" });
 }
 

@@ -1,5 +1,5 @@
-import type { Ref } from 'vue'
-import type { Annotation } from '~/types/annotation'
+import type { Ref } from "vue";
+import type { Annotation } from "~/types/annotation";
 
 export function useAnnotations(slug: Ref<string | null | undefined>) {
   // `watch: false` because we drive fetching ourselves below: letting useFetch's
@@ -15,12 +15,12 @@ export function useAnnotations(slug: Ref<string | null | undefined>) {
       immediate: !!slug.value,
       watch: false,
     },
-  )
+  );
 
   watch(slug, (value) => {
-    if (value) result.execute()
-    else result.data.value = []
-  })
+    if (value) result.execute();
+    else result.data.value = [];
+  });
 
-  return result
+  return result;
 }

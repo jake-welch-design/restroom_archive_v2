@@ -205,7 +205,9 @@ export function useThreeScene(
       scene.remove(currentModel);
       disposeObject(currentModel);
       currentModel = null;
-      console.log(`${tag} dispose: ${(performance.now() - tDispose).toFixed(0)}ms`);
+      console.log(
+        `${tag} dispose: ${(performance.now() - tDispose).toFixed(0)}ms`,
+      );
     }
 
     try {
@@ -213,7 +215,9 @@ export function useThreeScene(
       const tFetch = performance.now();
       const gltf = await loader.loadAsync(url);
       if (myId !== loadId) return;
-      console.log(`${tag} fetch+parse: ${(performance.now() - tFetch).toFixed(0)}ms`);
+      console.log(
+        `${tag} fetch+parse: ${(performance.now() - tFetch).toFixed(0)}ms`,
+      );
 
       const tAdd = performance.now();
       currentModel = gltf.scene;
@@ -253,7 +257,9 @@ export function useThreeScene(
         }
         camera.updateProjectionMatrix();
       }
-      console.log(`${tag} scene add+frame: ${(performance.now() - tAdd).toFixed(0)}ms`);
+      console.log(
+        `${tag} scene add+frame: ${(performance.now() - tAdd).toFixed(0)}ms`,
+      );
       console.log(`${tag} TOTAL: ${(performance.now() - t0).toFixed(0)}ms`);
 
       let meshCount = 0;
@@ -269,21 +275,32 @@ export function useThreeScene(
         if (idx) triangles += idx.count / 3;
         else if (pos) triangles += pos.count / 3;
         if (pos) vertices += pos.count;
-        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        const mats = Array.isArray(mesh.material)
+          ? mesh.material
+          : [mesh.material];
         for (const m of mats) {
           if (!m) continue;
           for (const key of Object.keys(m)) {
             const v = (m as unknown as Record<string, unknown>)[key];
-            if (v && typeof v === "object" && (v as { isTexture?: boolean }).isTexture) {
+            if (
+              v &&
+              typeof v === "object" &&
+              (v as { isTexture?: boolean }).isTexture
+            ) {
               textures.add(v as THREE.Texture);
             }
           }
         }
       });
-      console.log(`${tag} stats: ${meshCount} meshes · ${Math.round(triangles).toLocaleString()} tris · ${vertices.toLocaleString()} verts · ${textures.size} textures`);
+      console.log(
+        `${tag} stats: ${meshCount} meshes · ${Math.round(triangles).toLocaleString()} tris · ${vertices.toLocaleString()} verts · ${textures.size} textures`,
+      );
       const renderInfo = renderer?.info;
       if (renderInfo) {
-        console.log(`${tag} renderer.info before frame:`, JSON.parse(JSON.stringify(renderInfo)));
+        console.log(
+          `${tag} renderer.info before frame:`,
+          JSON.parse(JSON.stringify(renderInfo)),
+        );
       }
     } catch (e) {
       if (myId === loadId)
@@ -608,7 +625,10 @@ export function useThreeScene(
       // Pinch — adjust FOV
       const dist = getPinchDist();
       if (pinchStartDist > 0) {
-        povState.fov = Math.max(30, Math.min(110, pinchStartFov * (pinchStartDist / dist)));
+        povState.fov = Math.max(
+          30,
+          Math.min(110, pinchStartFov * (pinchStartDist / dist)),
+        );
         camera.fov = povState.fov;
         camera.updateProjectionMatrix();
       }
@@ -670,7 +690,11 @@ export function useThreeScene(
     // on the GPU after a model swap, which tanks interactive perf.
     for (const key of Object.keys(material)) {
       const value = (material as unknown as Record<string, unknown>)[key];
-      if (value && typeof value === "object" && (value as { isTexture?: boolean }).isTexture) {
+      if (
+        value &&
+        typeof value === "object" &&
+        (value as { isTexture?: boolean }).isTexture
+      ) {
         (value as THREE.Texture).dispose();
       }
     }

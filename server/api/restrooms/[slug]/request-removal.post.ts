@@ -1,35 +1,43 @@
-import { eq, sql } from 'drizzle-orm'
-import { z } from 'zod'
-import { useDb, schema } from '~~/server/utils/db'
-import { requireActiveUser } from '~~/server/utils/requireActiveUser'
-import { rateLimitByUser } from '~~/server/utils/rateLimit'
+import { eq, sql } from "drizzle-orm";
+import { z } from "zod";
+import { useDb, schema } from "~~/server/utils/db";
+import { requireActiveUser } from "~~/server/utils/requireActiveUser";
+import { rateLimitByUser } from "~~/server/utils/rateLimit";
 
 const Body = z.object({
   reason: z.string().max(500).optional(),
-})
+});
 
 export default defineEventHandler(async (event) => {
-  const user = requireActiveUser(event)
-  await rateLimitByUser(event, 'req-removal', { max: 10, windowSec: 86400 })
+  const user = requireActiveUser(event);
+  await rateLimitByUser(event, "req-removal", { max: 10, windowSec: 86400 });
 
-  const slug = getRouterParam(event, 'slug')
-  if (!slug) throw createError({ statusCode: 400, statusMessage: 'Missing slug' })
+  const slug = getRouterParam(event, "slug");
+  if (!slug)
+    throw createError({ statusCode: 400, statusMessage: "Missing slug" });
 
-  const body = await readValidatedBody(event, Body.parse)
+  const body = await readValidatedBody(event, Body.parse);
 
-  const db = useDb(event)
+  const db = useDb(event);
 
   const restroom = await db
-    .select({ id: schema.restrooms.id, submittedBy: schema.restrooms.submittedBy })
+    .select({
+      id: schema.restrooms.id,
+      submittedBy: schema.restrooms.submittedBy,
+    })
     .from(schema.restrooms)
     .where(eq(schema.restrooms.slug, slug))
-    .get()
+    .get();
 
-  if (!restroom) throw createError({ statusCode: 404, statusMessage: 'Restroom not found' })
+  if (!restroom)
+    throw createError({ statusCode: 404, statusMessage: "Restroom not found" });
 
   // The UI only offers this on your own entries; enforce it here too.
-  if (restroom.submittedBy !== user.id && user.role !== 'admin') {
-    throw createError({ statusCode: 403, statusMessage: 'You can only request removal of your own submissions.' })
+  if (restroom.submittedBy !== user.id && user.role !== "admin") {
+    throw createError({
+      statusCode: 403,
+      statusMessage: "You can only request removal of your own submissions.",
+    });
   }
 
   await db
@@ -39,7 +47,7 @@ export default defineEventHandler(async (event) => {
       removalReason: body.reason ?? null,
       updatedAt: sql`(datetime('now'))`,
     })
-    .where(eq(schema.restrooms.id, restroom.id))
+    .where(eq(schema.restrooms.id, restroom.id));
 
-  return { ok: true }
-})
+  return { ok: true };
+});

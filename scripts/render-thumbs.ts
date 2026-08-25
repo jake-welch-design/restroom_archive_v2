@@ -8,63 +8,69 @@
 //   npx tsx scripts/render-thumbs.ts --all              # all published rows
 //   npx tsx scripts/render-thumbs.ts --slug <slug>      # single row
 //
-import puppeteer from 'puppeteer'
-import { execSync } from 'node:child_process'
-import { readFileSync, writeFileSync, unlinkSync, mkdtempSync } from 'node:fs'
-import { join } from 'node:path'
-import { tmpdir } from 'node:os'
-import http from 'node:http'
-import net from 'node:net'
+import puppeteer from "puppeteer";
+import { execSync } from "node:child_process";
+import { readFileSync, writeFileSync, unlinkSync, mkdtempSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import http from "node:http";
+import net from "node:net";
 
 // ---------------------------------------------------------------------------
 // CLI args
 // ---------------------------------------------------------------------------
-const argv = process.argv.slice(2)
-const allFlag = argv.includes('--all')
-const slugIdx = argv.indexOf('--slug')
-const targetSlug = slugIdx >= 0 ? argv[slugIdx + 1] : null
+const argv = process.argv.slice(2);
+const allFlag = argv.includes("--all");
+const slugIdx = argv.indexOf("--slug");
+const targetSlug = slugIdx >= 0 ? argv[slugIdx + 1] : null;
 
 if (!allFlag && !targetSlug) {
-  console.error('Usage: npx tsx scripts/render-thumbs.ts --all | --slug <slug>')
-  process.exit(1)
+  console.error(
+    "Usage: npx tsx scripts/render-thumbs.ts --all | --slug <slug>",
+  );
+  process.exit(1);
 }
 
 // ---------------------------------------------------------------------------
 // Wrangler helpers
 // ---------------------------------------------------------------------------
-type DbRow = { id: number; slug: string; file: string }
+type DbRow = { id: number; slug: string; file: string };
 
 function d1Query(sql: string): DbRow[] {
   const out = execSync(
     `npx wrangler d1 execute restroom-archive-db --remote --json --command ${JSON.stringify(sql)}`,
-    { encoding: 'utf8', stdio: ['pipe', 'pipe', 'inherit'] },
-  )
-  return (JSON.parse(out)[0]?.results ?? []) as DbRow[]
+    { encoding: "utf8", stdio: ["pipe", "pipe", "inherit"] },
+  );
+  return (JSON.parse(out)[0]?.results ?? []) as DbRow[];
 }
 
 function fetchRows(): DbRow[] {
   if (targetSlug) {
-    return d1Query(`SELECT id, slug, file FROM restrooms WHERE slug='${targetSlug}'`)
+    return d1Query(
+      `SELECT id, slug, file FROM restrooms WHERE slug='${targetSlug}'`,
+    );
   }
-  return d1Query(`SELECT id, slug, file FROM restrooms WHERE status='published' ORDER BY iso_date ASC`)
+  return d1Query(
+    `SELECT id, slug, file FROM restrooms WHERE status='published' ORDER BY iso_date ASC`,
+  );
 }
 
 function downloadGlb(fileKey: string, destPath: string) {
   execSync(
     `npx wrangler r2 object get "restroom-models/${fileKey}" --file ${JSON.stringify(destPath)} --remote`,
-    { encoding: 'utf8', stdio: ['pipe', 'pipe', 'inherit'] },
-  )
+    { encoding: "utf8", stdio: ["pipe", "pipe", "inherit"] },
+  );
 }
 
 function uploadThumb(slug: string, imgPath: string) {
   execSync(
     `npx wrangler r2 object put "restroom-archive-thumbs/${slug}.jpg" --file ${JSON.stringify(imgPath)} --content-type image/jpeg --remote`,
-    { encoding: 'utf8', stdio: ['pipe', 'pipe', 'inherit'] },
-  )
+    { encoding: "utf8", stdio: ["pipe", "pipe", "inherit"] },
+  );
 }
 
 function updateThumbKey(slug: string) {
-  d1Query(`UPDATE restrooms SET thumb_key='${slug}.jpg' WHERE slug='${slug}'`)
+  d1Query(`UPDATE restrooms SET thumb_key='${slug}.jpg' WHERE slug='${slug}'`);
 }
 
 // ---------------------------------------------------------------------------
@@ -72,12 +78,12 @@ function updateThumbKey(slug: string) {
 // ---------------------------------------------------------------------------
 function getFreePort(): Promise<number> {
   return new Promise((resolve) => {
-    const srv = net.createServer()
-    srv.listen(0, '127.0.0.1', () => {
-      const port = (srv.address() as net.AddressInfo).port
-      srv.close(() => resolve(port))
-    })
-  })
+    const srv = net.createServer();
+    srv.listen(0, "127.0.0.1", () => {
+      const port = (srv.address() as net.AddressInfo).port;
+      srv.close(() => resolve(port));
+    });
+  });
 }
 
 const VIEWER_HTML = `<!DOCTYPE html>
@@ -161,76 +167,80 @@ new GLTFLoader().load('/model.glb', (gltf) => {
 })
 </script>
 </body>
-</html>`
+</html>`;
 
 function startServer(glbPath: string, port: number): http.Server {
   const server = http.createServer((req, res) => {
-    if (req.url === '/' || req.url === '/index.html') {
-      res.writeHead(200, { 'Content-Type': 'text/html' })
-      res.end(VIEWER_HTML)
-    }
-    else if (req.url === '/model.glb') {
-      const data = readFileSync(glbPath)
+    if (req.url === "/" || req.url === "/index.html") {
+      res.writeHead(200, { "Content-Type": "text/html" });
+      res.end(VIEWER_HTML);
+    } else if (req.url === "/model.glb") {
+      const data = readFileSync(glbPath);
       res.writeHead(200, {
-        'Content-Type': 'model/gltf-binary',
-        'Content-Length': data.length,
-        'Access-Control-Allow-Origin': '*',
-      })
-      res.end(data)
+        "Content-Type": "model/gltf-binary",
+        "Content-Length": data.length,
+        "Access-Control-Allow-Origin": "*",
+      });
+      res.end(data);
+    } else {
+      res.writeHead(404);
+      res.end();
     }
-    else {
-      res.writeHead(404)
-      res.end()
-    }
-  })
-  server.listen(port, '127.0.0.1')
-  return server
+  });
+  server.listen(port, "127.0.0.1");
+  return server;
 }
 
 // ---------------------------------------------------------------------------
 // Render one thumbnail
 // ---------------------------------------------------------------------------
 async function renderThumb(row: DbRow) {
-  const tmpDir = mkdtempSync(join(tmpdir(), 'restroom-thumb-'))
-  const glbPath = join(tmpDir, 'model.glb')
-  const imgPath = join(tmpDir, 'thumb.jpg')
+  const tmpDir = mkdtempSync(join(tmpdir(), "restroom-thumb-"));
+  const glbPath = join(tmpDir, "model.glb");
+  const imgPath = join(tmpDir, "thumb.jpg");
 
   try {
-    process.stdout.write(`  [${row.slug}] downloading GLB… `)
-    downloadGlb(row.file, glbPath)
-    console.log('done')
+    process.stdout.write(`  [${row.slug}] downloading GLB… `);
+    downloadGlb(row.file, glbPath);
+    console.log("done");
 
-    const port = await getFreePort()
-    const server = startServer(glbPath, port)
+    const port = await getFreePort();
+    const server = startServer(glbPath, port);
 
-    process.stdout.write(`  [${row.slug}] rendering… `)
+    process.stdout.write(`  [${row.slug}] rendering… `);
     const browser = await puppeteer.launch({
       headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    })
-    const page = await browser.newPage()
-    await page.setViewport({ width: 800, height: 800 })
-    await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'networkidle0', timeout: 60000 })
-    await page.waitForFunction('window.__ready === true', { timeout: 30000 })
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    });
+    const page = await browser.newPage();
+    await page.setViewport({ width: 800, height: 800 });
+    await page.goto(`http://127.0.0.1:${port}/`, {
+      waitUntil: "networkidle0",
+      timeout: 60000,
+    });
+    await page.waitForFunction("window.__ready === true", { timeout: 30000 });
 
     await page.screenshot({
       path: imgPath as `${string}.jpg`,
-      type: 'jpeg',
+      type: "jpeg",
       quality: 85,
       clip: { x: 0, y: 0, width: 800, height: 800 },
-    })
-    await browser.close()
-    server.close()
-    console.log('done')
+    });
+    await browser.close();
+    server.close();
+    console.log("done");
 
-    process.stdout.write(`  [${row.slug}] uploading… `)
-    uploadThumb(row.slug, imgPath)
-    updateThumbKey(row.slug)
-    console.log('done ✓')
-  }
-  finally {
-    try { unlinkSync(glbPath) } catch {}
-    try { unlinkSync(imgPath) } catch {}
+    process.stdout.write(`  [${row.slug}] uploading… `);
+    uploadThumb(row.slug, imgPath);
+    updateThumbKey(row.slug);
+    console.log("done ✓");
+  } finally {
+    try {
+      unlinkSync(glbPath);
+    } catch {}
+    try {
+      unlinkSync(imgPath);
+    } catch {}
   }
 }
 
@@ -238,16 +248,19 @@ async function renderThumb(row: DbRow) {
 // Main
 // ---------------------------------------------------------------------------
 async function main() {
-  const rows = fetchRows()
+  const rows = fetchRows();
   if (!rows.length) {
-    console.log('No rows found.')
-    return
+    console.log("No rows found.");
+    return;
   }
-  console.log(`Rendering thumbnails for ${rows.length} restroom(s)…\n`)
+  console.log(`Rendering thumbnails for ${rows.length} restroom(s)…\n`);
   for (const row of rows) {
-    await renderThumb(row)
+    await renderThumb(row);
   }
-  console.log('\nAll done.')
+  console.log("\nAll done.");
 }
 
-main().catch((e) => { console.error(e); process.exit(1) })
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

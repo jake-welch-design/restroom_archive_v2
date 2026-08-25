@@ -1939,11 +1939,7 @@ watch(
             Nothing awaiting review.
           </div>
           <ul v-else class="simple-list">
-            <li
-              v-for="r in inactiveSubmissions"
-              :key="r.id"
-              class="simple-row"
-            >
+            <li v-for="r in inactiveSubmissions" :key="r.id" class="simple-row">
               <div class="simple-main">
                 <span class="simple-title">{{ r.name }}</span>
                 <span class="simple-meta"
@@ -2576,9 +2572,7 @@ watch(
                         :disabled="actionLoading === `acct-${a.id}-ban`"
                         @click="banAccount(a)"
                       >
-                        {{
-                          actionLoading === `acct-${a.id}-ban` ? "…" : "Ban"
-                        }}
+                        {{ actionLoading === `acct-${a.id}-ban` ? "…" : "Ban" }}
                       </button>
                       <span v-if="!a.bannedAt" class="settings-note">
                         Permanent. Hides every restroom they've submitted from

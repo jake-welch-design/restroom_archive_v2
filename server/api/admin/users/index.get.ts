@@ -1,11 +1,11 @@
-import { desc } from 'drizzle-orm'
-import { useDb, schema } from '~~/server/utils/db'
-import { requireRole } from '~~/server/utils/requireRole'
+import { desc } from "drizzle-orm";
+import { useDb, schema } from "~~/server/utils/db";
+import { requireRole } from "~~/server/utils/requireRole";
 
 export default defineEventHandler(async (event) => {
-  requireRole(event, 'admin')
+  requireRole(event, "admin");
 
-  const db = useDb(event)
+  const db = useDb(event);
 
   const rows = await db
     .select({
@@ -24,7 +24,7 @@ export default defineEventHandler(async (event) => {
     })
     .from(schema.users)
     .orderBy(desc(schema.users.createdAt))
-    .all()
+    .all();
 
-  return rows
-})
+  return rows;
+});

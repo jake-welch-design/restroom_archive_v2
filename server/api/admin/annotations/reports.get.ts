@@ -1,13 +1,13 @@
-import { aliasedTable, asc, eq, isNull } from 'drizzle-orm'
-import { useDb, schema } from '~~/server/utils/db'
-import { requireRole } from '~~/server/utils/requireRole'
+import { aliasedTable, asc, eq, isNull } from "drizzle-orm";
+import { useDb, schema } from "~~/server/utils/db";
+import { requireRole } from "~~/server/utils/requireRole";
 
 export default defineEventHandler(async (event) => {
-  requireRole(event, 'admin')
+  requireRole(event, "admin");
 
-  const db = useDb(event)
-  const reporter = aliasedTable(schema.users, 'reporter')
-  const author = aliasedTable(schema.users, 'author')
+  const db = useDb(event);
+  const reporter = aliasedTable(schema.users, "reporter");
+  const author = aliasedTable(schema.users, "author");
 
   const rows = await db
     .select({
@@ -26,15 +26,21 @@ export default defineEventHandler(async (event) => {
       authorDisplayName: author.displayName,
     })
     .from(schema.annotationReports)
-    .innerJoin(schema.annotations, eq(schema.annotationReports.annotationId, schema.annotations.id))
-    .innerJoin(schema.restrooms, eq(schema.annotations.restroomId, schema.restrooms.id))
+    .innerJoin(
+      schema.annotations,
+      eq(schema.annotationReports.annotationId, schema.annotations.id),
+    )
+    .innerJoin(
+      schema.restrooms,
+      eq(schema.annotations.restroomId, schema.restrooms.id),
+    )
     .leftJoin(reporter, eq(schema.annotationReports.reporterId, reporter.id))
     .leftJoin(author, eq(schema.annotations.authorId, author.id))
     .where(isNull(schema.annotationReports.resolvedAt))
     .orderBy(asc(schema.annotationReports.createdAt))
-    .all()
+    .all();
 
-  return rows.map(r => ({
+  return rows.map((r) => ({
     reportId: r.reportId,
     reportReason: r.reportReason,
     reportCreatedAt: r.reportCreatedAt,
@@ -54,5 +60,5 @@ export default defineEventHandler(async (event) => {
     author: r.authorUsername
       ? { username: r.authorUsername, displayName: r.authorDisplayName }
       : null,
-  }))
-})
+  }));
+});

@@ -1,17 +1,17 @@
-import { desc, eq, sql } from 'drizzle-orm'
-import { useDb, schema } from '~~/server/utils/db'
-import { requireRole } from '~~/server/utils/requireRole'
+import { desc, eq, sql } from "drizzle-orm";
+import { useDb, schema } from "~~/server/utils/db";
+import { requireRole } from "~~/server/utils/requireRole";
 
 export default defineEventHandler(async (event) => {
-  requireRole(event, 'admin')
+  requireRole(event, "admin");
 
-  const db = useDb(event)
+  const db = useDb(event);
 
   const openReports = sql<number>`(
     SELECT COUNT(*) FROM ${schema.annotationReports}
     WHERE ${schema.annotationReports.annotationId} = ${schema.annotations.id}
       AND ${schema.annotationReports.resolvedAt} IS NULL
-  )`
+  )`;
 
   const rows = await db
     .select({
@@ -28,13 +28,16 @@ export default defineEventHandler(async (event) => {
       openReportCount: openReports,
     })
     .from(schema.annotations)
-    .innerJoin(schema.restrooms, eq(schema.annotations.restroomId, schema.restrooms.id))
+    .innerJoin(
+      schema.restrooms,
+      eq(schema.annotations.restroomId, schema.restrooms.id),
+    )
     .leftJoin(schema.users, eq(schema.annotations.authorId, schema.users.id))
     .orderBy(desc(schema.annotations.createdAt))
     .limit(500)
-    .all()
+    .all();
 
-  return rows.map(r => ({
+  return rows.map((r) => ({
     id: r.id,
     body: r.body,
     createdAt: r.createdAt,
@@ -49,5 +52,5 @@ export default defineEventHandler(async (event) => {
     author: r.authorUsername
       ? { username: r.authorUsername, displayName: r.authorDisplayName }
       : null,
-  }))
-})
+  }));
+});

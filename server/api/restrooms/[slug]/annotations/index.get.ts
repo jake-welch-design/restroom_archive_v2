@@ -1,19 +1,21 @@
-import { and, asc, eq, isNull } from 'drizzle-orm'
-import { useDb, schema } from '~~/server/utils/db'
+import { and, asc, eq, isNull } from "drizzle-orm";
+import { useDb, schema } from "~~/server/utils/db";
 
 export default defineEventHandler(async (event) => {
-  const slug = getRouterParam(event, 'slug')
-  if (!slug) throw createError({ statusCode: 400, statusMessage: 'Missing slug' })
+  const slug = getRouterParam(event, "slug");
+  if (!slug)
+    throw createError({ statusCode: 400, statusMessage: "Missing slug" });
 
-  const db = useDb(event)
+  const db = useDb(event);
 
   const restroom = await db
     .select({ id: schema.restrooms.id })
     .from(schema.restrooms)
     .where(eq(schema.restrooms.slug, slug))
-    .get()
+    .get();
 
-  if (!restroom) throw createError({ statusCode: 404, statusMessage: 'Restroom not found' })
+  if (!restroom)
+    throw createError({ statusCode: 404, statusMessage: "Restroom not found" });
 
   const rows = await db
     .select({
@@ -42,14 +44,16 @@ export default defineEventHandler(async (event) => {
     })
     .from(schema.annotations)
     .leftJoin(schema.users, eq(schema.annotations.authorId, schema.users.id))
-    .where(and(
-      eq(schema.annotations.restroomId, restroom.id),
-      isNull(schema.annotations.hiddenAt),
-    ))
+    .where(
+      and(
+        eq(schema.annotations.restroomId, restroom.id),
+        isNull(schema.annotations.hiddenAt),
+      ),
+    )
     .orderBy(asc(schema.annotations.createdAt))
-    .all()
+    .all();
 
-  return rows.map(r => ({
+  return rows.map((r) => ({
     id: r.id,
     restroomId: r.restroomId,
     body: r.body,
@@ -74,5 +78,5 @@ export default defineEventHandler(async (event) => {
       displayName: r.authorDisplayName,
       email: r.authorEmail!,
     },
-  }))
-})
+  }));
+});

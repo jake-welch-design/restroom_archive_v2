@@ -92,7 +92,9 @@ function goToStep(n: number) {
 // coordinates) directly into both fields.
 function onCoordsPaste(e: ClipboardEvent) {
   const text = e.clipboardData?.getData("text") ?? "";
-  const match = text.trim().match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/);
+  const match = text
+    .trim()
+    .match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/);
   if (!match) return;
   e.preventDefault();
   uploadLat.value = match[1];
@@ -236,9 +238,7 @@ function resetUpload() {
 
         <label class="field">
           <span class="field-label-row">
-            <span class="field-label"
-              >Location <span class="req">*</span></span
-            >
+            <span class="field-label">Location <span class="req">*</span></span>
             <InfoTooltip>
               <p>City, State (U.S.) or</p>
               <p>City, Country (non-U.S.)</p>
@@ -254,8 +254,8 @@ function resetUpload() {
             v-if="uploadLocation && !locationFormatValid"
             class="field-hint field-hint-warn"
           >
-            Use the format "City, ST" or "City, CC" — e.g. "Salt Lake City,
-            UT" or "Amsterdam, NL".
+            Use the format "City, ST" or "City, CC" — e.g. "Salt Lake City, UT"
+            or "Amsterdam, NL".
           </p>
         </label>
 
@@ -332,18 +332,17 @@ function resetUpload() {
               <p>A good description tells us:</p>
               <ul>
                 <li>
-                  How does someone find this restroom inside the
-                  establishment?
+                  How does someone find this restroom inside the establishment?
                 </li>
                 <li>
-                  What are the primary amenities of this restroom and where
-                  are they placed relative to each other in the space?
+                  What are the primary amenities of this restroom and where are
+                  they placed relative to each other in the space?
                 </li>
                 <li>What are the decorative characteristics?</li>
                 <li>How does the space feel?</li>
                 <li>
-                  Are there any notable aspects of the restroom that you
-                  would like visitors to pay attention to?
+                  Are there any notable aspects of the restroom that you would
+                  like visitors to pay attention to?
                 </li>
               </ul>
             </InfoTooltip>

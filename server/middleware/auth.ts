@@ -1,13 +1,13 @@
-import { eq } from 'drizzle-orm'
-import { useDb, schema } from '~~/server/utils/db'
-import { isWithinHours } from '~~/server/utils/sqliteTime'
+import { eq } from "drizzle-orm";
+import { useDb, schema } from "~~/server/utils/db";
+import { isWithinHours } from "~~/server/utils/sqliteTime";
 
 export default defineEventHandler(async (event) => {
-  const session = await getUserSession(event)
-  if (!session.user?.id) return
+  const session = await getUserSession(event);
+  if (!session.user?.id) return;
 
   try {
-    const db = useDb(event)
+    const db = useDb(event);
     const user = await db
       .select({
         id: schema.users.id,
@@ -24,12 +24,12 @@ export default defineEventHandler(async (event) => {
       })
       .from(schema.users)
       .where(eq(schema.users.id, session.user.id))
-      .get()
+      .get();
 
     if (!user) {
       // User was deleted — clear stale session
-      await clearUserSession(event)
-      return
+      await clearUserSession(event);
+      return;
     }
 
     // Admin messages auto-expire after 24h. Lazily clear the row on the first
@@ -38,14 +38,13 @@ export default defineEventHandler(async (event) => {
       await db
         .update(schema.users)
         .set({ adminMessage: null, adminMessageAt: null })
-        .where(eq(schema.users.id, user.id))
-      user.adminMessage = null
-      user.adminMessageAt = null
+        .where(eq(schema.users.id, user.id));
+      user.adminMessage = null;
+      user.adminMessageAt = null;
     }
 
-    event.context.user = user
-  }
-  catch {
+    event.context.user = user;
+  } catch {
     // DB not available (e.g. during build); skip silently
   }
-})
+});

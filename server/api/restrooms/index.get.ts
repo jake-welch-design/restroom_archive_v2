@@ -1,15 +1,15 @@
-import { desc, eq, inArray } from 'drizzle-orm'
-import { useDb, schema } from '~~/server/utils/db'
-import { parseDescriptors } from '~~/server/utils/descriptors'
+import { desc, eq, inArray } from "drizzle-orm";
+import { useDb, schema } from "~~/server/utils/db";
+import { parseDescriptors } from "~~/server/utils/descriptors";
 
 export default defineEventHandler(async (event) => {
-  const db = useDb(event)
+  const db = useDb(event);
 
   // Admins also see pending entries so they can preview them via /r/<slug>
   // — same rendering path as published models, just hidden from the directory
   // for everyone else by client-side filtering.
-  const isAdmin = event.context.user?.role === 'admin'
-  const statuses = isAdmin ? ['published', 'pending'] : ['published']
+  const isAdmin = event.context.user?.role === "admin";
+  const statuses = isAdmin ? ["published", "pending"] : ["published"];
 
   const rows = await db
     .select({
@@ -34,9 +34,9 @@ export default defineEventHandler(async (event) => {
     .leftJoin(schema.users, eq(schema.restrooms.submittedBy, schema.users.id))
     .where(inArray(schema.restrooms.status, statuses))
     .orderBy(desc(schema.restrooms.isoDate))
-    .all()
+    .all();
 
-  return rows.map(r => ({
+  return rows.map((r) => ({
     id: r.id,
     slug: r.slug,
     name: r.name,
@@ -56,5 +56,5 @@ export default defineEventHandler(async (event) => {
     // Avoids SSR-time host confusion (Nitro internal fetch reports localhost).
     modelUrl: `/api/r2/models/${r.file}`,
     thumbUrl: r.thumbKey ? `/api/r2/thumbs/${r.thumbKey}` : null,
-  }))
-})
+  }));
+});

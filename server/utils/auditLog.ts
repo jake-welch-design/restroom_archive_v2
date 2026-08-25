@@ -1,7 +1,7 @@
-import type { H3Event } from 'h3'
-import { useDb, schema } from '~~/server/utils/db'
+import type { H3Event } from "h3";
+import { useDb, schema } from "~~/server/utils/db";
 
-export type AuditTargetType = 'user' | 'restroom' | 'annotation'
+export type AuditTargetType = "user" | "restroom" | "annotation";
 
 export async function recordAdminAction(
   event: H3Event,
@@ -11,18 +11,22 @@ export async function recordAdminAction(
   metadata?: Record<string, unknown>,
 ) {
   try {
-    const actor = event.context.user
-    const db = useDb(event)
+    const actor = event.context.user;
+    const db = useDb(event);
     await db.insert(schema.adminAuditLog).values({
       actorId: actor?.id ?? null,
       action,
       targetType,
       targetId,
       metadata: metadata ? JSON.stringify(metadata) : null,
-    })
-  }
-  catch (err) {
+    });
+  } catch (err) {
     // Never let an audit-log failure break the actual admin operation.
-    console.error('audit log write failed', { action, targetType, targetId, err })
+    console.error("audit log write failed", {
+      action,
+      targetType,
+      targetId,
+      err,
+    });
   }
 }

@@ -1,19 +1,19 @@
-import { desc, eq } from 'drizzle-orm'
-import { z } from 'zod'
-import { useDb, schema } from '~~/server/utils/db'
-import { requireRole } from '~~/server/utils/requireRole'
+import { desc, eq } from "drizzle-orm";
+import { z } from "zod";
+import { useDb, schema } from "~~/server/utils/db";
+import { requireRole } from "~~/server/utils/requireRole";
 
 const Query = z.object({
   limit: z.coerce.number().int().min(1).max(200).optional().default(100),
   offset: z.coerce.number().int().min(0).optional().default(0),
-})
+});
 
 export default defineEventHandler(async (event) => {
-  requireRole(event, 'admin')
+  requireRole(event, "admin");
 
-  const { limit, offset } = await getValidatedQuery(event, Query.parse)
+  const { limit, offset } = await getValidatedQuery(event, Query.parse);
 
-  const db = useDb(event)
+  const db = useDb(event);
 
   const rows = await db
     .select({
@@ -29,12 +29,15 @@ export default defineEventHandler(async (event) => {
     })
     .from(schema.adminAuditLog)
     .leftJoin(schema.users, eq(schema.users.id, schema.adminAuditLog.actorId))
-    .orderBy(desc(schema.adminAuditLog.createdAt), desc(schema.adminAuditLog.id))
+    .orderBy(
+      desc(schema.adminAuditLog.createdAt),
+      desc(schema.adminAuditLog.id),
+    )
     .limit(limit)
     .offset(offset)
-    .all()
+    .all();
 
-  return rows.map(r => ({
+  return rows.map((r) => ({
     id: r.id,
     action: r.action,
     targetType: r.targetType,
@@ -42,7 +45,11 @@ export default defineEventHandler(async (event) => {
     metadata: r.metadata ? JSON.parse(r.metadata) : null,
     createdAt: r.createdAt,
     actor: r.actorId
-      ? { id: r.actorId, username: r.actorUsername, displayName: r.actorDisplayName }
+      ? {
+          id: r.actorId,
+          username: r.actorUsername,
+          displayName: r.actorDisplayName,
+        }
       : null,
-  }))
-})
+  }));
+});

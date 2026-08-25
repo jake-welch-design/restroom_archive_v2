@@ -1,34 +1,43 @@
-import { eq, sql } from 'drizzle-orm'
-import { z } from 'zod'
-import { useDb, schema } from '~~/server/utils/db'
-import { requireRole } from '~~/server/utils/requireRole'
-import { adminMessagePatch } from '~~/server/utils/adminMessage'
-import { recordAdminAction } from '~~/server/utils/auditLog'
+import { eq, sql } from "drizzle-orm";
+import { z } from "zod";
+import { useDb, schema } from "~~/server/utils/db";
+import { requireRole } from "~~/server/utils/requireRole";
+import { adminMessagePatch } from "~~/server/utils/adminMessage";
+import { recordAdminAction } from "~~/server/utils/auditLog";
 
 const Body = z.object({
   days: z.number().int().positive().max(3650),
   message: z.string().max(500).optional(),
-})
+});
 
 export default defineEventHandler(async (event) => {
-  const actor = requireRole(event, 'admin')
+  const actor = requireRole(event, "admin");
 
-  const id = Number(getRouterParam(event, 'id'))
-  if (!id) throw createError({ statusCode: 400, statusMessage: 'Invalid id' })
-  if (id === actor.id) throw createError({ statusCode: 400, statusMessage: 'You cannot mute yourself' })
+  const id = Number(getRouterParam(event, "id"));
+  if (!id) throw createError({ statusCode: 400, statusMessage: "Invalid id" });
+  if (id === actor.id)
+    throw createError({
+      statusCode: 400,
+      statusMessage: "You cannot mute yourself",
+    });
 
-  const body = await readValidatedBody(event, Body.parse)
+  const body = await readValidatedBody(event, Body.parse);
 
-  const db = useDb(event)
+  const db = useDb(event);
 
   const target = await db
     .select({ id: schema.users.id, role: schema.users.role })
     .from(schema.users)
     .where(eq(schema.users.id, id))
-    .get()
+    .get();
 
-  if (!target) throw createError({ statusCode: 404, statusMessage: 'User not found' })
-  if (target.role === 'admin') throw createError({ statusCode: 409, statusMessage: 'Cannot mute an admin' })
+  if (!target)
+    throw createError({ statusCode: 404, statusMessage: "User not found" });
+  if (target.role === "admin")
+    throw createError({
+      statusCode: 409,
+      statusMessage: "Cannot mute an admin",
+    });
 
   await db
     .update(schema.users)
@@ -36,9 +45,12 @@ export default defineEventHandler(async (event) => {
       mutedUntil: sql`datetime('now', ${`+${body.days} days`})`,
       ...adminMessagePatch(body.message),
     })
-    .where(eq(schema.users.id, id))
+    .where(eq(schema.users.id, id));
 
-  await recordAdminAction(event, 'user.mute', 'user', id, { days: body.days, ...(body.message ? { message: body.message } : {}) })
+  await recordAdminAction(event, "user.mute", "user", id, {
+    days: body.days,
+    ...(body.message ? { message: body.message } : {}),
+  });
 
-  return { ok: true }
-})
+  return { ok: true };
+});

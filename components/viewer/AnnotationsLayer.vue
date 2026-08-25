@@ -45,9 +45,12 @@ function cancelReport() {
 async function confirmReport(id: number) {
   reportError.value = "";
   try {
-    await $fetch(`/api/restrooms/${props.restroomSlug}/annotations/${id}/report`, {
-      method: "POST",
-    });
+    await $fetch(
+      `/api/restrooms/${props.restroomSlug}/annotations/${id}/report`,
+      {
+        method: "POST",
+      },
+    );
     reportedIds.value.add(id);
     confirmingReportId.value = null;
   } catch (e: unknown) {

@@ -36,7 +36,8 @@ const basemap = ref<Basemap>("map");
 
 function loadBasemap() {
   try {
-    if (localStorage.getItem(BASEMAP_KEY) === "satellite") basemap.value = "satellite";
+    if (localStorage.getItem(BASEMAP_KEY) === "satellite")
+      basemap.value = "satellite";
   } catch {
     // Ignore unavailable storage — the default basemap is fine.
   }
@@ -164,7 +165,9 @@ function initMap() {
           id: "satellite-layer",
           type: "raster",
           source: "satellite",
-          layout: { visibility: basemap.value === "satellite" ? "visible" : "none" },
+          layout: {
+            visibility: basemap.value === "satellite" ? "visible" : "none",
+          },
         },
       ],
     },
@@ -318,7 +321,12 @@ function offsetBox(el: HTMLElement, ancestor: HTMLElement) {
     y += n.offsetTop;
     n = n.offsetParent as HTMLElement | null;
   }
-  return { left: x, top: y, right: x + el.offsetWidth, bottom: y + el.offsetHeight };
+  return {
+    left: x,
+    top: y,
+    right: x + el.offsetWidth,
+    bottom: y + el.offsetHeight,
+  };
 }
 
 // Camera padding that keeps the selected pin centred in the part of the map the
@@ -371,8 +379,7 @@ function getPanelPadding(): maplibregl.PaddingOptions {
 
   // If the panel is open, it covers something — padding of 0 on every side means
   // the measurement went wrong, and using it would leave the pin under the panel.
-  const total =
-    measured.left + measured.right + measured.top + measured.bottom;
+  const total = measured.left + measured.right + measured.top + measured.bottom;
   return total > 0 ? measured : estimate();
 }
 
@@ -521,11 +528,15 @@ function sampleDebug() {
   };
 }
 
-watch(showMapDebug, (on) => {
-  if (debugTimer) clearInterval(debugTimer);
-  debugTimer = on ? setInterval(sampleDebug, 500) : null;
-  if (on) sampleDebug();
-}, { immediate: true });
+watch(
+  showMapDebug,
+  (on) => {
+    if (debugTimer) clearInterval(debugTimer);
+    debugTimer = on ? setInterval(sampleDebug, 500) : null;
+    if (on) sampleDebug();
+  },
+  { immediate: true },
+);
 
 watch(() => props.selectedSlug, updateActivePin);
 

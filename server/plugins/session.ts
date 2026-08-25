@@ -1,12 +1,12 @@
-import { eq } from 'drizzle-orm'
-import { useDb, schema } from '~~/server/utils/db'
-import { isWithinHours } from '~~/server/utils/sqliteTime'
+import { eq } from "drizzle-orm";
+import { useDb, schema } from "~~/server/utils/db";
+import { isWithinHours } from "~~/server/utils/sqliteTime";
 
 export default defineNitroPlugin(() => {
-  sessionHooks.hook('fetch', async (session, event) => {
-    if (!session.user?.id) return
+  sessionHooks.hook("fetch", async (session, event) => {
+    if (!session.user?.id) return;
     try {
-      const db = useDb(event)
+      const db = useDb(event);
       const fresh = await db
         .select({
           id: schema.users.id,
@@ -23,19 +23,18 @@ export default defineNitroPlugin(() => {
         })
         .from(schema.users)
         .where(eq(schema.users.id, session.user.id))
-        .get()
+        .get();
 
-      if (!fresh) return
+      if (!fresh) return;
 
       if (fresh.adminMessage && !isWithinHours(fresh.adminMessageAt, 24)) {
-        fresh.adminMessage = null
-        fresh.adminMessageAt = null
+        fresh.adminMessage = null;
+        fresh.adminMessageAt = null;
       }
 
-      session.user = fresh
-    }
-    catch {
+      session.user = fresh;
+    } catch {
       // DB unavailable (e.g. during build) — leave stale session in place
     }
-  })
-})
+  });
+});

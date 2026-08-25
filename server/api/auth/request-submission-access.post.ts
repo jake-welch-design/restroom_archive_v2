@@ -1,25 +1,25 @@
-import { eq, sql } from 'drizzle-orm'
-import { z } from 'zod'
-import { useDb, schema } from '~~/server/utils/db'
-import { requireActiveUser } from '~~/server/utils/requireActiveUser'
-import { rateLimitByUser } from '~~/server/utils/rateLimit'
+import { eq, sql } from "drizzle-orm";
+import { z } from "zod";
+import { useDb, schema } from "~~/server/utils/db";
+import { requireActiveUser } from "~~/server/utils/requireActiveUser";
+import { rateLimitByUser } from "~~/server/utils/rateLimit";
 
 const Body = z.object({
   agreements: z.array(z.string()).length(6),
-})
+});
 
 export default defineEventHandler(async (event) => {
-  const user = requireActiveUser(event)
-  await rateLimitByUser(event, 'req-submission', { max: 3, windowSec: 86400 })
+  const user = requireActiveUser(event);
+  await rateLimitByUser(event, "req-submission", { max: 3, windowSec: 86400 });
 
-  await readValidatedBody(event, Body.parse)
+  await readValidatedBody(event, Body.parse);
 
-  const db = useDb(event)
+  const db = useDb(event);
 
   await db
     .update(schema.users)
     .set({ submissionRequestedAt: sql`(datetime('now'))` })
-    .where(eq(schema.users.id, user.id))
+    .where(eq(schema.users.id, user.id));
 
-  return { ok: true }
-})
+  return { ok: true };
+});

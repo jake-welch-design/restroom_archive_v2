@@ -1,21 +1,22 @@
-import { eq } from 'drizzle-orm'
-import { useDb, schema } from '~~/server/utils/db'
+import { eq } from "drizzle-orm";
+import { useDb, schema } from "~~/server/utils/db";
 
 // Temporary local-only helper for manual QA. Not part of the app — delete after testing.
 export default defineEventHandler(async (event) => {
   // Hard gate: unguarded, this hands a full admin session to any unauthenticated
   // caller. `import.meta.dev` is compiled out of the production build.
   if (!import.meta.dev) {
-    throw createError({ statusCode: 404, statusMessage: 'Not found' })
+    throw createError({ statusCode: 404, statusMessage: "Not found" });
   }
 
-  const db = useDb(event)
+  const db = useDb(event);
   const user = await db
     .select()
     .from(schema.users)
     .where(eq(schema.users.id, 1))
-    .get()
-  if (!user) throw createError({ statusCode: 404, statusMessage: 'No user id 1' })
+    .get();
+  if (!user)
+    throw createError({ statusCode: 404, statusMessage: "No user id 1" });
 
   await setUserSession(event, {
     user: {
@@ -31,7 +32,10 @@ export default defineEventHandler(async (event) => {
       adminMessage: user.adminMessage ?? null,
       adminMessageAt: user.adminMessageAt ?? null,
     },
-  })
+  });
 
-  return { ok: true, user: { id: user.id, username: user.username, role: user.role } }
-})
+  return {
+    ok: true,
+    user: { id: user.id, username: user.username, role: user.role },
+  };
+});

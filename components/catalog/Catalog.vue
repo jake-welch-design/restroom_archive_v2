@@ -199,9 +199,8 @@ onBeforeUnmount(() => {
 // The strip's bottom element swaps between views (thead ↔ sub-header), the
 // filter panel inserts a row, and in list view the `.thead` only mounts once
 // rows exist — re-measure after the DOM settles for any of these.
-watch(
-  [viewMode, filterOpen, pending, () => rows.value.length],
-  () => nextTick(measureStrip),
+watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
+  nextTick(measureStrip),
 );
 </script>
 

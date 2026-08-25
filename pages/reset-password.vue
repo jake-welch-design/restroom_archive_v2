@@ -1,41 +1,40 @@
 <script setup lang="ts">
-const route = useRoute()
-const token = computed(() => (route.query.token as string | undefined) ?? '')
+const route = useRoute();
+const token = computed(() => (route.query.token as string | undefined) ?? "");
 
-const newPassword = ref('')
-const confirmPassword = ref('')
-const loading = ref(false)
-const error = ref('')
-const success = ref(false)
+const newPassword = ref("");
+const confirmPassword = ref("");
+const loading = ref(false);
+const error = ref("");
+const success = ref(false);
 
 async function submit() {
   if (!token.value) {
-    error.value = 'No reset token found in this link.'
-    return
+    error.value = "No reset token found in this link.";
+    return;
   }
   if (newPassword.value.length < 8) {
-    error.value = 'Password must be at least 8 characters.'
-    return
+    error.value = "Password must be at least 8 characters.";
+    return;
   }
   if (newPassword.value !== confirmPassword.value) {
-    error.value = 'Passwords do not match.'
-    return
+    error.value = "Passwords do not match.";
+    return;
   }
-  error.value = ''
-  loading.value = true
+  error.value = "";
+  loading.value = true;
   try {
-    await $fetch('/api/auth/reset-password', {
-      method: 'POST',
+    await $fetch("/api/auth/reset-password", {
+      method: "POST",
       body: { token: token.value, password: newPassword.value },
-    })
-    success.value = true
-  }
-  catch (e: unknown) {
-    const err = e as { data?: { statusMessage?: string }; message?: string }
-    error.value = err.data?.statusMessage ?? err.message ?? 'Could not reset password.'
-  }
-  finally {
-    loading.value = false
+    });
+    success.value = true;
+  } catch (e: unknown) {
+    const err = e as { data?: { statusMessage?: string }; message?: string };
+    error.value =
+      err.data?.statusMessage ?? err.message ?? "Could not reset password.";
+  } finally {
+    loading.value = false;
   }
 }
 </script>
@@ -48,7 +47,9 @@ async function submit() {
 
       <div v-if="!token" class="auth-msg">
         <p class="form-error">No reset token found in this link.</p>
-        <NuxtLink to="/forgot-password" class="link-btn">Request a new link</NuxtLink>
+        <NuxtLink to="/forgot-password" class="link-btn"
+          >Request a new link</NuxtLink
+        >
       </div>
 
       <div v-else-if="success" class="auth-msg">
@@ -88,7 +89,7 @@ async function submit() {
         <p v-if="error" class="form-error">{{ error }}</p>
 
         <button type="submit" class="primary-btn" :disabled="loading">
-          {{ loading ? 'Saving…' : 'Reset password' }}
+          {{ loading ? "Saving…" : "Reset password" }}
         </button>
       </form>
     </div>

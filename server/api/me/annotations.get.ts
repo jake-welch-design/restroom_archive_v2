@@ -1,11 +1,11 @@
-import { desc, eq } from 'drizzle-orm'
-import { useDb, schema } from '~~/server/utils/db'
-import { requireRole } from '~~/server/utils/requireRole'
+import { desc, eq } from "drizzle-orm";
+import { useDb, schema } from "~~/server/utils/db";
+import { requireRole } from "~~/server/utils/requireRole";
 
 export default defineEventHandler(async (event) => {
-  const user = requireRole(event, 'archivist')
+  const user = requireRole(event, "archivist");
 
-  const db = useDb(event)
+  const db = useDb(event);
 
   const rows = await db
     .select({
@@ -18,10 +18,13 @@ export default defineEventHandler(async (event) => {
       restroomDate: schema.restrooms.date,
     })
     .from(schema.annotations)
-    .innerJoin(schema.restrooms, eq(schema.annotations.restroomId, schema.restrooms.id))
+    .innerJoin(
+      schema.restrooms,
+      eq(schema.annotations.restroomId, schema.restrooms.id),
+    )
     .where(eq(schema.annotations.authorId, user.id))
     .orderBy(desc(schema.annotations.createdAt))
-    .all()
+    .all();
 
-  return rows
-})
+  return rows;
+});
