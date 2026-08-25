@@ -1,9 +1,37 @@
 <script setup lang="ts">
+/**
+ * Site header: wordmark plus primary navigation.
+ *
+ * Rendered by every page, including those outside the catalog, so the wordmark
+ * is an `h1` only on the home page and a `p` elsewhere. That keeps each page's
+ * own heading as its document title rather than competing with a site-wide one.
+ *
+ * The links are declared once and rendered twice, into the inline nav and into
+ * the drawer that replaces it in a narrow panel. Only one of the two is ever
+ * displayed; which one is a CSS decision, so both stay in the markup.
+ */
 const route = useRoute();
 const { loggedIn } = useAuth();
+
 const isHome = computed(() => route.path === "/");
 const menuOpen = ref(false);
 
+const navItems = computed(() => [
+  { to: "/about", label: "Info", active: route.path === "/about" },
+  {
+    to: "/",
+    label: "Catalog",
+    // A restroom's own URL is still the catalog, with a row expanded.
+    active: route.path === "/" || route.path.startsWith("/r/"),
+  },
+  {
+    to: "/account",
+    label: loggedIn.value ? "Account" : "Login",
+    active: route.path === "/account",
+  },
+]);
+
+// A navigation is the drawer's whole purpose, so it closes once one happens.
 watch(
   () => route.path,
   () => {
@@ -16,27 +44,20 @@ watch(
   <header class="catalog-head">
     <div class="head-row">
       <component :is="isHome ? 'h1' : 'p'" class="site-title">
-        <a href="/" style="text-decoration: none; color: inherit"
-          >The Restroom Archive</a
-        >
+        <a href="/">The Restroom Archive</a>
       </component>
+
       <nav class="top-nav">
-        <NuxtLink to="/about" :class="{ active: route.path === '/about' }"
-          >Info</NuxtLink
-        >
         <NuxtLink
-          to="/"
-          :class="{
-            active: route.path === '/' || route.path.startsWith('/r/'),
-          }"
-          >Catalog</NuxtLink
+          v-for="item in navItems"
+          :key="item.to"
+          :to="item.to"
+          :class="{ active: item.active }"
         >
-        <NuxtLink
-          to="/account"
-          :class="{ active: route.path === '/account' }"
-          >{{ loggedIn ? "Account" : "Login" }}</NuxtLink
-        >
+          {{ item.label }}
+        </NuxtLink>
       </nav>
+
       <button
         type="button"
         class="menu-toggle"
@@ -50,21 +71,14 @@ watch(
 
     <div class="mobile-nav-wrap" :class="{ open: menuOpen }">
       <nav class="mobile-nav">
-        <NuxtLink to="/about" :class="{ active: route.path === '/about' }"
-          >Info</NuxtLink
-        >
         <NuxtLink
-          to="/"
-          :class="{
-            active: route.path === '/' || route.path.startsWith('/r/'),
-          }"
-          >Catalog</NuxtLink
+          v-for="item in navItems"
+          :key="item.to"
+          :to="item.to"
+          :class="{ active: item.active }"
         >
-        <NuxtLink
-          to="/account"
-          :class="{ active: route.path === '/account' }"
-          >{{ loggedIn ? "Account" : "Login" }}</NuxtLink
-        >
+          {{ item.label }}
+        </NuxtLink>
       </nav>
     </div>
   </header>
@@ -101,6 +115,11 @@ watch(
   font-size: 24px;
   font-weight: 400;
   color: #000;
+}
+
+.site-title a {
+  color: inherit;
+  text-decoration: none;
 }
 
 .top-nav {

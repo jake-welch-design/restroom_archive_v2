@@ -30,27 +30,22 @@ const allTags = computed(() => {
   return [...seen].sort((a, b) => a.localeCompare(b));
 });
 
-function isTagActive(tag: string) {
-  const lower = tag.toLowerCase();
-  return activeTags.value.some((t) => t.toLowerCase() === lower);
-}
+const {
+  isTagActive,
+  toggleTag: computeToggle,
+  removeTag: computeRemove,
+} = useTagFilter();
 
 function toggleTag(tag: string) {
-  const t = tag.trim();
-  if (!t) return;
-  const lower = t.toLowerCase();
-  const idx = activeTags.value.findIndex((x) => x.toLowerCase() === lower);
-  if (idx >= 0) {
-    activeTags.value.splice(idx, 1);
-  } else {
-    activeTags.value.push(t);
-    filterOpen.value = true;
-  }
+  const next = computeToggle(tag, activeTags.value);
+  // Opening the panel on add, not on remove: turning a tag on from a row is
+  // where the user needs to see the filter they have just started building.
+  if (next.length > activeTags.value.length) filterOpen.value = true;
+  activeTags.value = next;
 }
 
 function removeTag(tag: string) {
-  const lower = tag.toLowerCase();
-  activeTags.value = activeTags.value.filter((x) => x.toLowerCase() !== lower);
+  activeTags.value = computeRemove(tag, activeTags.value);
 }
 
 const fuse = computed(() => {
@@ -242,13 +237,13 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
           <input v-model="query" type="search" placeholder="Search" />
         </label>
 
-        <button type="button" class="link-btn" @click="randomPick">
+        <button type="button" class="control-btn" @click="randomPick">
           Random
         </button>
 
         <button
           type="button"
-          class="link-btn filter-btn"
+          class="control-btn filter-btn"
           :class="{ active: filterOpen }"
           :aria-expanded="filterOpen"
           @click="filterOpen = !filterOpen"
@@ -260,7 +255,7 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
 
       <div class="view-mode">
         <button
-          class="link-btn"
+          class="control-btn"
           :class="{ active: viewMode === 'list' }"
           :aria-pressed="viewMode === 'list'"
           @click="viewMode = 'list'"
@@ -268,7 +263,7 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
           List
         </button>
         <button
-          class="link-btn"
+          class="control-btn"
           :class="{ active: viewMode === 'grid' }"
           :aria-pressed="viewMode === 'grid'"
           @click="viewMode = 'grid'"
@@ -276,7 +271,7 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
           Grid
         </button>
         <button
-          class="link-btn"
+          class="control-btn"
           :class="{ active: viewMode === 'map' }"
           :aria-pressed="viewMode === 'map'"
           @click="viewMode = 'map'"
@@ -292,7 +287,7 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
         :key="t"
         type="button"
         class="filter-chip"
-        :class="{ active: isTagActive(t) }"
+        :class="{ active: isTagActive(t, activeTags) }"
         @click="toggleTag(t)"
       >
         {{ t }}
@@ -373,7 +368,7 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
       <button
         v-if="dateFrom || dateTo"
         type="button"
-        class="link-btn"
+        class="control-btn"
         @click="
           dateFrom = '';
           dateTo = '';
@@ -561,16 +556,22 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
   margin: 0;
 }
 
-.link-btn {
+/* Control-bar buttons: Random, Filter, and the view switcher. Deliberately
+   not the form `.link-btn` in assets/css/forms.css, which is underlined. These
+   read as a row of plain labels; an underline on each would turn the strip into
+   a hedge. */
+.control-btn {
   background: none;
   border: none;
   padding: 0;
+  font: inherit;
   font-size: 14px;
+  text-decoration: none;
   cursor: pointer;
   color: #000;
 }
 
-.link-btn.active {
+.control-btn.active {
   color: #595959;
 }
 
@@ -578,7 +579,7 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
    color. Gated on a real pointer so a tap on a touch device doesn't leave it
    stuck until the next tap. */
 @media (hover: hover) {
-  .link-btn:hover {
+  .control-btn:hover {
     color: #595959;
   }
 }
@@ -705,7 +706,7 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
   .sub-header {
     padding: 8px 12px;
   }
-  .link-btn,
+  .control-btn,
   .sort-btn,
   .date-field,
   .date-val {

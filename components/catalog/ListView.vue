@@ -1,10 +1,6 @@
 <script setup lang="ts">
 import type { RestroomSummary } from "~/types/restroom";
-import type { Annotation } from "~/types/annotation";
-import {
-  formatDayMonthYear,
-  formatMonthDayYear,
-} from "~~/shared/utils/formatDate";
+import { formatDayMonthYear } from "~~/shared/utils/formatDate";
 
 type SortKey = "isoDate" | "name" | "location";
 type SortDir = "asc" | "desc";
@@ -24,11 +20,6 @@ const emit = defineEmits<{
   removeTag: [tag: string];
 }>();
 
-function isTagActive(tag: string) {
-  const lower = tag.toLowerCase();
-  return props.activeTags.some((t) => t.toLowerCase() === lower);
-}
-
 // Previously-used descriptors across all loaded restrooms, ordered by
 // frequency — feeds the tag suggestion dropdown when editing an entry.
 const descriptorSuggestions = computed(() => {
@@ -47,7 +38,6 @@ const descriptorSuggestions = computed(() => {
 });
 
 const { isAdmin, user } = useAuth();
-const { selectAnnotation } = useSelection();
 
 // Admins edit anything; archivists edit the info on their own submissions.
 // Usernames are unique, so they're enough to match without exposing ids.
@@ -55,32 +45,6 @@ function canEdit(r: RestroomSummary) {
   if (isAdmin.value) return true;
   const u = user.value as { username?: string } | null;
   return !!u?.username && r.submitter?.username === u.username;
-}
-
-// Annotations for the expanded row
-const expandedSlug = computed(() => props.selectedSlug);
-const { data: annotations, refresh: refreshAnnotations } =
-  useAnnotations(expandedSlug);
-
-// Annotations collapse
-const annotationsOpen = ref(false);
-
-// Annotation delete
-const deletingId = ref<number | null>(null);
-async function deleteAnnotation(slug: string, id: number) {
-  deletingId.value = id;
-  try {
-    await $fetch(`/api/restrooms/${slug}/annotations/${id}`, {
-      method: "DELETE",
-    });
-    await refreshAnnotations();
-  } finally {
-    deletingId.value = null;
-  }
-}
-
-function authorLabel(a: Annotation) {
-  return a.author.displayName ?? `@${a.author.username}`;
 }
 
 const tbodyRef = ref<HTMLUListElement | null>(null);
@@ -344,68 +308,15 @@ function sortArrow(key: SortKey) {
               {{ r.description ?? "No description yet." }}
             </p>
 
-            <!-- Descriptors -->
-            <div
-              v-if="r.descriptors?.length"
-              class="descriptor-chips"
-              @click.stop
-            >
-              <button
-                v-for="t in r.descriptors"
-                :key="t"
-                type="button"
-                class="tag-chip row-chip"
-                :class="{ active: isTagActive(t) }"
-                @click.stop="emit('toggleTag', t)"
-              >
-                {{ t }}
-              </button>
-            </div>
+            <DescriptorChips
+              class="row-chips"
+              :tags="r.descriptors ?? []"
+              :active-tags="activeTags"
+              @toggle-tag="emit('toggleTag', $event)"
+            />
 
-            <!-- Annotations -->
-            <div class="annotations-section" @click.stop>
-              <button
-                type="button"
-                class="annotations-toggle"
-                :aria-expanded="annotationsOpen"
-                @click.stop="annotationsOpen = !annotationsOpen"
-              >
-                Annotations ({{ annotations?.length ?? 0 }})
-                <span class="toggle-caret" :class="{ open: annotationsOpen }"
-                  >›</span
-                >
-              </button>
-              <ul
-                v-if="annotationsOpen && annotations?.length"
-                class="annotation-list"
-              >
-                <li
-                  v-for="a in annotations"
-                  :key="a.id"
-                  class="annotation-item"
-                  @click.stop="selectAnnotation(a.id)"
-                >
-                  <div class="annotation-main">
-                    <span class="annotation-body">{{ a.body }}</span>
-                    <span class="annotation-meta"
-                      >{{ authorLabel(a) }} ·
-                      {{ formatMonthDayYear(a.createdAt) }}</span
-                    >
-                  </div>
-                  <button
-                    v-if="isAdmin || user?.id === a.author.id"
-                    type="button"
-                    class="annotation-delete"
-                    :disabled="deletingId === a.id"
-                    @click.stop="deleteAnnotation(r.slug, a.id)"
-                  >
-                    {{ deletingId === a.id ? "…" : "×" }}
-                  </button>
-                </li>
-              </ul>
-              <p v-else-if="annotationsOpen" class="annotation-empty">
-                No annotations yet.
-              </p>
+            <div class="annotations-section">
+              <AnnotationList :slug="r.slug" />
             </div>
           </div>
         </div>
@@ -511,42 +422,6 @@ function sortArrow(key: SortKey) {
   align-items: start;
   min-height: 20px;
 }
-.descriptor-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 12px;
-}
-.tag-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: #fff;
-  color: #000;
-  padding: 3px 8px;
-  font-size: 12px;
-  font-weight: 400;
-  line-height: 1.2;
-  border: 1px solid #000;
-  border-radius: 3px;
-  font-family: inherit;
-}
-.row-chip {
-  cursor: pointer;
-  transition:
-    background 0.1s,
-    color 0.1s;
-}
-.row-chip.active {
-  background: #000;
-  color: #fff;
-}
-.row-chip:hover:not(.active) {
-  background: #f0f0f0;
-}
-.row-chip.active:hover {
-  background: #333;
-}
 .row.selected {
   background: #fff;
 }
@@ -590,89 +465,6 @@ function sortArrow(key: SortKey) {
   padding-top: 12px;
   border-top: 1px solid #e8e8e8;
 }
-.annotations-toggle {
-  background: transparent;
-  border: 0;
-  padding: 0;
-  font: inherit;
-  font-size: 14px;
-  color: #000;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-bottom: 0;
-}
-.annotations-toggle:hover {
-  color: #555;
-}
-.toggle-caret {
-  display: inline-block;
-  font-size: 12px;
-  transition: transform 0.15s;
-  transform: rotate(0deg);
-}
-.toggle-caret.open {
-  transform: rotate(90deg);
-}
-.annotation-list {
-  list-style: none;
-  margin: 6px 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-.annotation-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 6px 0;
-  border-bottom: 1px solid #e8e8e8;
-  cursor: pointer;
-}
-.annotation-item:hover {
-  background: #f9f9f9;
-}
-.annotation-main {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.annotation-body {
-  font-size: 14px;
-  color: #000;
-  line-height: 1.3;
-}
-.annotation-meta {
-  font-size: 12px;
-  color: #999;
-}
-.annotation-delete {
-  background: transparent;
-  border: 0;
-  padding: 0 4px;
-  font: inherit;
-  font-size: 16px;
-  color: #999;
-  cursor: pointer;
-  line-height: 1;
-  flex-shrink: 0;
-}
-.annotation-delete:hover:not(:disabled) {
-  color: #c33;
-}
-.annotation-delete:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-.annotation-empty {
-  margin: 4px 0 0;
-  font-size: 13px;
-  color: #999;
-}
-
 /* Edit form */
 .edit-form {
   display: flex;
@@ -770,12 +562,6 @@ function sortArrow(key: SortKey) {
     padding: 0 12px 0px;
   }
   .desc-text {
-    font-size: 12px;
-  }
-  .annotation-body {
-    font-size: 12px;
-  }
-  .annotations-toggle {
     font-size: 12px;
   }
   .edit-input {

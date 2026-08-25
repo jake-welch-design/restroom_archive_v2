@@ -1,54 +1,36 @@
 <script setup lang="ts">
 import type { RestroomSummary } from "~/types/restroom";
-import type { Annotation } from "~/types/annotation";
-import {
-  formatDayMonthYear,
-  formatMonthDayYear,
-} from "~~/shared/utils/formatDate";
+import { formatDayMonthYear } from "~~/shared/utils/formatDate";
 
+/**
+ * Thumbnail grid of the catalog.
+ *
+ * A tile shows its scan's thumbnail with the name, date and location overlaid.
+ * The selected tile swaps that for its detail in place, keeping the grid's
+ * geometry intact so the surrounding tiles do not reflow.
+ *
+ * Column count and margins follow the panel's width rather than the window's.
+ * Keyed to the window they stepped the wrong way at the layout switch: a 376px
+ * panel still received three columns while a 700px one dropped to two.
+ */
 const props = defineProps<{
   rows: RestroomSummary[];
   selectedSlug: string | null;
   activeTags: string[];
 }>();
+
 const emit = defineEmits<{
   select: [slug: string];
   toggleTag: [tag: string];
 }>();
 
-function isTagActive(tag: string) {
-  const lower = tag.toLowerCase();
-  return props.activeTags.some((t) => t.toLowerCase() === lower);
-}
-
-const { isAdmin, user } = useAuth();
-const { selectAnnotation } = useSelection();
-
-const expandedSlug = computed(() => props.selectedSlug);
-const { data: annotations, refresh: refreshAnnotations } =
-  useAnnotations(expandedSlug);
-
-const annotationsOpen = ref(false);
-const deletingId = ref<number | null>(null);
-
-async function deleteAnnotation(slug: string, id: number) {
-  deletingId.value = id;
-  try {
-    await $fetch(`/api/restrooms/${slug}/annotations/${id}`, {
-      method: "DELETE",
-    });
-    await refreshAnnotations();
-  } finally {
-    deletingId.value = null;
-  }
-}
-
-function authorLabel(a: Annotation) {
-  return a.author.displayName ?? `@${a.author.username}`;
-}
-
 const gridWrapRef = ref<HTMLDivElement | null>(null);
 
+/**
+ * Brings the selected tile into view. Selection can originate outside the grid
+ * (the viewer's next/previous controls, a deep link), in which case the tile may
+ * be well off screen.
+ */
 async function scrollToSelected(slug: string | null | undefined) {
   if (!slug || !gridWrapRef.value) return;
   await nextTick();
@@ -89,66 +71,15 @@ onMounted(() => scrollToSelected(props.selectedSlug));
                 {{ r.description ?? "No description yet." }}
               </p>
 
-              <div
-                v-if="r.descriptors?.length"
-                class="descriptors-section"
-                @click.stop
-              >
-                <button
-                  v-for="t in r.descriptors"
-                  :key="t"
-                  type="button"
-                  class="tag-chip"
-                  :class="{ active: isTagActive(t) }"
-                  @click.stop="emit('toggleTag', t)"
-                >
-                  {{ t }}
-                </button>
-              </div>
+              <DescriptorChips
+                :tags="r.descriptors ?? []"
+                :active-tags="activeTags"
+                density="compact"
+                @toggle-tag="emit('toggleTag', $event)"
+              />
 
               <div class="annotations-section">
-                <button
-                  type="button"
-                  class="annotations-toggle"
-                  :aria-expanded="annotationsOpen"
-                  @click.stop="annotationsOpen = !annotationsOpen"
-                >
-                  Annotations ({{ annotations?.length ?? 0 }})
-                  <span class="toggle-caret" :class="{ open: annotationsOpen }"
-                    >›</span
-                  >
-                </button>
-                <ul
-                  v-if="annotationsOpen && annotations?.length"
-                  class="annotation-list"
-                >
-                  <li
-                    v-for="a in annotations"
-                    :key="a.id"
-                    class="annotation-item"
-                    @click.stop="selectAnnotation(a.id)"
-                  >
-                    <div class="annotation-main">
-                      <span class="annotation-body">{{ a.body }}</span>
-                      <span class="annotation-meta">
-                        {{ authorLabel(a) }} ·
-                        {{ formatMonthDayYear(a.createdAt) }}
-                      </span>
-                    </div>
-                    <button
-                      v-if="isAdmin || user?.id === a.author.id"
-                      type="button"
-                      class="annotation-delete"
-                      :disabled="deletingId === a.id"
-                      @click.stop="deleteAnnotation(r.slug, a.id)"
-                    >
-                      {{ deletingId === a.id ? "…" : "×" }}
-                    </button>
-                  </li>
-                </ul>
-                <p v-else-if="annotationsOpen" class="annotation-empty">
-                  No annotations yet.
-                </p>
+                <AnnotationList :slug="r.slug" density="compact" />
               </div>
             </div>
           </template>
@@ -278,119 +209,7 @@ onMounted(() => scrollToSelected(props.selectedSlug));
   font-size: 11px;
   line-height: 1.35;
 }
-.descriptors-section {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-.tag-chip {
-  display: inline-flex;
-  align-items: center;
-  background: #fff;
-  color: #000;
-  border: 1px solid #000;
-  border-radius: 3px;
-  padding: 3px 8px;
-  font: inherit;
-  font-size: 11px;
-  line-height: 1.2;
-  cursor: pointer;
-  transition:
-    background 0.1s,
-    color 0.1s;
-}
-.tag-chip:hover:not(.active) {
-  background: #f0f0f0;
-}
-.tag-chip.active {
-  background: #000;
-  color: #fff;
-}
-.tag-chip.active:hover {
-  background: #333;
-}
 .annotations-section {
   margin-top: auto;
-}
-.annotations-toggle {
-  background: transparent;
-  border: 0;
-  padding: 0;
-  font: inherit;
-  font-size: 13px;
-  color: #000;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-.annotations-toggle:hover {
-  color: #555;
-}
-.toggle-caret {
-  display: inline-block;
-  font-size: 12px;
-  transition: transform 0.15s;
-  transform: rotate(0deg);
-}
-.toggle-caret.open {
-  transform: rotate(90deg);
-}
-.annotation-list {
-  list-style: none;
-  margin: 4px 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-}
-.annotation-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  padding: 4px 0;
-  border-bottom: 1px solid #e8e8e8;
-  cursor: pointer;
-}
-.annotation-item:hover {
-  background: #f9f9f9;
-}
-.annotation-main {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-.annotation-body {
-  font-size: 12px;
-  color: #000;
-  line-height: 1.3;
-}
-.annotation-meta {
-  font-size: 11px;
-  color: #999;
-}
-.annotation-delete {
-  background: transparent;
-  border: 0;
-  padding: 0 4px;
-  font: inherit;
-  font-size: 14px;
-  color: #999;
-  cursor: pointer;
-  line-height: 1;
-  flex-shrink: 0;
-}
-.annotation-delete:hover:not(:disabled) {
-  color: #c33;
-}
-.annotation-delete:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-.annotation-empty {
-  margin: 4px 0 0;
-  font-size: 12px;
-  color: #999;
 }
 </style>

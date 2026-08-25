@@ -1,12 +1,16 @@
 <script setup lang="ts">
 import type { RestroomSummary } from "~/types/restroom";
-import type { Annotation } from "~/types/annotation";
-import {
-  formatDayMonthYear,
-  formatMonthDayYear,
-} from "~~/shared/utils/formatDate";
+import { formatDayMonthYear } from "~~/shared/utils/formatDate";
 
-const props = defineProps<{
+/**
+ * Detail panel for the pin selected on the map.
+ *
+ * Reads as three stacked sections divided by hairlines: identity, description
+ * with its descriptors, then annotations. The panel moves from the map's bottom
+ * edge to its left side on a sheet layout, which is geometry only; the type
+ * scale follows the panel's width instead.
+ */
+defineProps<{
   restroom: RestroomSummary;
   activeTags: string[];
 }>();
@@ -15,33 +19,6 @@ const emit = defineEmits<{
   close: [];
   toggleTag: [tag: string];
 }>();
-
-const slug = computed(() => props.restroom.slug);
-const { data: annotations, refresh: refreshAnnotations } = useAnnotations(slug);
-const annotationsOpen = ref(false);
-const { isAdmin, user } = useAuth();
-const { selectAnnotation } = useSelection();
-
-const deletingId = ref<number | null>(null);
-async function deleteAnnotation(id: number) {
-  deletingId.value = id;
-  try {
-    await $fetch(`/api/restrooms/${props.restroom.slug}/annotations/${id}`, {
-      method: "DELETE",
-    });
-    await refreshAnnotations();
-  } finally {
-    deletingId.value = null;
-  }
-}
-
-function isTagActive(tag: string) {
-  return props.activeTags.some((t) => t.toLowerCase() === tag.toLowerCase());
-}
-
-function authorLabel(a: Annotation) {
-  return a.author.displayName ?? `@${a.author.username}`;
-}
 </script>
 
 <template>
@@ -65,57 +42,15 @@ function authorLabel(a: Annotation) {
         {{ restroom.description ?? "No description yet." }}
       </p>
 
-      <div v-if="restroom.descriptors?.length" class="descriptor-chips">
-        <button
-          v-for="t in restroom.descriptors"
-          :key="t"
-          type="button"
-          class="tag-chip"
-          :class="{ active: isTagActive(t) }"
-          @click="emit('toggleTag', t)"
-        >
-          {{ t }}
-        </button>
-      </div>
+      <DescriptorChips
+        :tags="restroom.descriptors ?? []"
+        :active-tags="activeTags"
+        @toggle-tag="emit('toggleTag', $event)"
+      />
     </div>
 
     <div class="annotations-section">
-      <button
-        type="button"
-        class="annotations-toggle"
-        @click="annotationsOpen = !annotationsOpen"
-      >
-        Annotations ({{ annotations?.length ?? 0 }})
-        <span class="toggle-caret" :class="{ open: annotationsOpen }">›</span>
-      </button>
-      <ul v-if="annotationsOpen && annotations?.length" class="annotation-list">
-        <li
-          v-for="a in annotations"
-          :key="a.id"
-          class="annotation-item"
-          @click="selectAnnotation(a.id)"
-        >
-          <div class="annotation-main">
-            <span class="annotation-body">{{ a.body }}</span>
-            <span class="annotation-meta"
-              >{{ authorLabel(a) }} ·
-              {{ formatMonthDayYear(a.createdAt) }}</span
-            >
-          </div>
-          <button
-            v-if="isAdmin || user?.id === a.author.id"
-            type="button"
-            class="annotation-delete"
-            :disabled="deletingId === a.id"
-            @click.stop="deleteAnnotation(a.id)"
-          >
-            {{ deletingId === a.id ? "…" : "×" }}
-          </button>
-        </li>
-      </ul>
-      <p v-else-if="annotationsOpen" class="annotation-empty">
-        No annotations yet.
-      </p>
+      <AnnotationList :slug="restroom.slug" />
     </div>
   </div>
 </template>
@@ -185,139 +120,12 @@ function authorLabel(a: Annotation) {
   line-height: 1.35;
 }
 
-.descriptor-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 12px;
-}
-
-.tag-chip {
-  display: inline-flex;
-  align-items: center;
-  background: #fff;
-  color: #000;
-  border: 1px solid #000;
-  border-radius: 3px;
-  padding: 3px 8px;
-  font: inherit;
-  font-size: 12px;
-  line-height: 1.2;
-  cursor: pointer;
-  transition:
-    background 0.1s,
-    color 0.1s;
-}
-
-.tag-chip.active {
-  background: #000;
-  color: #fff;
-}
-
-.tag-chip:hover:not(.active) {
-  background: #f0f0f0;
-}
-
 /* Divider matches the one under `.panel-header`, so the panel reads as three
    sections: name/date/location, description + descriptors, annotations. */
 .annotations-section {
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px solid #e8e8e8;
-}
-
-.annotations-toggle {
-  background: transparent;
-  border: 0;
-  padding: 0;
-  font: inherit;
-  font-size: 14px;
-  color: #000;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.annotations-toggle:hover {
-  color: #555;
-}
-
-.toggle-caret {
-  display: inline-block;
-  font-size: 12px;
-  transition: transform 0.15s;
-  transform: rotate(0deg);
-}
-
-.toggle-caret.open {
-  transform: rotate(90deg);
-}
-
-.annotation-list {
-  list-style: none;
-  margin: 6px 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.annotation-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 6px 0;
-  border-bottom: 1px solid #e8e8e8;
-  cursor: pointer;
-}
-
-.annotation-item:hover {
-  background: #f9f9f9;
-}
-
-.annotation-main {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.annotation-body {
-  font-size: 14px;
-  color: #000;
-  line-height: 1.3;
-}
-
-.annotation-meta {
-  font-size: 12px;
-  color: #999;
-}
-
-.annotation-delete {
-  background: transparent;
-  border: 0;
-  padding: 0 4px;
-  font: inherit;
-  font-size: 16px;
-  color: #999;
-  cursor: pointer;
-  line-height: 1;
-  flex-shrink: 0;
-}
-
-.annotation-delete:hover:not(:disabled) {
-  color: #c33;
-}
-
-.annotation-delete:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.annotation-empty {
-  margin: 4px 0 0;
-  font-size: 13px;
-  color: #999;
 }
 
 /* Sheet layout: the panel moves off the map's bottom edge and onto its side.
@@ -352,9 +160,7 @@ function authorLabel(a: Annotation) {
     display: none;
   }
 
-  .panel-name,
-  .annotation-body,
-  .annotations-toggle {
+  .panel-name {
     font-size: 12px;
   }
 }
