@@ -457,6 +457,18 @@ client resolves them against `document.baseURI`.
 Recorded rather than fixed, because each is a product decision rather than a
 refactoring one.
 
+- **`/` is SWR-cached while its markup varies by cookie.** `nuxt.config.ts` sets
+  `"/": { swr: 60 }`, but `Catalog.vue` chooses list, grid or map from the
+  `viewMode` cookie during server rendering. A cached response rendered for one
+  view mode is therefore served to a visitor whose cookie asks for another.
+  Vue patches the difference during hydration, so the visible result is correct
+  and the only symptom is a "Hydration completed but contains mismatches"
+  console warning, reproducible by changing view mode and then reloading within
+  the cache window. Fixing it means picking one of three trade-offs: drop the
+  SWR rule and pay full server rendering on the busiest route, render the view
+  switcher client-only and accept a flash, or move the preference out of a
+  cookie into local storage and out of the server-rendered markup entirely.
+
 - **`/api/stats` counts every non-banned account as an "archivist"**, including
   annotators who have never been approved to submit. The About page's closing
   sentence therefore overstates the contributor count.
