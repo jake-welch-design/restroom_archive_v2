@@ -36,9 +36,7 @@ const { refresh: refreshMyAnnotations } = useMyAnnotations();
 
 const publishedCount = computed(
   () =>
-    (mySubmissions.value ?? []).filter(
-      (r) => r.status === "published" || r.status === "removal_requested",
-    ).length,
+    (mySubmissions.value ?? []).filter((r) => r.status === "published").length,
 );
 
 const inactiveCount = computed(

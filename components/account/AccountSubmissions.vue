@@ -20,11 +20,16 @@ const { data: submissions, refresh } = useMySubmissions();
 const { refresh: refreshRestroomQueue } = useRestroomQueue();
 const action = useAsyncAction();
 
-/** Live in the archive. A pending removal request does not delist an entry. */
+/**
+ * Live in the archive.
+ *
+ * A pending removal request does not delist an entry, and does not change its
+ * status either: the request is recorded in the restroom's
+ * `removal_requested_by` column, which the payload surfaces as
+ * `removalRequested`. The row stays here until an admin acts on it.
+ */
 const published = computed(() =>
-  (submissions.value ?? []).filter(
-    (r) => r.status === "published" || r.status === "removal_requested",
-  ),
+  (submissions.value ?? []).filter((r) => r.status === "published"),
 );
 
 /** Everything not live: awaiting review, turned down, or taken down. */
@@ -42,7 +47,6 @@ const STATUS_LABEL: Record<string, string> = {
   // distinction is not meaningful, so it reads the same.
   hidden: "Rejected",
   removed: "Removed at your request",
-  removal_requested: "Removal requested",
 };
 
 function statusLabel(status: string) {
