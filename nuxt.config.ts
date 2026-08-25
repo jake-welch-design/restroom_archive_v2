@@ -77,8 +77,9 @@ export default defineNuxtConfig({
 
   app: {
     head: {
-      title: "The Restroom Archive",
-
+      // No default title here: app.vue's titleTemplate already supplies
+      // "The Restroom Archive" as the bare title when a page sets none, and
+      // a value here would be passed through that template a second time.
       viewport: "width=device-width, initial-scale=1",
 
       link: [
