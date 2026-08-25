@@ -198,9 +198,6 @@ watch(
 
   .menu-toggle {
     display: flex;
-    /* Bottom-align with the site title's baseline instead of the row's
-       vertical center. */
-    align-self: flex-end;
   }
 
   .mobile-nav-wrap {

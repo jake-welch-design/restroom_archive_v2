@@ -113,6 +113,11 @@ const emit = defineEmits<{
   color: #000;
 }
 
+.description {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 .desc-text {
   margin: 0;
   color: #000;

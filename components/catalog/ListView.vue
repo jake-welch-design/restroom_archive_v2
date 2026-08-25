@@ -436,6 +436,11 @@ function sortArrow(key: SortKey) {
   border-top: 1px solid #e8e8e8;
   padding-top: 12px;
 }
+.description {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
 
 /* Read view */
 .desc-text {
@@ -462,6 +467,7 @@ function sortArrow(key: SortKey) {
 /* Annotations */
 .annotations-section {
   margin-top: 12px;
+  margin-bottom: 12px;
   padding-top: 12px;
   border-top: 1px solid #e8e8e8;
 }
