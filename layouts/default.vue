@@ -253,7 +253,6 @@ function goPrev() {
         :model-url="previewModelUrl ?? selected?.modelUrl ?? null"
         :slug="previewModelUrl ? null : (selected?.slug ?? null)"
         :thumb-url="previewModelUrl ? null : (selected?.thumbUrl ?? null)"
-        :panel-collapsed="isClosed"
       />
 
       <Transition name="fade">
@@ -288,13 +287,13 @@ function goPrev() {
   background: #000;
   overflow: hidden;
 
-  /* Metrics for the collapsed-view bottom row. `.nav-btn` below is sized from
-     them, and the viewer's overlay pills rebuild the same height from them, so
-     the two rows stay level without either repeating a pixel value. Custom
-     properties cross into the viewer's scoped styles, which a class could not. */
-  --nav-btn-font-size: 14px;
-  --nav-btn-pad-y: 4px;
-  --nav-btn-border: 1px;
+  /* Metrics for the viewer's overlay pills, declared here because `.nav-btn`
+     below rebuilds its height from them to sit level with that row. The pills
+     own the size — these are their values, not the nav row's. Custom properties
+     cross into the viewer's scoped styles, which a class could not. */
+  --ctrl-btn-size: 26px;
+  --ctrl-group-pad-y: 4px;
+  --ctrl-group-border: 1px;
 }
 
 .panel {
@@ -434,16 +433,24 @@ function goPrev() {
   display: flex;
   align-items: center;
   justify-content: center;
-  border: var(--nav-btn-border) solid #fff;
+  border: 1px solid #fff;
   border-radius: 3px;
   background: transparent;
   cursor: pointer;
   color: #ffffff;
   font-family: Arial, Helvetica, sans-serif;
-  font-size: var(--nav-btn-font-size);
-  /* Height is left intrinsic — the line box plus this padding and the border is
-     what the viewer's overlay pills match themselves to. */
-  padding: var(--nav-btn-pad-y) 10px;
+  font-size: 14px;
+  /* Sized to the viewer's overlay pills rather than to its own text, so the
+     bottom row reads as one set of controls. Rebuilt from the pills' three
+     inputs instead of hardcoding their sum, so restyling them carries these
+     along. Vertical padding is dropped: the flex centring above places the
+     label, which keeps "Random" and the arrows centred at any height. */
+  box-sizing: border-box;
+  height: calc(
+    var(--ctrl-btn-size, 26px) + 2 * var(--ctrl-group-pad-y, 4px) + 2 *
+      var(--ctrl-group-border, 1px)
+  );
+  padding: 0 10px;
   transition: opacity 0.12s;
 }
 .nav-btn:hover {

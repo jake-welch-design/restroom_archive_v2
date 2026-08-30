@@ -7,10 +7,6 @@ const props = defineProps<{
   modelUrl?: string | null;
   slug?: string | null;
   thumbUrl?: string | null;
-  // Only used for sizing: with the catalog collapsed on mobile, these controls
-  // share the bottom of the screen with the layout's prev/random/next row and
-  // are matched to its height.
-  panelCollapsed?: boolean;
 }>();
 const canvasRef = ref<HTMLCanvasElement | null>(null);
 const modelUrlRef = toRef(props, "modelUrl");
@@ -190,7 +186,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
   <div class="viewer">
     <canvas ref="canvasRef" @pointerdown="onCanvasPointerDown" />
 
-    <div class="overlay" :class="{ 'panel-collapsed': props.panelCollapsed }">
+    <div class="overlay">
       <div class="overlay-right">
         <!-- View mode: single circle that changes icon -->
         <div class="ctrl-group view-mode-group">
@@ -377,18 +373,20 @@ canvas {
   align-items: center;
   gap: 8px;
 }
+/* The three values the layout's nav buttons rebuild their height from, so the
+   bottom row stays level on mobile. Changing them here moves both. */
 .ctrl-group {
   display: flex;
   align-items: center;
   gap: 2px;
   background: none;
-  border: 1px solid #fff;
+  border: var(--ctrl-group-border, 1px) solid #fff;
   border-radius: 999px;
-  padding: 4px 5px;
+  padding: var(--ctrl-group-pad-y, 4px) 5px;
 }
 .ctrl-btn {
-  width: 26px;
-  height: 26px;
+  width: var(--ctrl-btn-size, 26px);
+  height: var(--ctrl-btn-size, 26px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -558,44 +556,6 @@ canvas {
   }
   .viewport-toast-wrap {
     top: 2.75rem;
-  }
-
-  /* Collapsed, these pills sit on the same line as the layout's
-     prev/random/next buttons and are matched to that row's height. The pills
-     hold icons, not text, so there is no line box of their own to match with:
-     this borrows the nav button's font (via the layout's custom properties) and
-     rebuilds its height from the same three inputs — line box, padding, border.
-     `1lh` resolves against real font metrics, so the two agree exactly on every
-     platform, and restyling the nav row carries these along with it. */
-  .panel-collapsed .ctrl-group {
-    box-sizing: border-box;
-    font-family: Arial, Helvetica, sans-serif;
-    font-size: var(--nav-btn-font-size, 14px);
-    line-height: normal;
-    height: calc(
-      1lh + 2 * var(--nav-btn-pad-y, 4px) + 2 * var(--nav-btn-border, 1px)
-    );
-    padding: 0 4px;
-  }
-  .panel-collapsed .ctrl-btn {
-    width: 20px;
-    height: 20px;
-  }
-  /* The icons carry width/height attributes, which this overrides. */
-  .panel-collapsed .ctrl-btn svg {
-    width: 16px;
-    height: 16px;
-  }
-  .panel-collapsed .toggle-track {
-    width: 24px;
-    height: 14px;
-  }
-  .panel-collapsed .toggle-thumb {
-    width: 10px;
-    height: 10px;
-  }
-  .panel-collapsed .ctrl-toggle.active .toggle-thumb {
-    left: 12px;
   }
 }
 </style>
