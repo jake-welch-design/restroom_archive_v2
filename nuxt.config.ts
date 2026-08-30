@@ -67,6 +67,10 @@ export default defineNuxtConfig({
       modelsBaseUrl: "",
       thumbsBaseUrl: "",
       siteUrl: "",
+      // CARTO basemap tile key. Public by necessity: the browser requests the
+      // tiles directly, so the key ships in the bundle. It's scoped to
+      // basemap tiles only. Overridden by NUXT_PUBLIC_CARTO_API_KEY.
+      cartoApiKey: "",
       turnstile: { siteKey: "0x4AAAAAADBTYNrRS1uRCrHi" },
     },
   },

@@ -26,5 +26,10 @@ NUXT_PUBLIC_THUMBS_BASE_URL = ""
 # Secrets (set via `wrangler pages secret put <NAME>`):
 #   NUXT_SESSION_PASSWORD        -- 32+ char random string for nuxt-auth-utils session sealing
 #   NUXT_TURNSTILE_SECRET_KEY    -- Cloudflare Turnstile secret key
+#   NUXT_PUBLIC_CARTO_API_KEY    -- CARTO basemap tile key (carto.com/basemaps/apikey).
+#     Not secret -- it ships to the browser in the SSR payload -- but kept out of
+#     [vars] so it isn't committed to this public repo for scrapers to harvest.
+#     Do NOT add it to [vars] as an empty string: an empty var still counts as
+#     "set" and overrides the secret at runtime, blanking the key.
 # Public vars (set below or in dashboard):
 #   NUXT_PUBLIC_TURNSTILE_SITE_KEY -- Cloudflare Turnstile site key

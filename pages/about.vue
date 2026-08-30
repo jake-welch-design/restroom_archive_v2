@@ -100,8 +100,37 @@ async function submitContact() {
       </section>
 
       <section>
-        <h1>Controls</h1>
+        <h1>Navigation controls</h1>
         <p>Drag to rotate, right click to pan, and scroll to zoom.</p>
+      </section>
+
+      <section>
+        <h1>How to scan a restroom</h1>
+        <p>
+          For this project I've primarily used
+          <a
+            href="https://apps.apple.com/us/app/polycam-3d-scans-floor-plans/id1532482376
+Polycam 3D Scans & Floor Plans"
+            >Polycam for iPhone</a
+          >, but any mobile 3D scanning app should work. iPhone Pro models
+          support LiDAR scanning, which I recommend, but if you don't have
+          access to LiDAR, you should be able to make quality scans using
+          photogrammetry. Click
+          <a
+            href="https://learn.poly.cam/hc/en-us/articles/36655587097620-How-to-Use-Space-Mode-with-LiDAR-enabled-devices#h_01K3P12AHC1PG459TBPJN6H7Y9"
+            >here</a
+          >
+          to learn how to scan with LiDAR, and
+          <a
+            href="https://learn.poly.cam/hc/en-us/articles/43933482446996-How-to-Use-Space-Mode-Non-LiDAR-Devices#h_05_scanning"
+            >here</a
+          >
+          to learn how to scan with photogrammetry.
+          <br /><br />Download the model as a .GLB/.GLTF file, Polycam offers
+          export in this format for free. To become an Archivist and submit your
+          scan, please sign-up for an account and request access on the Account
+          page.
+        </p>
       </section>
 
       <section>

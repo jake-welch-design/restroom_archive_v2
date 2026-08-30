@@ -12,6 +12,33 @@ const emit = defineEmits<{ select: [slug: string] }>();
 
 const mapContainer = ref<HTMLDivElement | null>(null);
 
+// Positron is the vector equivalent of the light_all raster basemap this used
+// to draw. CARTO has said raster cartography stays frozen while vector keeps
+// getting data updates, so the gap would only widen.
+const CARTO_STYLE_URL =
+  "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
+
+const cartoKey = useRuntimeConfig().public.cartoApiKey;
+
+// CARTO wants a key on basemap requests, and a vector basemap is not one URL:
+// the style, its TileJSON, the vector tiles, the sprite and the glyph ranges are
+// all separate requests across two hosts, and the TileJSON deliberately hands
+// back tile URLs with no key on them. So the key is stamped on every cartocdn
+// request as it goes out rather than baked into any one URL. The .mvt endpoints
+// happen to still serve unkeyed today — that reads as a grace period, not a
+// promise, and this is what keeps it working when they start enforcing.
+function transformRequest(url: string): maplibregl.RequestParameters | undefined {
+  if (!cartoKey || !url.includes(".cartocdn.com")) return undefined;
+  const u = new URL(url);
+  u.searchParams.set("key", cartoKey);
+  return { url: u.toString() };
+}
+
+// Every layer the CARTO style brought with it, captured before any of ours is
+// added. The basemap is 93 layers rather than the single raster layer it
+// replaced, so hiding it for satellite means hiding the whole group.
+let basemapLayerIds: string[] = [];
+
 let map: maplibregl.Map | null = null;
 let resizeObs: ResizeObserver | null = null;
 let sourceReady = false;
@@ -121,57 +148,8 @@ function initMap() {
 
   map = new maplibregl.Map({
     container: el,
-    style: {
-      version: 8,
-      sources: {
-        carto: {
-          type: "raster",
-          tiles: [
-            "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png",
-            "https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png",
-            "https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png",
-            "https://d.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png",
-          ],
-          tileSize: 256,
-          attribution:
-            '© <a href="https://carto.com/attributions">CARTO</a> © <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors',
-        },
-        satellite: {
-          type: "raster",
-          tiles: [
-            // Note the {y}/{x} order: Esri's REST tile scheme, not {x}/{y}.
-            "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-          ],
-          tileSize: 256,
-          maxzoom: 19,
-          attribution:
-            'Imagery © <a href="https://www.esri.com" target="_blank">Esri</a>, Maxar, Earthstar Geographics, and the GIS User Community',
-        },
-      },
-      // Both basemaps are declared up front and toggled by visibility. Swapping
-      // via setStyle would tear down the `restrooms` source and pin layer on
-      // every switch; this way only one layout property changes. Attribution
-      // follows automatically, because MapLibre credits only sources whose layers are
-      // visible.
-      layers: [
-        {
-          id: "carto-layer",
-          type: "raster",
-          source: "carto",
-          layout: { visibility: basemap.value === "map" ? "visible" : "none" },
-          // Deliberate desaturation of the light basemap; imagery is left alone.
-          paint: { "raster-saturation": -0.15 },
-        },
-        {
-          id: "satellite-layer",
-          type: "raster",
-          source: "satellite",
-          layout: {
-            visibility: basemap.value === "satellite" ? "visible" : "none",
-          },
-        },
-      ],
-    },
+    style: CARTO_STYLE_URL,
+    transformRequest,
     center: [-98, 38],
     zoom: 4,
     dragRotate: false,
@@ -182,6 +160,38 @@ function initMap() {
 
   map.touchZoomRotate.disableRotation();
   map.addControl(new maplibregl.NavigationControl(), "top-right");
+
+  // The satellite basemap is added here rather than in the style because the
+  // style now arrives over the network. `styledata` is the first point the
+  // CARTO layers exist to be counted and covered; waiting for `load` would be
+  // too late, since that only fires after the first complete render — long
+  // enough for a satellite user to watch the street map paint and vanish.
+  map.once("styledata", () => {
+    if (!map) return;
+    basemapLayerIds = map.getStyle().layers.map((l) => l.id);
+
+    map.addSource("satellite", {
+      type: "raster",
+      tiles: [
+        // Note the {y}/{x} order: Esri's REST tile scheme, not {x}/{y}.
+        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      ],
+      tileSize: 256,
+      maxzoom: 19,
+      attribution:
+        'Imagery © <a href="https://www.esri.com" target="_blank">Esri</a>, Maxar, Earthstar Geographics, and the GIS User Community',
+    });
+
+    map.addLayer({
+      id: "satellite-layer",
+      type: "raster",
+      source: "satellite",
+    });
+
+    // CARTO's own attribution rides in on the vector source's TileJSON, so
+    // crediting still follows visibility the way it did with two raster layers.
+    applyBasemapVisibility();
+  });
 
   map.on("load", () => {
     if (!map) return;
@@ -464,20 +474,28 @@ function updateActivePin(slug: string | null) {
   ]);
 }
 
+// Hiding the CARTO layers rather than leaving them to render under opaque
+// imagery: they are invisible either way, but tiles the user cannot see still
+// cost fetches against the basemap quota. No layer in the style ships hidden,
+// so turning the whole group back on is safe.
+function applyBasemapVisibility() {
+  if (!map || !map.getLayer("satellite-layer")) return;
+  const showMap = basemap.value === "map";
+  for (const id of basemapLayerIds) {
+    map.setLayoutProperty(id, "visibility", showMap ? "visible" : "none");
+  }
+  map.setLayoutProperty(
+    "satellite-layer",
+    "visibility",
+    showMap ? "none" : "visible",
+  );
+}
+
 function setBasemap(next: Basemap) {
   if (!map || basemap.value === next) return;
   basemap.value = next;
   saveBasemap();
-  map.setLayoutProperty(
-    "carto-layer",
-    "visibility",
-    next === "map" ? "visible" : "none",
-  );
-  map.setLayoutProperty(
-    "satellite-layer",
-    "visibility",
-    next === "satellite" ? "visible" : "none",
-  );
+  applyBasemapVisibility();
   updateActivePin(props.selectedSlug);
 }
 
