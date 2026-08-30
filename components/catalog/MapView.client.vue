@@ -27,7 +27,9 @@ const cartoKey = useRuntimeConfig().public.cartoApiKey;
 // request as it goes out rather than baked into any one URL. The .mvt endpoints
 // happen to still serve unkeyed today — that reads as a grace period, not a
 // promise, and this is what keeps it working when they start enforcing.
-function transformRequest(url: string): maplibregl.RequestParameters | undefined {
+function transformRequest(
+  url: string,
+): maplibregl.RequestParameters | undefined {
   if (!cartoKey || !url.includes(".cartocdn.com")) return undefined;
   const u = new URL(url);
   u.searchParams.set("key", cartoKey);
@@ -598,6 +600,7 @@ onBeforeUnmount(() => {
   map = null;
   sourceReady = false;
   needsInitialFit = false;
+  basemapLayerIds = [];
 });
 </script>
 
