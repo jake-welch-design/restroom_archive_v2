@@ -480,4 +480,17 @@ const pendingPos = computed(() => {
 .compose-cancel:hover {
   border-color: #000;
 }
+
+/* Same window breakpoint the viewer uses for its sheet layout. The bubble is
+   positioned against a dot in the model, so on a phone a 220px card covers most
+   of what it is annotating; it narrows and its type drops with it. */
+@media (max-width: 750px) {
+  .chat-bubble {
+    width: 150px;
+  }
+  .bubble-body,
+  .bubble-meta {
+    font-size: 10px;
+  }
+}
 </style>
