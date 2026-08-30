@@ -253,6 +253,7 @@ function goPrev() {
         :model-url="previewModelUrl ?? selected?.modelUrl ?? null"
         :slug="previewModelUrl ? null : (selected?.slug ?? null)"
         :thumb-url="previewModelUrl ? null : (selected?.thumbUrl ?? null)"
+        :panel-collapsed="isClosed"
       />
 
       <Transition name="fade">
@@ -286,6 +287,14 @@ function goPrev() {
   display: flex;
   background: #000;
   overflow: hidden;
+
+  /* Metrics for the collapsed-view bottom row. `.nav-btn` below is sized from
+     them, and the viewer's overlay pills rebuild the same height from them, so
+     the two rows stay level without either repeating a pixel value. Custom
+     properties cross into the viewer's scoped styles, which a class could not. */
+  --nav-btn-font-size: 14px;
+  --nav-btn-pad-y: 4px;
+  --nav-btn-border: 1px;
 }
 
 .panel {
@@ -425,14 +434,16 @@ function goPrev() {
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #fff;
+  border: var(--nav-btn-border) solid #fff;
   border-radius: 3px;
   background: transparent;
   cursor: pointer;
   color: #ffffff;
   font-family: Arial, Helvetica, sans-serif;
-  font-size: 14px;
-  padding: 4px 10px;
+  font-size: var(--nav-btn-font-size);
+  /* Height is left intrinsic — the line box plus this padding and the border is
+     what the viewer's overlay pills match themselves to. */
+  padding: var(--nav-btn-pad-y) 10px;
   transition: opacity 0.12s;
 }
 .nav-btn:hover {
