@@ -128,6 +128,18 @@ export interface AccountRow {
   adminMessage: string | null;
   adminMessageAt: string | null;
   createdAt: string;
+  /** Submissions of any status attributed to the account. */
+  submissionCount: number;
+}
+
+/** GET /api/admin/users/:id/submissions: one account's submissions. */
+export interface AccountSubmission {
+  id: number;
+  slug: string;
+  name: string;
+  location: string;
+  date: string;
+  status: string;
 }
 
 /** GET /api/admin/audit-log: a record of one admin action. */

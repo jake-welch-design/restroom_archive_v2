@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { AccountRow } from "~/types/account";
+import type { AccountRow, AccountSubmission } from "~/types/account";
+import { apiErrorMessage } from "~~/shared/utils/apiError";
 import { formatDayMonthYear } from "~~/shared/utils/formatDate";
 import { isFuture } from "~~/shared/utils/sqliteTime";
 
@@ -42,6 +43,61 @@ function toggleOptions(id: number) {
   muteDays.value = null;
   // A rename left open on another account should not carry over to this one.
   cancelRename();
+  // The two disclosures are exclusive, so a row opens to one thing at a time.
+  openSubmissionsId.value = null;
+}
+
+/* --- Submissions dropdown -------------------------------------------------- */
+
+/**
+ * The list behind an account's submission count.
+ *
+ * The count arrives with the accounts list, so the rows read complete before
+ * anything is expanded; the entries themselves are fetched per account on
+ * first open and kept, since an admin opening one row usually opens a few.
+ */
+const openSubmissionsId = ref<number | null>(null);
+const loadingSubmissionsId = ref<number | null>(null);
+const submissionsError = ref("");
+const submissionsByAccount = ref<Record<number, AccountSubmission[]>>({});
+
+async function toggleSubmissions(a: AccountRow) {
+  if (openSubmissionsId.value === a.id) {
+    openSubmissionsId.value = null;
+    return;
+  }
+
+  openSubmissionsId.value = a.id;
+  openId.value = null;
+  submissionsError.value = "";
+  if (submissionsByAccount.value[a.id]) return;
+
+  loadingSubmissionsId.value = a.id;
+  try {
+    submissionsByAccount.value[a.id] = await $fetch<AccountSubmission[]>(
+      `/api/admin/users/${a.id}/submissions`,
+    );
+  } catch (e: unknown) {
+    submissionsError.value = apiErrorMessage(e, "Could not load submissions.");
+    openSubmissionsId.value = null;
+  } finally {
+    loadingSubmissionsId.value = null;
+  }
+}
+
+const SUBMISSION_STATUS_LABEL: Record<string, string> = {
+  pending: "Awaiting review",
+  rejected: "Rejected",
+  hidden: "Hidden",
+  removed: "Removed",
+};
+
+/**
+ * Only published and pending entries are in the catalog the viewer reads from,
+ * so those are the only ones a link can actually pull up.
+ */
+function isInArchive(s: AccountSubmission) {
+  return s.status === "published" || s.status === "pending";
 }
 
 /* --- Status ---------------------------------------------------------------- */
@@ -218,6 +274,9 @@ async function submitRename(a: AccountRow) {
     <p v-if="action.error" class="form-error action-error">
       {{ action.error }}
     </p>
+    <p v-if="submissionsError" class="form-error action-error">
+      {{ submissionsError }}
+    </p>
 
     <div v-if="!accounts?.length" class="empty">No accounts.</div>
 
@@ -248,6 +307,17 @@ async function submitRename(a: AccountRow) {
 
           <div class="simple-actions">
             <button
+              v-if="a.submissionCount"
+              type="button"
+              class="btn"
+              :class="{ active: openSubmissionsId === a.id }"
+              :aria-expanded="openSubmissionsId === a.id"
+              @click="toggleSubmissions(a)"
+            >
+              {{ a.submissionCount }}
+              {{ a.submissionCount === 1 ? "submission" : "submissions" }}
+            </button>
+            <button
               type="button"
               class="btn"
               :class="{ active: openId === a.id }"
@@ -256,6 +326,26 @@ async function submitRename(a: AccountRow) {
               {{ openId === a.id ? "Close" : "Manage" }}
             </button>
           </div>
+        </div>
+
+        <div v-if="openSubmissionsId === a.id" class="submissions">
+          <div v-if="loadingSubmissionsId === a.id" class="empty">Loading…</div>
+          <ul v-else class="submission-list">
+            <li
+              v-for="s in submissionsByAccount[a.id]"
+              :key="s.id"
+              class="submission-item"
+            >
+              <NuxtLink v-if="isInArchive(s)" class="link" :to="`/r/${s.slug}`">
+                {{ s.name }}
+              </NuxtLink>
+              <span v-else>{{ s.name }}</span>
+              <span class="dim">{{ s.date }} · {{ s.location }}</span>
+              <span v-if="s.status !== 'published'" class="pill pill-neutral">
+                {{ SUBMISSION_STATUS_LABEL[s.status] ?? s.status }}
+              </span>
+            </li>
+          </ul>
         </div>
 
         <div v-if="openId === a.id" class="account-options">
@@ -531,6 +621,34 @@ async function submitRename(a: AccountRow) {
 .admin-msg-preview {
   color: #c33;
   font-style: italic;
+}
+
+/* --- Submissions dropdown -------------------------------------------------- */
+/* One line per entry: the name links into the archive, the rest is context.
+   Deliberately lighter than the Manage panel, since nothing here acts. */
+
+.submissions {
+  padding: 0 0 12px;
+}
+
+.submission-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.submission-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  padding: 3px 0;
+  font-size: 12px;
+}
+
+.submission-item .link {
+  color: #000;
+  text-decoration: underline;
 }
 
 .account-options {
