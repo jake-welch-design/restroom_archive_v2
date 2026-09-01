@@ -1,8 +1,89 @@
+# The Restroom Archive
+#
+# The scans in this archive are not licensed for AI training. See /ai.txt for
+# the full statement and https://restroomarchive.com/about for the license.
+#
+# Cloudflare's Managed robots.txt prepends its own block above this one at the
+# edge, which means the file served to crawlers contains two `User-agent: *`
+# groups. The spec says to merge them and the major crawlers do, but not every
+# parser is well behaved. So the named groups below are repeated here rather
+# than left to that injection: a named group beats `*` in every parser, and
+# repeating them keeps the archive protected if the Cloudflare toggle is ever
+# turned off. Redundant on purpose.
+
+# Reserves the archive against text and data mining under Article 4 of EU
+# Directive 2019/790. Search indexing is welcome; training is not.
 User-agent: *
+Content-Signal: search=yes, ai-train=no, ai-input=no, use=reference
 Allow: /
 Disallow: /account
 Disallow: /admin
 Disallow: /submit
 Disallow: /api/
+
+# Training and dataset crawlers. Blocked outright rather than signalled, since
+# a signal only helps with crawlers that read signals.
+User-agent: GPTBot
+Disallow: /
+
+User-agent: OAI-SearchBot
+Disallow: /
+
+User-agent: ChatGPT-User
+Disallow: /
+
+User-agent: ClaudeBot
+Disallow: /
+
+User-agent: Claude-Web
+Disallow: /
+
+User-agent: anthropic-ai
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: Google-Extended
+Disallow: /
+
+User-agent: Applebot-Extended
+Disallow: /
+
+User-agent: Bytespider
+Disallow: /
+
+User-agent: Amazonbot
+Disallow: /
+
+User-agent: meta-externalagent
+Disallow: /
+
+User-agent: FacebookBot
+Disallow: /
+
+User-agent: PerplexityBot
+Disallow: /
+
+User-agent: Perplexity-User
+Disallow: /
+
+User-agent: cohere-ai
+Disallow: /
+
+User-agent: Diffbot
+Disallow: /
+
+User-agent: Omgilibot
+Disallow: /
+
+User-agent: ImagesiftBot
+Disallow: /
+
+User-agent: Timpibot
+Disallow: /
+
+User-agent: Scrapy
+Disallow: /
 
 Sitemap: https://restroomarchive.com/sitemap.xml

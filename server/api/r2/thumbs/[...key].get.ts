@@ -21,5 +21,12 @@ export default defineEventHandler(async (event) => {
   setHeader(event, "cache-control", "public, max-age=31536000, immutable");
   setHeader(event, "etag", object.httpEtag);
 
+  // Same reservation the scans carry, for the same reason. Unlike the models
+  // route there is no burst limit here: the grid view requests dozens of
+  // thumbnails in one go, so a per-IP limit would throttle ordinary visitors
+  // long before it inconvenienced a scraper.
+  setHeader(event, "x-robots-tag", "noai, noimageai, noindex");
+  setHeader(event, "tdm-reservation", "1");
+
   return object.body;
 });

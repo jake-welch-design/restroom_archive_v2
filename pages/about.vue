@@ -134,6 +134,31 @@ Polycam 3D Scans & Floor Plans"
       </section>
 
       <section>
+        <h1>License and AI training</h1>
+        <p>
+          Scans in this archive are published under
+          <a
+            href="https://creativecommons.org/licenses/by-nc-nd/4.0/"
+            rel="license"
+            >CC BY-NC-ND 4.0</a
+          >. You're welcome to browse, link, cite, and write about the archive.
+          Commercial use, redistribution of the scan files, and derivative works
+          built from the geometry all need written permission first.
+          <br /><br />Archivists keep copyright in their own scans. Neither they
+          nor the archive have licensed this work as training data, and use of
+          it to train, fine-tune, evaluate, or ground machine learning models is
+          expressly reserved — including retrieval over the archive's contents,
+          and regardless of how a copy was obtained. That reservation is stated
+          in machine-readable form at <a href="/ai.txt">ai.txt</a> and
+          <a href="/robots.txt">robots.txt</a>, declared on every scan and
+          thumbnail the site serves, and enforced at the edge against crawlers
+          that ignore it. <br /><br />If you'd like to use something here in a
+          way the license doesn't cover, ask below — the answer isn't
+          automatically no.
+        </p>
+      </section>
+
+      <section>
         <h1>Contact</h1>
 
         <div v-if="contactSubmitted" class="contact-msg">
