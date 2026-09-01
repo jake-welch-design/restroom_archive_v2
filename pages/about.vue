@@ -114,12 +114,6 @@ async function submitContact() {
           captures the creativity and impertinence of humans when they know that
           nobody else is watching. {{ statsSentence }}
         </p>
-        <p>
-          <a href="#" @click.prevent="legalOpen = true"
-            >Click here to view the full terms</a
-          >
-          for how the content in this Archive may be used.
-        </p>
       </section>
 
       <section>
@@ -161,6 +155,12 @@ async function submitContact() {
           users to scan and export in this format on their free tier without a
           subscription. To become an Archivist, please sign up for an account
           and request submission access on the Account page.
+        </p>
+        <p>
+          <a href="#" @click.prevent="legalOpen = true"
+            >Click here to view the full terms</a
+          >
+          for how the content in this Archive may be used.
         </p>
       </section>
 
