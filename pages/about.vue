@@ -90,7 +90,7 @@ async function submitContact() {
         <p>
           The Restroom Archive is an ongoing repository of publicly accessible
           restrooms. Everyone uses restrooms, yet as spaces, they are considered
-          taboo, rarely discussed, acknowledged, or considered. Designed, and
+          taboo, rarely discussed, acknowledged, or considered. Designed and
           built by <a href="https://jakewelch.design">Jake Welch</a>, this
           archive aims to document the diverse qualities of these unique spaces.
           There is perhaps no space in society which better captures the
