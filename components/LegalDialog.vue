@@ -235,6 +235,14 @@ function onClick(e: MouseEvent) {
   /* The dialog is a top-layer element, so it sits outside .about-page and
      inherits none of its tokens. Everything it needs is restated here. */
   overflow: hidden;
+}
+
+/* Scoped to [open] deliberately. `display` must not be set on the bare
+   selector: the UA stylesheet hides a closed dialog with
+   `dialog:not([open]) { display: none }`, and an author rule setting display
+   overrides that no matter how specific it is -- origin beats specificity --
+   which leaves the dialog painted inline on the page at all times. */
+.legal-dialog[open] {
   display: flex;
   flex-direction: column;
 }

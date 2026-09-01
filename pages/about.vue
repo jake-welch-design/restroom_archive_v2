@@ -151,7 +151,9 @@ async function submitContact() {
           declared on every scan and thumbnail the site serves, and enforced at
           the edge against crawlers that ignore it. <br /><br />The full terms
           are in the
-          <a href="#" @click.prevent="legalOpen = true">privacy statement</a>.
+          <a href="#" @click.prevent="legalOpen = true"
+            >Privacy and Usage Statement</a
+          >.
         </p>
       </section>
 
@@ -238,7 +240,9 @@ async function submitContact() {
         <p class="dim">
           Scans are held under an exclusive license, never sold, never shared,
           and never used for AI training ·
-          <a href="#" @click.prevent="legalOpen = true">Privacy statement</a>
+          <a href="#" @click.prevent="legalOpen = true"
+            >Privacy and Usage Statement</a
+          >
         </p>
       </footer>
     </article>
