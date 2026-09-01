@@ -30,7 +30,12 @@ function template(body: string) {
 </html>`;
 }
 
-async function send(to: string, subject: string, html: string) {
+async function send(
+  to: string,
+  subject: string,
+  html: string,
+  replyTo: string = CONTACT_EMAIL,
+) {
   const apiKey = useRuntimeConfig().plunkApiKey;
   if (!apiKey) {
     throw createError({
@@ -52,6 +57,7 @@ async function send(to: string, subject: string, html: string) {
       subscribed: true,
       name: FROM_NAME,
       from: FROM_EMAIL,
+      reply: replyTo,
     }),
   });
 
@@ -109,5 +115,6 @@ export async function sendContactEmail(opts: {
       </table>
       <p style="white-space:pre-wrap;padding:0 20px;font-size:14px;color:#000;margin:20px 20px 30px;line-height:1.5">${escapeHtml(opts.body)}</p>
     `),
+    opts.email,
   );
 }
