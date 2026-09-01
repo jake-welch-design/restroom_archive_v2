@@ -11,11 +11,16 @@
  * reservation stated in /ai.txt -- a reservation the archive can only make on
  * terms its contributors actually agreed to.
  *
- * The grant is exclusive rather than an assignment: the Archivist keeps their
- * copyright and can still use their own scan elsewhere, while nobody else can
- * be granted rights in it. That is the whole point -- the archive is not a
- * distributor, so an exclusive hold plus the commitments in the terms achieves
- * what ownership would without asking contributors to give up their work.
+ * The grant is a SOLE license, not an exclusive one and not an assignment. The
+ * distinction is load-bearing and easy to undo by accident: an exclusive
+ * license bars the licensor from using their own work, which would contradict
+ * the first half of this same agreement. Sole means the archive is the only
+ * party that may hold the rights while the Archivist keeps full use of their
+ * own scan. Do not "tighten" this back to "exclusive".
+ *
+ * Soleness is still worth having over a bare non-exclusive permission: it is
+ * what stops an Archivist licensing the same scan to a dataset or AI company
+ * alongside the archive.
  */
 export const SUBMISSION_AGREEMENTS = [
   "Scans will be complete and without too many holes (excluding mirrored surfaces).",
@@ -24,5 +29,5 @@ export const SUBMISSION_AGREEMENTS = [
   "I will avoid scanning restrooms that aren't private/ a single room. I will never scan if there are other people present.",
   "I will use my best judgement when submitting. I won't submit anything too traumatizing or gross.",
   "I agree to always be respectful.",
-  "The scans I submit are my own work and mine to contribute. I keep my copyright and can still use them elsewhere, and I grant The Restroom Archive an exclusive, perpetual license to hold and display them here — which means the archive will never sell them, pass them on, release them as a dataset, or allow them to be used for AI training.",
+  "The scans I submit are my own work and mine to contribute. I keep ownership and copyright, and I may use my scans anywhere else. I grant The Restroom Archive a sole, perpetual license to hold and display them on the site, meaning I will not license the same scan to anyone else, and I understand the archive will use them on the site and nowhere else: never sold, never transferred, never released as datasets, never used for AI training.",
 ] as const;

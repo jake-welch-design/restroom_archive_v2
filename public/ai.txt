@@ -1,54 +1,55 @@
 # ai.txt -- The Restroom Archive
 # https://restroomarchive.com
 #
-# A machine-readable statement of how the works in this archive may and may not
-# be used. Served alongside /robots.txt, which carries the same reservation as
-# crawler directives. The full terms are at https://restroomarchive.com/about
+# A machine-readable statement of permitted and prohibited use. Served
+# alongside /robots.txt, which carries the same reservation as crawler
+# directives. Full terms: https://restroomarchive.com/about
 
 ## Statement
 
 ALL RIGHTS RESERVED.
 
 The 3D scans, thumbnails, photographs, annotations, and descriptive text
-published on this site are NOT offered under any public license. No license to
-reuse them is granted to anyone -- not to visitors, not to search engines, not
-to AI developers, not to dataset compilers.
+published on this site are not offered under any public license. No license to
+reuse them is granted to any party, including visitors, search engines, AI
+developers, and dataset compilers.
 
-Contributors ("Archivists") retain copyright in their own scans and grant the
-archive an exclusive, perpetual license to hold and display them. Because that
-grant is exclusive, no third party can obtain rights in these works from any
-source. There is no one who can license them to you.
+Archivists own their scans and retain copyright in them. They grant the archive
+a sole, perpetual license to hold and display the scans on this site. Because
+that grant is sole, no third party can obtain rights in these works from any
+source: not from the archive, which does not sublicense, and not from the
+Archivist, who has agreed not to license the same scan elsewhere.
+
+The archive uses contributed scans on this site and nowhere else.
 
 ## Reservation of rights
 
 Use of these works as training, fine-tuning, validation, evaluation, or
-grounding data for machine learning models -- including generative models for
-3D geometry, images, video, or text, and including retrieval-augmented
-generation over the archive's contents -- is expressly prohibited and expressly
-reserved.
+grounding data for machine learning models is prohibited and expressly
+reserved. This includes generative models for 3D geometry, images, video, and
+text, and includes retrieval-augmented generation over the archive's contents.
 
-This is an express reservation of rights under Article 4(3) of Directive (EU)
-2019/790 on copyright in the Digital Single Market, and is asserted equally
-under any other jurisdiction's text-and-data-mining exception that permits
-rightsholders to opt out.
+The reservation is made under Article 4(3) of Directive (EU) 2019/790 on
+copyright in the Digital Single Market, and under equivalent
+text-and-data-mining provisions in other jurisdictions.
 
-The reservation applies regardless of how the works were obtained, including
-via a third-party crawl, a redistributed dataset, or a cached copy. Possession
-of a copy conveys no right to use it.
+The reservation applies regardless of how a copy was obtained, including
+through third-party crawls, redistributed datasets, and cached copies.
+Possession of a copy conveys no right to use it.
 
-## The archive's own commitments
+## Archive commitments
 
-These bind the archive, not just its visitors. The archive does not and will
+These bind the archive, not only its visitors. The archive does not and will
 not:
 
 - Sell, rent, or otherwise commercialise contributed scans.
-- Transfer or assign them to another party without these commitments carrying
-  over intact.
-- Sublicense or redistribute them -- no dataset releases, no bulk exports, no
-  partner feeds, no download endpoint.
+- Transfer or assign them to another party unless these commitments transfer
+  intact.
+- Sublicense or redistribute them. There are no dataset releases, bulk exports,
+  partner feeds, or download endpoints.
 - Use them, or permit their use, as machine learning training data.
 
-## Permitted without asking
+## Permitted without request
 
 - Viewing and browsing the archive.
 - Search indexing that returns links and short excerpts.
@@ -56,15 +57,14 @@ not:
 
 ## Requires written permission
 
-- Any reuse, reproduction, or redistribution of the scans or thumbnails.
-- Any derivative work built from the scan geometry.
-- Any commercial use of any kind.
-- Any machine learning use as described under "Reservation of rights".
-  Permission for this will not be granted.
+- Reuse, reproduction, or redistribution of scans or thumbnails.
+- Derivative works built from scan geometry.
+- Commercial use of any kind.
+- Machine learning use as described above. Permission will not be granted.
 
 ## Contact
 
-Requests for permission, and takedown notices, go through the contact form at
+Permission requests and takedown notices: the contact form at
 https://restroomarchive.com/about
 
 ## Machine-readable summary

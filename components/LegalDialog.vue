@@ -43,7 +43,7 @@ function onClick(e: MouseEvent) {
     @click="onClick"
   >
     <div class="legal-head">
-      <h2 id="legal-title">Terms &amp; Privacy</h2>
+      <h2 id="legal-title">Privacy and Usage Statement</h2>
       <button
         type="button"
         class="legal-close"
@@ -57,165 +57,167 @@ function onClick(e: MouseEvent) {
     <div class="legal-body thin-scroll">
       <h3>Terms</h3>
 
-      <h4>1. What this is</h4>
+      <h4>1. Scope</h4>
       <p>
         The Restroom Archive is a curated archive of 3D scans of publicly
-        accessible restrooms. Using the site means accepting these terms. If you
-        submit a scan, the section on contributions applies to you as well.
+        accessible restrooms. Use of the site constitutes acceptance of these
+        terms. Submitting a scan also constitutes acceptance of section 2.
       </p>
 
-      <h4>2. Your scans stay yours</h4>
+      <h4>2. Contributor rights</h4>
       <p>
-        You keep the copyright in every scan you contribute. You are not signing
-        it away, and you remain free to use your own scan anywhere else you
-        like, for anything you like.
+        Archivists own the scans they contribute and retain copyright in them.
+        Contributing does not transfer ownership and does not restrict an
+        Archivist from using their own scan anywhere else, for any purpose.
       </p>
       <p>
-        What you grant the archive is an
-        <strong>exclusive, perpetual, irrevocable, worldwide license</strong>
-        to store, preserve, display, and present your scan as part of the
-        archive, together with the right to make the technical copies and
-        derivatives that hosting requires — thumbnails, compressed or optimised
-        versions, format conversions. Exclusive means that for as long as the
-        scan is in the archive, nobody else can be granted those rights.
+        Submission grants the archive a
+        <strong>sole, perpetual, irrevocable, worldwide license</strong> to
+        store, preserve, display, and present the scan as part of the archive.
+        This includes the right to produce the technical copies and derivatives
+        that hosting requires, such as thumbnails, compressed or optimised
+        versions, and format conversions.
       </p>
       <p>
-        By submitting, you confirm the scan is yours to contribute, that you
-        made it, and that you had the right to scan the space.
+        The license is sole rather than exclusive. An exclusive license would
+        bar the Archivist from using their own work; a sole license does not.
+        The archive is the only party that may hold these rights, and no third
+        party may be granted a license to a scan while it remains in the
+        archive, but the Archivist&rsquo;s own use is unaffected.
+      </p>
+      <p>
+        The archive uses contributed scans on this site and nowhere else. The
+        commitments in section 3 state the limits of that use.
+      </p>
+      <p>
+        Submission confirms that the scan is the Archivist&rsquo;s own work,
+        that it is theirs to contribute, and that they held the right to scan
+        the space.
       </p>
 
-      <h4>3. What the archive will never do with it</h4>
-      <p>These are commitments, not preferences. The archive will not:</p>
+      <h4>3. Archive commitments</h4>
+      <p>The archive does not and will not:</p>
       <ul>
-        <li>Sell, rent, or otherwise commercialise your scan.</li>
+        <li>Sell, rent, or otherwise commercialise contributed scans.</li>
         <li>
-          Transfer or assign it to another party, including in an acquisition,
-          without the same commitments carrying over intact.
+          Transfer or assign them to another party unless these commitments
+          transfer intact.
         </li>
         <li>
-          Sublicense or redistribute it — no dataset releases, no bulk exports,
-          no partner feeds, no download button.
+          Sublicense or redistribute them. There are no dataset releases, bulk
+          exports, partner feeds, or download endpoints.
         </li>
         <li>
-          Use it, or allow it to be used, as training, fine-tuning, evaluation,
-          or grounding data for machine learning models of any kind.
+          Use them, or permit their use, as training, fine-tuning, evaluation,
+          or grounding data for machine learning models.
         </li>
       </ul>
-      <p>
-        The scans exist to be looked at, here, in this archive. That is the
-        whole of it.
-      </p>
 
-      <h4>4. What visitors may do</h4>
+      <h4>4. Permitted use</h4>
       <p>
-        <strong>All rights reserved.</strong> Viewing and browsing the archive
-        is welcome, as is linking to it, citing it, and writing about it. No
-        license to reuse the scans is granted to anyone — not to visitors, not
-        to search engines, not to AI companies. Downloading, extracting,
-        redistributing, or building on the scan geometry all require written
-        permission first.
+        <strong>All rights reserved.</strong> Viewing, browsing, linking,
+        citing, and writing about the archive are permitted. No license to reuse
+        the scans is granted to any party, including visitors, search engines,
+        and AI developers. Downloading, extracting, redistributing, and building
+        on scan geometry require written permission.
       </p>
       <p>
-        Use of anything in the archive as training data for machine learning is
-        expressly prohibited and expressly reserved, including under Article
-        4(3) of Directive (EU) 2019/790 and any equivalent text-and-data-mining
-        provision elsewhere. This applies however a copy was obtained, including
-        through a third-party crawl or a redistributed dataset.
+        Use of archive content as training data for machine learning is
+        prohibited and expressly reserved under Article 4(3) of Directive (EU)
+        2019/790 and equivalent text-and-data-mining provisions in other
+        jurisdictions. The reservation applies regardless of how a copy was
+        obtained, including through third-party crawls and redistributed
+        datasets.
       </p>
 
       <h4>5. Accounts</h4>
       <p>
-        You are responsible for what happens under your account. Submission
-        access is granted case by case and can be revoked. Scans are reviewed
-        before publication, and the archive may decline or remove anything at
-        its discretion.
+        Account holders are responsible for activity under their account.
+        Submission access is granted case by case and may be revoked. Scans are
+        reviewed before publication, and the archive may decline or remove any
+        submission at its discretion.
       </p>
 
       <h4>6. Removal</h4>
       <p>
-        Contributions are meant to be permanent — an archive that empties out
-        isn't one. Deleting your account removes your account and your
-        annotations, and detaches your name from your scans, which stay in the
-        archive unattributed.
+        Contributions are intended to be permanent. Deleting an account removes
+        the account and its annotations, and detaches the Archivist&rsquo;s name
+        from their scans, which remain in the archive unattributed.
       </p>
       <p>
-        That said, if you need a scan taken down entirely — it captured
-        something private, your circumstances changed, you made a mistake — ask.
-        Every good-faith request gets a real read and a real answer. Removal is
-        at the archive's discretion rather than guaranteed, but the discretion
-        is exercised in your favour where there's a genuine reason.
+        Full removal of a scan may be requested in writing. Requests are
+        reviewed individually. Removal is at the archive&rsquo;s discretion
+        rather than guaranteed.
       </p>
 
       <h4>7. Changes</h4>
       <p>
         These terms may change. Material changes affecting contributors will be
-        communicated to Archivists rather than quietly swapped in, and the
-        commitments in section 3 will not be weakened.
+        communicated to Archivists directly. The commitments in section 3 will
+        not be weakened.
       </p>
 
       <h3>Privacy</h3>
 
       <p>
-        This site runs no analytics. There are no tracking pixels, no
-        advertising, no third-party cookies, and no data brokers. Nothing you do
-        here is profiled, and nothing about you is sold, rented, or shared for
-        marketing — not now, and not as a change of heart later.
+        The site runs no analytics. It uses no tracking pixels, no advertising,
+        no third-party cookies, and no data brokers. Visitor activity is not
+        profiled. Personal information is never sold, rented, or shared for
+        marketing.
       </p>
 
-      <h4>What's collected</h4>
+      <h4>Data collected</h4>
       <p>
-        An account stores your email, username, an optional display name, and a
-        hashed password (scrypt, with a per-account salt — the plain password is
-        never stored and cannot be recovered from the hash). Submitting stores
-        the scan along with the restroom's name, location, coordinates, and any
-        description or tags you add. Annotations store your text and where you
-        placed it. Your IP address is held briefly — under an hour — purely to
-        rate-limit abuse, then deleted automatically.
+        Accounts store an email address, username, optional display name, and a
+        password hash (scrypt, with a per-account salt). Plain passwords are
+        never stored and cannot be recovered from the hash. Submissions store
+        the scan together with the restroom&rsquo;s name, location, coordinates,
+        description, and tags. Annotations store their text and position. IP
+        addresses are retained for under one hour for rate limiting, then
+        deleted automatically.
       </p>
 
-      <h4>What's public</h4>
+      <h4>Public information</h4>
       <p>
-        Your username, display name, scans, and annotations.
-        <strong>Your email address is never shown publicly.</strong> It is used
-        only to verify your account, reset your password, and reply if you get
-        in touch.
+        Usernames, display names, scans, and annotations are public. Email
+        addresses are never displayed publicly and are used only for account
+        verification, password resets, and replies to enquiries.
       </p>
 
-      <h4>Who else sees anything</h4>
+      <h4>Third-party processors</h4>
       <p>
-        Being exact matters more here than being reassuring. The site, database,
-        scans, and thumbnails are hosted on
-        <a href="https://www.cloudflare.com/privacypolicy/">Cloudflare</a>,
-        which also provides the anti-bot check on forms.
+        <a href="https://www.cloudflare.com/privacypolicy/">Cloudflare</a> hosts
+        the site, database, scans, and thumbnails, and provides the anti-bot
+        check on forms.
         <a href="https://www.useplunk.com/legal/privacy">Plunk</a> sends
-        verification, password-reset, and contact emails, so it sees the address
-        a message goes to. On the map view only, tiles load directly from
+        verification, password-reset, and contact emails, and therefore receives
+        recipient addresses. On the map view, tiles load directly from
         <a href="https://carto.com/privacy/">CARTO</a> and
-        <a href="https://www.esri.com/en-us/privacy/overview">Esri</a>, meaning
-        those two can see your IP address and roughly which part of the map you
-        are looking at. That is the complete list — there is no fifth party.
+        <a href="https://www.esri.com/en-us/privacy/overview">Esri</a>, which
+        receive visitor IP addresses and the map area requested. No other third
+        party receives data.
       </p>
 
       <h4>Cookies</h4>
       <p>
-        Two, both strictly functional: one that keeps you signed in, and one
-        that remembers whether you prefer the list, grid, or map view. Neither
-        tracks you, and there are no third-party cookies to consent to.
+        Two cookies are set, both strictly functional. One maintains the
+        signed-in session. The other stores the preferred catalog view. Neither
+        is used for tracking.
       </p>
 
       <h4>Scans and people</h4>
       <p>
-        Archivists agree never to scan a restroom while anyone else is present,
-        and every scan is reviewed before publication. If a scan captures
-        something it shouldn't, say so and it will be removed.
+        Archivists agree not to scan a restroom while other people are present,
+        and all scans are reviewed before publication. Scans that capture
+        identifying or private content are removed on report.
       </p>
 
-      <h4>Your control</h4>
+      <h4>Access and deletion</h4>
       <p>
-        You can delete your account at any time from the Account page, which
-        erases your account and annotations immediately. For anything else — a
-        correction, a takedown, a question about what's stored — use the contact
-        form on the About page.
+        Accounts can be deleted at any time from the Account page, which
+        immediately removes the account and its annotations. Corrections,
+        takedown requests, and questions about stored data can be sent through
+        the contact form on the About page.
       </p>
 
       <p class="legal-updated">Last updated 1 September 2026.</p>
