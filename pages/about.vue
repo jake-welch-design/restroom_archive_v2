@@ -138,25 +138,6 @@ async function submitContact() {
       </section>
 
       <section>
-        <h1>Rights and AI training</h1>
-        <p>
-          Scans are not offered for reuse. Archivists own their scans and keep
-          the right to use them anywhere else. What they grant the archive is a
-          sole license to hold and display the scan here, and the archive uses
-          contributed scans on this site and nowhere else. Scans are not sold,
-          transferred, released as datasets, or used for machine learning
-          training. There is no download button and no bulk export.
-          <br /><br />The reservation is stated in machine-readable form at
-          <a href="/ai.txt">ai.txt</a> and <a href="/robots.txt">robots.txt</a>,
-          declared on every scan and thumbnail served, and enforced at the edge
-          against crawlers that ignore it. <br /><br />Full terms are in the
-          <a href="#" @click.prevent="legalOpen = true"
-            >Privacy and Usage Statement</a
-          >.
-        </p>
-      </section>
-
-      <section>
         <h1>Contact</h1>
 
         <div v-if="contactSubmitted" class="contact-msg">
