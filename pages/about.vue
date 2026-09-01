@@ -216,9 +216,8 @@ async function submitContact() {
       </section>
 
       <footer class="about-footer">
-        <p>© 2026 Jake Welch. All rights reserved.</p>
+        <p>© 2026 Jake Welch</p>
         <p class="dim">
-          Archivists own their scans. Used on this site and nowhere else ·
           <a href="#" @click.prevent="legalOpen = true"
             >Privacy and Usage Statement</a
           >
