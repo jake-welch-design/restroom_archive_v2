@@ -3,26 +3,29 @@
 #
 # A machine-readable statement of how the works in this archive may and may not
 # be used. Served alongside /robots.txt, which carries the same reservation as
-# crawler directives.
+# crawler directives. The full terms are at https://restroomarchive.com/about
 
 ## Statement
 
-The 3D scans, thumbnails, photographs, annotations, and descriptive text
-published on this site are licensed to the public under Creative Commons
-Attribution-NonCommercial-NoDerivatives 4.0 International (CC BY-NC-ND 4.0),
-with one express carve-out stated below.
+ALL RIGHTS RESERVED.
 
-Contributors ("Archivists") submit scans of publicly accessible restrooms under
-that license. They retain copyright in their own work. Neither they nor the
-archive have granted permission for the use described next.
+The 3D scans, thumbnails, photographs, annotations, and descriptive text
+published on this site are NOT offered under any public license. No license to
+reuse them is granted to anyone -- not to visitors, not to search engines, not
+to AI developers, not to dataset compilers.
+
+Contributors ("Archivists") retain copyright in their own scans and grant the
+archive an exclusive, perpetual license to hold and display them. Because that
+grant is exclusive, no third party can obtain rights in these works from any
+source. There is no one who can license them to you.
 
 ## Reservation of rights
 
 Use of these works as training, fine-tuning, validation, evaluation, or
 grounding data for machine learning models -- including generative models for
 3D geometry, images, video, or text, and including retrieval-augmented
-generation over the archive's contents -- is NOT permitted under the license
-above and is expressly reserved.
+generation over the archive's contents -- is expressly prohibited and expressly
+reserved.
 
 This is an express reservation of rights under Article 4(3) of Directive (EU)
 2019/790 on copyright in the Digital Single Market, and is asserted equally
@@ -30,21 +33,34 @@ under any other jurisdiction's text-and-data-mining exception that permits
 rightsholders to opt out.
 
 The reservation applies regardless of how the works were obtained, including
-via a third-party crawl, a redistributed dataset, or a cached copy.
+via a third-party crawl, a redistributed dataset, or a cached copy. Possession
+of a copy conveys no right to use it.
+
+## The archive's own commitments
+
+These bind the archive, not just its visitors. The archive does not and will
+not:
+
+- Sell, rent, or otherwise commercialise contributed scans.
+- Transfer or assign them to another party without these commitments carrying
+  over intact.
+- Sublicense or redistribute them -- no dataset releases, no bulk exports, no
+  partner feeds, no download endpoint.
+- Use them, or permit their use, as machine learning training data.
 
 ## Permitted without asking
 
 - Viewing and browsing the archive.
 - Search indexing that returns links and short excerpts.
-- Linking, embedding, citing, and writing about the archive.
-- Personal, educational, and non-commercial reference use with attribution.
+- Linking to, citing, and writing about the archive.
 
 ## Requires written permission
 
-- Commercial use of any kind.
-- Redistribution of the scan files, in whole or in part.
-- Derivative works built from the scan geometry.
+- Any reuse, reproduction, or redistribution of the scans or thumbnails.
+- Any derivative work built from the scan geometry.
+- Any commercial use of any kind.
 - Any machine learning use as described under "Reservation of rights".
+  Permission for this will not be granted.
 
 ## Contact
 
@@ -57,6 +73,7 @@ User-agent: *
 Disallow-AI-Training: /
 Disallow-AI-Input: /
 Allow-Search: /
-License: https://creativecommons.org/licenses/by-nc-nd/4.0/
+License: none-granted
+Rights: all-rights-reserved
 TDM-Reservation: 1
 Contact: https://restroomarchive.com/about

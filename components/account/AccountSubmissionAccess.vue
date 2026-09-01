@@ -11,19 +11,14 @@
  * The list is sent with the request so the audit trail records what was agreed
  * to, not merely that something was.
  */
+import { SUBMISSION_AGREEMENTS } from "~~/shared/utils/agreements";
+
 const emit = defineEmits<{ requested: [] }>();
 
 const { refreshSession } = useAuth();
 const action = useAsyncAction("Could not submit request.");
 
-const AGREEMENTS = [
-  "Scans will be complete and without too many holes (excluding mirrored surfaces).",
-  "Scans will be cropped to remove any false spaces caused by reflective surfaces.",
-  "Toilets must be flushed before scanning.",
-  "I will avoid scanning restrooms that aren't private/ a single room. I will never scan if there are other people present.",
-  "I will use my best judgement when submitting. I won't submit anything too traumatizing or gross.",
-  "I agree to always be respectful.",
-];
+const AGREEMENTS = SUBMISSION_AGREEMENTS;
 
 const showForm = ref(false);
 const checks = ref<boolean[]>(AGREEMENTS.map(() => false));
@@ -44,7 +39,7 @@ async function submit() {
   const ok = await action.run(async () => {
     await $fetch("/api/auth/request-submission-access", {
       method: "POST",
-      body: { agreements: AGREEMENTS },
+      body: { agreements: [...AGREEMENTS] },
     });
     // The request stamps submissionRequestedAt on the user, which is what
     // swaps this form for the awaiting-review notice.

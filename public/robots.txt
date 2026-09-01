@@ -1,7 +1,8 @@
 # The Restroom Archive
 #
-# The scans in this archive are not licensed for AI training. See /ai.txt for
-# the full statement and https://restroomarchive.com/about for the license.
+# All rights reserved. The scans in this archive are not offered under any
+# public license and are not licensed for AI training. See /ai.txt for the full
+# statement and https://restroomarchive.com/about for the terms.
 #
 # Cloudflare's Managed robots.txt prepends its own block above this one at the
 # edge, which means the file served to crawlers contains two `User-agent: *`

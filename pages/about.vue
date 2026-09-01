@@ -42,6 +42,11 @@ const statsSentence = computed(() => {
   );
 });
 
+// Terms and privacy live in a modal rather than inline: the full text is long
+// enough to bury the contact form, and the footer link is where people go
+// looking for it.
+const legalOpen = ref(false);
+
 // Contact form
 const contactName = ref("");
 const contactEmail = ref("");
@@ -133,27 +138,20 @@ async function submitContact() {
       </section>
 
       <section>
-        <h1>License and AI training</h1>
+        <h1>Rights and AI training</h1>
         <p>
-          Scans in this archive are published under
-          <a
-            href="https://creativecommons.org/licenses/by-nc-nd/4.0/"
-            rel="license"
-            >CC BY-NC-ND 4.0</a
-          >. You're welcome to browse, link, cite, and write about the archive.
-          Commercial use, redistribution of the scan files, and derivative works
-          built from the geometry all need written permission first.
-          <br /><br />Archivists keep copyright in their own scans. Neither they
-          nor the archive have licensed this work as training data, and use of
-          it to train, fine-tune, evaluate, or ground machine learning models is
-          expressly reserved — including retrieval over the archive's contents,
-          and regardless of how a copy was obtained. That reservation is stated
-          in machine-readable form at <a href="/ai.txt">ai.txt</a> and
-          <a href="/robots.txt">robots.txt</a>, declared on every scan and
-          thumbnail the site serves, and enforced at the edge against crawlers
-          that ignore it. <br /><br />If you'd like to use something here in a
-          way the license doesn't cover, ask below — the answer isn't
-          automatically no.
+          Scans here are not offered up for reuse. Archivists keep the copyright
+          in their own work and grant the archive an exclusive license to hold
+          and display it — which means the archive will never sell it, hand it
+          on, publish it as a dataset, or let it be used to train machine
+          learning models. There is no download button and no bulk export, by
+          design.
+          <br /><br />That reservation is stated in machine-readable form at
+          <a href="/ai.txt">ai.txt</a> and <a href="/robots.txt">robots.txt</a>,
+          declared on every scan and thumbnail the site serves, and enforced at
+          the edge against crawlers that ignore it. <br /><br />The full terms
+          are in the
+          <a href="#" @click.prevent="legalOpen = true">privacy statement</a>.
         </p>
       </section>
 
@@ -237,8 +235,15 @@ async function submitContact() {
 
       <footer class="about-footer">
         <p>© 2026 Jake Welch. All rights reserved.</p>
+        <p class="dim">
+          Scans are held under an exclusive license, never sold, never shared,
+          and never used for AI training ·
+          <a href="#" @click.prevent="legalOpen = true">Privacy statement</a>
+        </p>
       </footer>
     </article>
+
+    <LegalDialog :open="legalOpen" @close="legalOpen = false" />
   </div>
 </template>
 
