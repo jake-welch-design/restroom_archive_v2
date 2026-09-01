@@ -109,8 +109,7 @@ async function submitContact() {
         <p>
           For this project I've primarily used
           <a
-            href="https://apps.apple.com/us/app/polycam-3d-scans-floor-plans/id1532482376
-Polycam 3D Scans & Floor Plans"
+            href="https://apps.apple.com/us/app/polycam-3d-scans-floor-plans/id1532482376"
             >Polycam for iPhone</a
           >, but any mobile 3D scanning app should work. iPhone Pro models
           support LiDAR scanning, which I recommend, but if you don't have

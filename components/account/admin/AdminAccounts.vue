@@ -43,18 +43,18 @@ function toggleOptions(id: number) {
   muteDays.value = null;
   // A rename left open on another account should not carry over to this one.
   cancelRename();
-  // The two disclosures are exclusive, so a row opens to one thing at a time.
-  openSubmissionsId.value = null;
 }
 
 /* --- Submissions dropdown -------------------------------------------------- */
 
 /**
- * The list behind an account's submission count.
+ * What each account has submitted, behind the same disclosure the catalog uses
+ * for a restroom's annotations: a count that is always visible, and a list that
+ * is not.
  *
- * The count arrives with the accounts list, so the rows read complete before
- * anything is expanded; the entries themselves are fetched per account on
- * first open and kept, since an admin opening one row usually opens a few.
+ * The count arrives with the accounts list, so every row reads complete before
+ * anything is expanded; the entries themselves are fetched per account on first
+ * open and kept, since an admin opening one row usually opens a few.
  */
 const openSubmissionsId = ref<number | null>(null);
 const loadingSubmissionsId = ref<number | null>(null);
@@ -68,7 +68,6 @@ async function toggleSubmissions(a: AccountRow) {
   }
 
   openSubmissionsId.value = a.id;
-  openId.value = null;
   submissionsError.value = "";
   if (submissionsByAccount.value[a.id]) return;
 
@@ -91,6 +90,12 @@ const SUBMISSION_STATUS_LABEL: Record<string, string> = {
   hidden: "Hidden",
   removed: "Removed",
 };
+
+/** Published entries need no label; everything else says where it stands. */
+function statusSuffix(s: AccountSubmission) {
+  if (s.status === "published") return "";
+  return ` · ${SUBMISSION_STATUS_LABEL[s.status] ?? s.status}`;
+}
 
 /**
  * Only published and pending entries are in the catalog the viewer reads from,
@@ -282,7 +287,10 @@ async function submitRename(a: AccountRow) {
 
     <ul v-else class="simple-list">
       <li v-for="a in accounts" :key="a.id" class="account-row">
-        <div class="simple-row">
+        <div
+          class="simple-row"
+          :class="{ 'row-expanded': openSubmissionsId === a.id }"
+        >
           <div class="simple-main">
             <span class="simple-title">
               <UserAttribution
@@ -303,20 +311,51 @@ async function submitRename(a: AccountRow) {
             <span v-if="a.adminMessage" class="simple-meta admin-msg-preview">
               “{{ a.adminMessage }}”
             </span>
+
+            <div v-if="a.submissionCount" class="submissions">
+              <button
+                type="button"
+                class="submissions-toggle"
+                :aria-expanded="openSubmissionsId === a.id"
+                @click="toggleSubmissions(a)"
+              >
+                Submissions ({{ a.submissionCount }})
+                <span
+                  class="toggle-caret"
+                  :class="{ open: openSubmissionsId === a.id }"
+                >
+                  ›
+                </span>
+              </button>
+
+              <template v-if="openSubmissionsId === a.id">
+                <p v-if="loadingSubmissionsId === a.id" class="submissions-note">
+                  Loading…
+                </p>
+                <ul v-else class="submission-list thin-scroll">
+                  <li
+                    v-for="s in submissionsByAccount[a.id]"
+                    :key="s.id"
+                    class="submission-item"
+                  >
+                    <NuxtLink
+                      v-if="isInArchive(s)"
+                      class="submission-title link"
+                      :to="`/r/${s.slug}`"
+                    >
+                      {{ s.name }}
+                    </NuxtLink>
+                    <span v-else class="submission-title">{{ s.name }}</span>
+                    <span class="submission-meta">
+                      {{ s.date }} · {{ s.location }}{{ statusSuffix(s) }}
+                    </span>
+                  </li>
+                </ul>
+              </template>
+            </div>
           </div>
 
           <div class="simple-actions">
-            <button
-              v-if="a.submissionCount"
-              type="button"
-              class="btn"
-              :class="{ active: openSubmissionsId === a.id }"
-              :aria-expanded="openSubmissionsId === a.id"
-              @click="toggleSubmissions(a)"
-            >
-              {{ a.submissionCount }}
-              {{ a.submissionCount === 1 ? "submission" : "submissions" }}
-            </button>
             <button
               type="button"
               class="btn"
@@ -326,26 +365,6 @@ async function submitRename(a: AccountRow) {
               {{ openId === a.id ? "Close" : "Manage" }}
             </button>
           </div>
-        </div>
-
-        <div v-if="openSubmissionsId === a.id" class="submissions">
-          <div v-if="loadingSubmissionsId === a.id" class="empty">Loading…</div>
-          <ul v-else class="submission-list">
-            <li
-              v-for="s in submissionsByAccount[a.id]"
-              :key="s.id"
-              class="submission-item"
-            >
-              <NuxtLink v-if="isInArchive(s)" class="link" :to="`/r/${s.slug}`">
-                {{ s.name }}
-              </NuxtLink>
-              <span v-else>{{ s.name }}</span>
-              <span class="dim">{{ s.date }} · {{ s.location }}</span>
-              <span v-if="s.status !== 'published'" class="pill pill-neutral">
-                {{ SUBMISSION_STATUS_LABEL[s.status] ?? s.status }}
-              </span>
-            </li>
-          </ul>
         </div>
 
         <div v-if="openId === a.id" class="account-options">
@@ -611,6 +630,12 @@ async function submitRename(a: AccountRow) {
   border-bottom: 0;
 }
 
+/* An open submission list makes the row tall, and a vertically centred Manage
+   button then floats away from the account it belongs to. */
+.simple-row.row-expanded {
+  align-items: flex-start;
+}
+
 .badge-row {
   display: flex;
   flex-wrap: wrap;
@@ -624,31 +649,88 @@ async function submitRename(a: AccountRow) {
 }
 
 /* --- Submissions dropdown -------------------------------------------------- */
-/* One line per entry: the name links into the archive, the rest is context.
-   Deliberately lighter than the Manage panel, since nothing here acts. */
+/* The catalog's annotation disclosure, applied to an account: the count reads
+   from the collapsed row, and the list opens under it. Nothing here acts, so it
+   stays a text control rather than joining the buttons on the right.
+
+   The rows themselves are the published-submissions format, a linked name over
+   one line of context. */
 
 .submissions {
-  padding: 0 0 12px;
+  margin-top: 4px;
 }
 
+.submissions-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: 12px;
+  color: #000;
+  cursor: pointer;
+}
+
+.submissions-toggle:hover {
+  color: #555;
+}
+
+.toggle-caret {
+  display: inline-block;
+  font-size: 12px;
+  transform: rotate(0deg);
+  transition: transform 0.15s;
+}
+
+.toggle-caret.open {
+  transform: rotate(90deg);
+}
+
+.submissions-note {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #999;
+}
+
+/* An account with a hundred entries would otherwise push every account below it
+   off the screen, so a long list scrolls in place. */
 .submission-list {
   list-style: none;
-  margin: 0;
+  margin: 4px 0 0;
   padding: 0;
+  display: flex;
+  flex-direction: column;
+  max-height: 260px;
+  overflow-y: auto;
 }
 
 .submission-item {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 8px;
-  padding: 3px 0;
-  font-size: 12px;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 0;
+  border-bottom: 1px solid #e8e8e8;
 }
 
-.submission-item .link {
+.submission-item:last-child {
+  border-bottom: 0;
+}
+
+.submission-title {
+  font-size: 13px;
   color: #000;
+  line-height: 1.3;
+}
+
+.submission-title.link {
   text-decoration: underline;
+}
+
+.submission-meta {
+  font-size: 12px;
+  color: #999;
 }
 
 .account-options {

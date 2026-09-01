@@ -1,4 +1,4 @@
-import { desc, sql } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { useDb, schema } from "~~/server/utils/db";
 import { requireRole } from "~~/server/utils/requireRole";
 import { SESSION_USER_COLUMNS } from "~~/server/utils/sessionUser";
@@ -19,20 +19,23 @@ export default defineEventHandler(async (event) => {
 
   const db = useDb(event);
 
-  // Every status counts, not just published: a row's worth of history includes
-  // what was turned down.
-  const submissionCount = sql<number>`(
-    SELECT COUNT(*) FROM ${schema.restrooms}
-    WHERE ${schema.restrooms.submittedBy} = ${schema.users.id}
-  )`;
-
+  // Counted by joining rather than by a correlated subquery: drizzle renders
+  // column references unqualified in a single-table query, which inside a
+  // subquery over restrooms silently resolves `users.id` to `restrooms.id`.
+  // Counting the joined id rather than the rows gives 0, not 1, for an account
+  // that has submitted nothing.
   return await db
     .select({
       ...SESSION_USER_COLUMNS,
       createdAt: schema.users.createdAt,
-      submissionCount,
+      submissionCount: sql<number>`count(${schema.restrooms.id})`,
     })
     .from(schema.users)
+    .leftJoin(
+      schema.restrooms,
+      eq(schema.restrooms.submittedBy, schema.users.id),
+    )
+    .groupBy(schema.users.id)
     .orderBy(desc(schema.users.createdAt))
     .all();
 });
