@@ -47,6 +47,18 @@ const statsSentence = computed(() => {
 // looking for it.
 const legalOpen = ref(false);
 
+// Support links. There is deliberately no amount field here: these are Stripe
+// Payment Links, which take no amount from the URL, so a field on this page
+// could not carry a value through to the checkout. The donor picks the amount
+// on Stripe's own page instead. Adding the EUR link and PayPal is a matter of
+// extending this list -- the markup below reads whatever is in it.
+const supportLinks = [
+  {
+    label: "Send a one-time donation",
+    href: "https://donate.stripe.com/eVqcN7gJG0400Ucep9fUQ00",
+  },
+];
+
 // Contact form
 const contactName = ref("");
 const contactEmail = ref("");
@@ -93,19 +105,12 @@ async function submitContact() {
       <section>
         <h1>About</h1>
         <p>
-          The Restroom Archive is an ongoing repository of publicly accessible
-          restrooms. Everyone uses restrooms, yet as spaces, they are considered
-          taboo, rarely discussed, acknowledged, or considered. Designed and
-          built by <a href="https://jakewelch.design">Jake Welch</a>, this
-          archive aims to document the diverse qualities of these unique spaces.
-          There is perhaps no space in society which better captures the
-          creativity and impertinence of humans when they know that nobody else
-          is watching. {{ statsSentence }}
+          The Restroom Archive is an ongoing repository of publicly accessible restrooms. Designed and built by <a href="https://jakewelch.design">Jake Welch</a>, this archive aims to document the diverse qualities of these unique spaces. Everyone uses restrooms, yet as spaces, they are considered taboo and are rarely considered. There is perhaps no space in society that better captures the creativity and impertinence of humans when they know that nobody else is watching.  {{ statsSentence }}
         </p>
         <p>
           <a href="#" @click.prevent="legalOpen = true"
             >Click here to view the full terms</a
-          >
+          > for how the content in this Archive may be used.
         </p>
       </section>
 
@@ -117,28 +122,26 @@ async function submitContact() {
       <section>
         <h1>How to scan a restroom</h1>
         <p>
-          For this project I've primarily used
-          <a
+          Most of the Archive was scanned using <a
             href="https://apps.apple.com/us/app/polycam-3d-scans-floor-plans/id1532482376"
             >Polycam for iPhone</a
           >, but any mobile 3D scanning app should work. iPhone Pro models
-          support LiDAR scanning, which I recommend, but if you don't have
-          access to LiDAR, you should be able to make quality scans using
-          photogrammetry. Click
-          <a
+          support LiDAR scanning, which is recommended, but if you don't have
+          access to LiDAR, high-quality scans are possible using photogrammetry.
+          <ul>
+          <li>Click <a
             href="https://learn.poly.cam/hc/en-us/articles/36655587097620-How-to-Use-Space-Mode-with-LiDAR-enabled-devices#h_01K3P12AHC1PG459TBPJN6H7Y9"
             >here</a
-          >
-          to learn how to scan with LiDAR, and
-          <a
+          > to learn how to scan with LiDAR</li>
+          <li>Click <a
             href="https://learn.poly.cam/hc/en-us/articles/43933482446996-How-to-Use-Space-Mode-Non-LiDAR-Devices#h_05_scanning"
             >here</a
-          >
-          to learn how to scan with photogrammetry.
-          <br /><br />Download the model as a .GLB/.GLTF file, Polycam offers
-          export in this format for free. To become an Archivist and submit your
-          scan, please sign-up for an account and request access on the Account
-          page.
+          > to learn how to scan with photogrammetry </li>
+          </ul>
+          Once scanned, download the model as a .GLB/.GLTF file; Polycam allows
+          users to scan and export in this format on their free tier without a
+          subscription. To become an Archivist, please sign up for an account
+          and request submission access on the Account page.
         </p>
       </section>
 
@@ -219,6 +222,29 @@ async function submitContact() {
           </button>
         </form>
       </section>
+
+      <!-- A bordered box rather than another section: the rule between
+           sections reads as "next topic", and this is an aside to the page
+           rather than a continuation of it. -->
+      <div class="support">
+        <h1>Support this Archive</h1>
+        <p>
+          This site is independently run and operated by one person. If you
+          enjoy using it, please consider donating to keep it up and
+          running.
+        </p>
+        <ul class="support-links">
+          <li v-for="link in supportLinks" :key="link.href">
+            <a
+              :href="link.href"
+              class="primary-btn"
+              target="_blank"
+              rel="noopener noreferrer"
+              >{{ link.label }} →</a
+            >
+          </li>
+        </ul>
+      </div>
 
       <footer class="about-footer">
         <p>© 2026 Jake Welch</p>
@@ -323,6 +349,39 @@ async function submitContact() {
   line-height: 1.4;
 }
 
+/* Support */
+.support {
+  margin-top: 1.2em;
+  border: 1px solid var(--ink);
+  padding: 16px;
+}
+
+.support p {
+  margin: 0 0 12px;
+}
+
+.support-links {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  /* Buttons hug their labels rather than stretching the width of the box, so
+     a second and third link read as a set of choices rather than a stack of
+     banners. */
+  align-items: flex-start;
+  gap: 8px;
+}
+
+/* `.about-content a` paints every link in this page black and underlines it,
+   which on a filled button is black on black. Overriding it needs the extra
+   class here to outrank that rule. */
+.support-links .primary-btn {
+  display: inline-block;
+  color: var(--paper);
+  text-decoration: none;
+}
+
 /* Same panel-width step as the catalog and its header. The page scales with
    the panel it sits in, not with the window. */
 @container panel (max-width: 560px) {
@@ -337,7 +396,7 @@ async function submitContact() {
     font-size: 12px;
   }
   .primary-btn {
-    font-size: 14px;
+    font-size: 12px;
     padding: 8px 18px;
   }
 
