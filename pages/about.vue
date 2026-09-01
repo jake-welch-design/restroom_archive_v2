@@ -105,12 +105,20 @@ async function submitContact() {
       <section>
         <h1>About</h1>
         <p>
-          The Restroom Archive is an ongoing repository of publicly accessible restrooms. Designed and built by <a href="https://jakewelch.design">Jake Welch</a>, this archive aims to document the diverse qualities of these unique spaces. Everyone uses restrooms, yet as spaces, they are considered taboo and are rarely considered. There is perhaps no space in society that better captures the creativity and impertinence of humans when they know that nobody else is watching.  {{ statsSentence }}
+          The Restroom Archive is an ongoing repository of publicly accessible
+          restrooms. Designed and built by
+          <a href="https://jakewelch.design">Jake Welch</a>, this archive aims
+          to document the diverse qualities of these unique spaces. Everyone
+          uses restrooms, yet as spaces, they are considered taboo and are
+          rarely considered. There is perhaps no space in society that better
+          captures the creativity and impertinence of humans when they know that
+          nobody else is watching. {{ statsSentence }}
         </p>
         <p>
           <a href="#" @click.prevent="legalOpen = true"
             >Click here to view the full terms</a
-          > for how the content in this Archive may be used.
+          >
+          for how the content in this Archive may be used.
         </p>
       </section>
 
@@ -122,22 +130,33 @@ async function submitContact() {
       <section>
         <h1>How to scan a restroom</h1>
         <p>
-          Most of the Archive was scanned using <a
+          Most of the Archive was scanned using
+          <a
             href="https://apps.apple.com/us/app/polycam-3d-scans-floor-plans/id1532482376"
             >Polycam for iPhone</a
           >, but any mobile 3D scanning app should work. iPhone Pro models
           support LiDAR scanning, which is recommended, but if you don't have
           access to LiDAR, high-quality scans are possible using photogrammetry.
-          <ul>
-          <li>Click <a
-            href="https://learn.poly.cam/hc/en-us/articles/36655587097620-How-to-Use-Space-Mode-with-LiDAR-enabled-devices#h_01K3P12AHC1PG459TBPJN6H7Y9"
-            >here</a
-          > to learn how to scan with LiDAR</li>
-          <li>Click <a
-            href="https://learn.poly.cam/hc/en-us/articles/43933482446996-How-to-Use-Space-Mode-Non-LiDAR-Devices#h_05_scanning"
-            >here</a
-          > to learn how to scan with photogrammetry </li>
-          </ul>
+        </p>
+        <ul>
+          <li>
+            Click
+            <a
+              href="https://learn.poly.cam/hc/en-us/articles/36655587097620-How-to-Use-Space-Mode-with-LiDAR-enabled-devices#h_01K3P12AHC1PG459TBPJN6H7Y9"
+              >here</a
+            >
+            to learn how to scan with LiDAR
+          </li>
+          <li>
+            Click
+            <a
+              href="https://learn.poly.cam/hc/en-us/articles/43933482446996-How-to-Use-Space-Mode-Non-LiDAR-Devices#h_05_scanning"
+              >here</a
+            >
+            to learn how to scan with photogrammetry
+          </li>
+        </ul>
+        <p>
           Once scanned, download the model as a .GLB/.GLTF file; Polycam allows
           users to scan and export in this format on their free tier without a
           subscription. To become an Archivist, please sign up for an account
@@ -230,8 +249,7 @@ async function submitContact() {
         <h1>Support this Archive</h1>
         <p>
           This site is independently run and operated by one person. If you
-          enjoy using it, please consider donating to keep it up and
-          running.
+          enjoy using it, please consider donating to keep it up and running.
         </p>
         <ul class="support-links">
           <li v-for="link in supportLinks" :key="link.href">
@@ -289,6 +307,23 @@ async function submitContact() {
 .about-content p {
   font-size: 14px;
   margin: 0 0 1.2em;
+}
+
+/* Prose lists carry the paragraph's size and bottom margin so a section that
+   mixes the two reads as one block of text. Scoped to `section` on purpose:
+   the support box's list of links is not prose and sets its own layout. */
+.about-content section ul {
+  font-size: 14px;
+  margin: 0 0 1.2em;
+  padding-left: 1.4em;
+}
+
+.about-content section li {
+  margin-bottom: 0.4em;
+}
+
+.about-content section li:last-child {
+  margin-bottom: 0;
 }
 
 .about-content a {
