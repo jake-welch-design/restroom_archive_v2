@@ -43,7 +43,7 @@ function onClick(e: MouseEvent) {
     @click="onClick"
   >
     <div class="legal-head">
-      <h2 id="legal-title">Privacy and Usage Statement</h2>
+      <h2 id="legal-title">Privacy and Terms</h2>
       <button
         type="button"
         class="legal-close"
@@ -59,49 +59,39 @@ function onClick(e: MouseEvent) {
 
       <h4>1. Scope</h4>
       <p>
-        The Restroom Archive is a curated archive of 3D scans of publicly
-        accessible restrooms. Use of the site constitutes acceptance of these
-        terms. Submitting a scan also constitutes acceptance of section 2.
+        These terms cover use of The Restroom Archive. Submitting a scan
+        additionally accepts section 2.
       </p>
 
-      <h4>2. Contributor rights</h4>
+      <h4>2. Ownership and license</h4>
       <p>
-        Archivists own the scans they contribute and retain copyright in them.
-        Contributing does not transfer ownership and does not restrict an
-        Archivist from using their own scan anywhere else, for any purpose.
+        Archivists own their scans and keep copyright in them. Contributing
+        transfers no ownership and places no limit on an Archivist&rsquo;s use
+        of their own work.
       </p>
       <p>
         Submission grants the archive a
         <strong>sole, perpetual, irrevocable, worldwide license</strong> to
-        store, preserve, display, and present the scan as part of the archive.
-        This includes the right to produce the technical copies and derivatives
-        that hosting requires, such as thumbnails, compressed or optimised
-        versions, and format conversions.
+        store, preserve, display, and present the scan, including the technical
+        copies hosting requires: thumbnails, compressed versions, and format
+        conversions. Sole means the archive is the only party that may hold
+        these rights, and that the Archivist will not license the same scan
+        elsewhere while it remains in the archive.
       </p>
       <p>
-        The license is sole rather than exclusive. An exclusive license would
-        bar the Archivist from using their own work; a sole license does not.
-        The archive is the only party that may hold these rights, and no third
-        party may be granted a license to a scan while it remains in the
-        archive, but the Archivist&rsquo;s own use is unaffected.
-      </p>
-      <p>
-        The archive uses contributed scans on this site and nowhere else. The
-        commitments in section 3 state the limits of that use.
-      </p>
-      <p>
-        Submission confirms that the scan is the Archivist&rsquo;s own work,
-        that it is theirs to contribute, and that they held the right to scan
-        the space.
+        Submission confirms the scan is the Archivist&rsquo;s own work and that
+        they held the right to scan the space.
       </p>
 
-      <h4>3. Archive commitments</h4>
-      <p>The archive does not and will not:</p>
+      <h4>3. How scans are used</h4>
+      <p>
+        Contributed scans are used on this site and nowhere else. The archive
+        does not:
+      </p>
       <ul>
-        <li>Sell, rent, or otherwise commercialise contributed scans.</li>
+        <li>Sell, rent, or otherwise commercialise them.</li>
         <li>
-          Transfer or assign them to another party unless these commitments
-          transfer intact.
+          Transfer or assign them unless these commitments transfer intact.
         </li>
         <li>
           Sublicense or redistribute them. There are no dataset releases, bulk
@@ -113,21 +103,19 @@ function onClick(e: MouseEvent) {
         </li>
       </ul>
 
-      <h4>4. Permitted use</h4>
+      <h4>4. Use by others</h4>
       <p>
         <strong>All rights reserved.</strong> Viewing, browsing, linking,
         citing, and writing about the archive are permitted. No license to reuse
-        the scans is granted to any party, including visitors, search engines,
-        and AI developers. Downloading, extracting, redistributing, and building
-        on scan geometry require written permission.
+        the scans is granted to any party. Downloading, extracting,
+        redistributing, and building on scan geometry require written
+        permission.
       </p>
       <p>
-        Use of archive content as training data for machine learning is
-        prohibited and expressly reserved under Article 4(3) of Directive (EU)
-        2019/790 and equivalent text-and-data-mining provisions in other
-        jurisdictions. The reservation applies regardless of how a copy was
-        obtained, including through third-party crawls and redistributed
-        datasets.
+        Machine learning use is prohibited and expressly reserved under Article
+        4(3) of Directive (EU) 2019/790 and equivalent text-and-data-mining
+        provisions in other jurisdictions, regardless of how a copy was
+        obtained.
       </p>
 
       <h4>5. Accounts</h4>
@@ -135,19 +123,16 @@ function onClick(e: MouseEvent) {
         Account holders are responsible for activity under their account.
         Submission access is granted case by case and may be revoked. Scans are
         reviewed before publication, and the archive may decline or remove any
-        submission at its discretion.
+        submission.
       </p>
 
       <h4>6. Removal</h4>
       <p>
         Contributions are intended to be permanent. Deleting an account removes
-        the account and its annotations, and detaches the Archivist&rsquo;s name
-        from their scans, which remain in the archive unattributed.
-      </p>
-      <p>
-        Full removal of a scan may be requested in writing. Requests are
-        reviewed individually. Removal is at the archive&rsquo;s discretion
-        rather than guaranteed.
+        the account and its annotations and detaches the Archivist&rsquo;s name
+        from their scans, which remain in the archive unattributed. Full removal
+        may be requested in writing. Requests are reviewed individually and
+        granted at the archive&rsquo;s discretion.
       </p>
 
       <h4>7. Changes</h4>
@@ -160,38 +145,34 @@ function onClick(e: MouseEvent) {
       <h3>Privacy</h3>
 
       <p>
-        The site runs no analytics. It uses no tracking pixels, no advertising,
-        no third-party cookies, and no data brokers. Visitor activity is not
-        profiled. Personal information is never sold, rented, or shared for
-        marketing.
+        The site runs no analytics, tracking pixels, advertising, third-party
+        cookies, or data brokers. Visitor activity is not profiled, and personal
+        information is never sold, rented, or shared for marketing.
       </p>
 
       <h4>Data collected</h4>
       <p>
         Accounts store an email address, username, optional display name, and a
-        password hash (scrypt, with a per-account salt). Plain passwords are
-        never stored and cannot be recovered from the hash. Submissions store
-        the scan together with the restroom&rsquo;s name, location, coordinates,
-        description, and tags. Annotations store their text and position. IP
-        addresses are retained for under one hour for rate limiting, then
-        deleted automatically.
+        password hash (scrypt, with a per-account salt). Submissions store the
+        scan with the restroom&rsquo;s name, location, coordinates, description,
+        and tags. Annotations store their text and position. IP addresses are
+        retained for under one hour for rate limiting, then deleted.
       </p>
 
       <h4>Public information</h4>
       <p>
         Usernames, display names, scans, and annotations are public. Email
-        addresses are never displayed publicly and are used only for account
-        verification, password resets, and replies to enquiries.
+        addresses are never displayed and are used only for account
+        verification, password resets, and replies.
       </p>
 
       <h4>Third-party processors</h4>
       <p>
         <a href="https://www.cloudflare.com/privacypolicy/">Cloudflare</a> hosts
-        the site, database, scans, and thumbnails, and provides the anti-bot
-        check on forms.
-        <a href="https://www.useplunk.com/legal/privacy">Plunk</a> sends
-        verification, password-reset, and contact emails, and therefore receives
-        recipient addresses. On the map view, tiles load directly from
+        the site, database, and files, and provides the anti-bot check on forms.
+        <a href="https://www.useplunk.com/legal/privacy">Plunk</a> sends account
+        and contact emails, and receives recipient addresses. On the map view,
+        tiles load directly from
         <a href="https://carto.com/privacy/">CARTO</a> and
         <a href="https://www.esri.com/en-us/privacy/overview">Esri</a>, which
         receive visitor IP addresses and the map area requested. No other third
@@ -200,9 +181,8 @@ function onClick(e: MouseEvent) {
 
       <h4>Cookies</h4>
       <p>
-        Two cookies are set, both strictly functional. One maintains the
-        signed-in session. The other stores the preferred catalog view. Neither
-        is used for tracking.
+        Two, both strictly functional: one maintains the signed-in session, the
+        other stores the preferred catalog view.
       </p>
 
       <h4>Scans and people</h4>
@@ -216,8 +196,8 @@ function onClick(e: MouseEvent) {
       <p>
         Accounts can be deleted at any time from the Account page, which
         immediately removes the account and its annotations. Corrections,
-        takedown requests, and questions about stored data can be sent through
-        the contact form on the About page.
+        takedown requests, and questions about stored data go through the
+        contact form on the About page.
       </p>
 
       <p class="legal-updated">Last updated 1 September 2026.</p>

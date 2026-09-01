@@ -102,6 +102,11 @@ async function submitContact() {
           creativity and impertinence of humans when they know that nobody else
           is watching. {{ statsSentence }}
         </p>
+        <p>
+          <a href="#" @click.prevent="legalOpen = true"
+            >Click here to view the full terms</a
+          >
+        </p>
       </section>
 
       <section>
@@ -218,9 +223,7 @@ async function submitContact() {
       <footer class="about-footer">
         <p>© 2026 Jake Welch</p>
         <p class="dim">
-          <a href="#" @click.prevent="legalOpen = true"
-            >Privacy and Usage Statement</a
-          >
+          <a href="#" @click.prevent="legalOpen = true">Privacy and Terms</a>
         </p>
       </footer>
     </article>
