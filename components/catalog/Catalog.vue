@@ -281,7 +281,11 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
       </div>
     </div>
 
-    <div v-if="allTags.length" class="filter-wrap" :class="{ open: filterOpen }">
+    <div
+      v-if="allTags.length"
+      class="filter-wrap"
+      :class="{ open: filterOpen }"
+    >
       <div class="filter-panel thin-scroll">
         <button
           v-for="t in allTags"
@@ -746,7 +750,7 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
   }
   .filter-wrap.open .filter-panel {
     padding-top: 8px;
-    padding-bottom: 8px;
+    /* padding-bottom: 8px; */
   }
 }
 
