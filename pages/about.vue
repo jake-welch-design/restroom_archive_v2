@@ -402,6 +402,7 @@ async function submitContact() {
 }
 
 .support p {
+  font-size: 12px;
   margin: 0 0 12px;
 }
 
