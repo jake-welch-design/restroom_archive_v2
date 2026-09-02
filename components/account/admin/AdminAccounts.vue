@@ -66,6 +66,7 @@ type SortKey =
   | "name"
   | "username"
   | "email"
+  | "type"
   | "submissionCount"
   | "annotationCount";
 
@@ -74,14 +75,14 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: "name", label: "Name" },
   { key: "username", label: "Username" },
   { key: "email", label: "Email" },
+  { key: "type", label: "Account type" },
   { key: "submissionCount", label: "Submissions" },
   { key: "annotationCount", label: "Annotations" },
 ];
 
 const query = ref("");
 const sortKey = ref<SortKey>("createdAt");
-// Newest first, which is the order the endpoint already returns.
-const sortDir = ref<"asc" | "desc">("desc");
+const sortDir = ref<"asc" | "desc">("asc");
 
 /** An account with no display name is listed under the handle it does have. */
 function sortName(a: AccountRow) {
@@ -96,6 +97,12 @@ function compare(a: AccountRow, b: AccountRow) {
       return a.username.localeCompare(b.username);
     case "email":
       return a.email.localeCompare(b.email);
+    case "type":
+      // Ties broken by name, because a type sort on its own leaves every
+      // account of one type in whatever order they happened to arrive in.
+      return (
+        typeRank(a) - typeRank(b) || sortName(a).localeCompare(sortName(b))
+      );
     case "submissionCount":
       return a.submissionCount - b.submissionCount;
     case "annotationCount":
@@ -121,6 +128,24 @@ const visibleAccounts = computed(() => {
 
   const dir = sortDir.value === "asc" ? 1 : -1;
   return [...list].sort((a, b) => compare(a, b) * dir);
+});
+
+/**
+ * How the list breaks down by type, under the search field.
+ *
+ * Counted off the visible list rather than the whole set, so it describes what
+ * is actually on screen; with the search empty the two are the same thing.
+ * Admins are counted too — they are neither of the other two, and a tally that
+ * does not add up to the list above it is worse than a longer one.
+ */
+const tally = computed(() => {
+  const counts: Record<AccountType, number> = {
+    Annotator: 0,
+    Archivist: 0,
+    Admin: 0,
+  };
+  for (const a of visibleAccounts.value) counts[roleLabel(a)]++;
+  return counts;
 });
 
 /* --- Submissions and annotations dropdowns --------------------------------- */
@@ -222,10 +247,26 @@ function isMuted(account: AccountRow) {
   return isFuture(account.mutedUntil);
 }
 
-function roleLabel(account: AccountRow) {
+/**
+ * What kind of account this is: the one fact the badges lead with, the tally
+ * counts, and the type sort orders by.
+ *
+ * Not stored anywhere — it is `role` and `approvedAt` read together, which is
+ * why every surface that shows it derives it here rather than from a column.
+ */
+type AccountType = "Admin" | "Archivist" | "Annotator";
+
+function roleLabel(account: AccountRow): AccountType {
   if (account.role === "admin") return "Admin";
   if (account.approvedAt) return "Archivist";
   return "Annotator";
+}
+
+/** Least access first, so ascending reads Annotator → Archivist → Admin. */
+const TYPE_ORDER: AccountType[] = ["Annotator", "Archivist", "Admin"];
+
+function typeRank(account: AccountRow) {
+  return TYPE_ORDER.indexOf(roleLabel(account));
 }
 
 type Badge = {
@@ -397,51 +438,58 @@ async function submitRename(a: AccountRow) {
     </p>
 
     <div v-if="accounts?.length" class="account-controls">
-      <label class="search">
-        <button
-          v-if="query"
-          type="button"
-          class="search-icon clear"
-          aria-label="Clear search"
-          @click="query = ''"
-        >
-          <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true">
-            <path
-              d="M2 2 L10 10 M10 2 L2 10"
-              stroke="currentColor"
-              stroke-width="1.25"
-              fill="none"
-              stroke-linecap="round"
-            />
-          </svg>
-        </button>
+      <div class="controls-left">
+        <label class="search">
+          <button
+            v-if="query"
+            type="button"
+            class="search-icon clear"
+            aria-label="Clear search"
+            @click="query = ''"
+          >
+            <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true">
+              <path
+                d="M2 2 L10 10 M10 2 L2 10"
+                stroke="currentColor"
+                stroke-width="1.25"
+                fill="none"
+                stroke-linecap="round"
+              />
+            </svg>
+          </button>
 
-        <span v-else class="search-icon" aria-hidden="true">
-          <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true">
-            <circle
-              cx="5"
-              cy="5"
-              r="3.25"
-              stroke="currentColor"
-              stroke-width="1.25"
-              fill="none"
-            />
-            <path
-              d="M7.5 7.5 L10.5 10.5"
-              stroke="currentColor"
-              stroke-width="1.25"
-              stroke-linecap="round"
-            />
-          </svg>
-        </span>
+          <span v-else class="search-icon" aria-hidden="true">
+            <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true">
+              <circle
+                cx="5"
+                cy="5"
+                r="3.25"
+                stroke="currentColor"
+                stroke-width="1.25"
+                fill="none"
+              />
+              <path
+                d="M7.5 7.5 L10.5 10.5"
+                stroke="currentColor"
+                stroke-width="1.25"
+                stroke-linecap="round"
+              />
+            </svg>
+          </span>
 
-        <input
-          v-model="query"
-          type="search"
-          placeholder="Search accounts"
-          aria-label="Search accounts"
-        />
-      </label>
+          <input
+            v-model="query"
+            type="search"
+            placeholder="Search accounts"
+            aria-label="Search accounts"
+          />
+        </label>
+
+        <p class="account-tally">
+          Annotators: {{ tally.Annotator }} · Archivists:
+          {{ tally.Archivist }} · Admins: {{ tally.Admin }}
+        </p>
+      </div>
 
       <div class="sort-control">
         <label class="sort-label" for="account-sort">Sort by</label>
@@ -867,11 +915,28 @@ async function submitRename(a: AccountRow) {
 
 .account-controls {
   display: flex;
-  align-items: center;
+  /* Top-aligned rather than centred: the tally hangs below the search field, and
+     centring would push the sort control down to straddle both lines instead of
+     sitting on the search's own line. */
+  align-items: flex-start;
   flex-wrap: wrap;
   justify-content: space-between;
   gap: 8px 20px;
   padding-bottom: 12px;
+}
+
+.controls-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* A read-out, not a control: the micro step and the muted colour keep it from
+   reading as another thing to click. */
+.account-tally {
+  margin: 0;
+  font-size: 11px;
+  color: #999;
 }
 
 .search {
