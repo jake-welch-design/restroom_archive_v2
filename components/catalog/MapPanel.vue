@@ -50,6 +50,7 @@ const emit = defineEmits<{
     </div>
 
     <DescriptorChips
+      class="panel-chips"
       :tags="restroom.descriptors ?? []"
       :active-tags="activeTags"
       @toggle-tag="emit('toggleTag', $event)"
@@ -130,10 +131,18 @@ const emit = defineEmits<{
   font-size: 12px;
   line-height: 1.35;
 }
-/* Matches the `.annotation-meta` below the divider. */
+/* Matches the `.annotation-meta` further down the panel. */
 .submitter-line {
   color: #999;
   font-size: 12px;
+}
+
+/* The chips sit outside `.description`, and the panel is a plain block rather
+   than a flex column, so they carry the 8px the description's gap would
+   otherwise have given them. Without it they sit flush against the
+   attribution while every other seam in the panel is 8px. */
+.panel-chips {
+  margin-top: 8px;
 }
 
 /* Divider matches the one under `.panel-header`, so the panel reads as three
