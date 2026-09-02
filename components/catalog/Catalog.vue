@@ -614,8 +614,8 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
 
 /* Gentle slide open/closed, mirroring the mobile nav drawer in CatalogHeader:
    a grid whose single row eases between 0fr and 1fr while the inner panel clips
-   its own content. The vertical padding and the divider animate with it so the
-   strip grows as one piece rather than snapping. */
+   its own content. The vertical padding animates with it so the strip grows as
+   one piece rather than snapping. */
 .filter-wrap {
   display: grid;
   grid-template-rows: 0fr;
@@ -626,7 +626,6 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
 
 .filter-wrap.open {
   grid-template-rows: 1fr;
-  border-bottom: 1px solid #000;
 }
 
 .filter-panel {
