@@ -455,11 +455,10 @@ function sortArrow(key: SortKey) {
   font-size: 14px;
   line-height: 1.35;
 }
+/* Matches the `.annotation-meta` below the divider. */
 .submitter-line {
-  display: block;
   color: #999;
   font-size: 12px;
-  line-height: 1.2;
 }
 .edit-link {
   background: transparent;
@@ -478,7 +477,9 @@ function sortArrow(key: SortKey) {
 
 /* Annotations */
 .annotations-section {
-  margin-top: 10px;
+  /* No margin of its own: `.description`'s 10px gap already separates it, and
+     adding to that put the divider twice as far below the attribution as the
+     description, tags and attribution sit from each other. */
   margin-bottom: 12px;
   padding-top: 12px;
   border-top: 1px solid #e8e8e8;

@@ -215,11 +215,10 @@ onMounted(() => scrollToSelected(props.selectedSlug));
   font-size: 11px;
   line-height: 1.35;
 }
+/* Matches the compact `.annotation-meta` directly below it. */
 .submitter-line {
-  display: block;
   color: #999;
   font-size: 11px;
-  line-height: 1.2;
 }
 .annotations-section {
   margin-top: auto;

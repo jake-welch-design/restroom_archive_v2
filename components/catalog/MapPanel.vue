@@ -130,11 +130,10 @@ const emit = defineEmits<{
   font-size: 12px;
   line-height: 1.35;
 }
+/* Matches the `.annotation-meta` below the divider. */
 .submitter-line {
-  display: block;
   color: #999;
-  font-size: 11px;
-  line-height: 1.2;
+  font-size: 12px;
 }
 
 /* Divider matches the one under `.panel-header`, so the panel reads as three
