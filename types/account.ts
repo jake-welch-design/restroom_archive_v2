@@ -130,6 +130,8 @@ export interface AccountRow {
   createdAt: string;
   /** Submissions of any status attributed to the account. */
   submissionCount: number;
+  /** Annotations written by the account, hidden ones included. */
+  annotationCount: number;
 }
 
 /** GET /api/admin/users/:id/submissions: one account's submissions. */
@@ -140,6 +142,16 @@ export interface AccountSubmission {
   location: string;
   date: string;
   status: string;
+}
+
+/** GET /api/admin/users/:id/annotations: one account's annotations. */
+export interface AccountAnnotation {
+  id: number;
+  body: string;
+  createdAt: string;
+  hiddenAt: string | null;
+  restroomSlug: string;
+  restroomName: string;
 }
 
 /** GET /api/admin/audit-log: a record of one admin action. */

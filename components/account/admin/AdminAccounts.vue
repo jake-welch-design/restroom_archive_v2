@@ -1,5 +1,9 @@
 <script setup lang="ts">
-import type { AccountRow, AccountSubmission } from "~/types/account";
+import type {
+  AccountAnnotation,
+  AccountRow,
+  AccountSubmission,
+} from "~/types/account";
 import { apiErrorMessage } from "~~/shared/utils/apiError";
 import { formatDayMonthYear } from "~~/shared/utils/formatDate";
 import { isFuture } from "~~/shared/utils/sqliteTime";
@@ -45,44 +49,150 @@ function toggleOptions(id: number) {
   cancelRename();
 }
 
-/* --- Submissions dropdown -------------------------------------------------- */
+/* --- Search and sort ------------------------------------------------------- */
 
 /**
- * What each account has submitted, behind the same disclosure the catalog uses
- * for a restroom's annotations: a count that is always visible, and a list that
- * is not.
+ * The section's control bar, in the catalog's idiom: a search field and a sort
+ * with a direction caret, sitting above the list rather than on it.
  *
- * The count arrives with the accounts list, so every row reads complete before
- * anything is expanded; the entries themselves are fetched per account on first
- * open and kept, since an admin opening one row usually opens a few.
+ * Unlike the catalog, searching does not replace the sort. A fuzzy search that
+ * reorders by relevance is right for browsing an archive; an admin looking up an
+ * account is usually narrowing a list they still want ordered by whatever they
+ * chose, so this is a plain substring match over the three ways an account is
+ * named and the sort stays in force.
  */
-const openSubmissionsId = ref<number | null>(null);
-const loadingSubmissionsId = ref<number | null>(null);
-const submissionsError = ref("");
-const submissionsByAccount = ref<Record<number, AccountSubmission[]>>({});
+type SortKey =
+  | "createdAt"
+  | "name"
+  | "username"
+  | "email"
+  | "submissionCount"
+  | "annotationCount";
 
-async function toggleSubmissions(a: AccountRow) {
-  if (openSubmissionsId.value === a.id) {
-    openSubmissionsId.value = null;
-    return;
-  }
+const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: "createdAt", label: "Date added" },
+  { key: "name", label: "Name" },
+  { key: "username", label: "Username" },
+  { key: "email", label: "Email" },
+  { key: "submissionCount", label: "Submissions" },
+  { key: "annotationCount", label: "Annotations" },
+];
 
-  openSubmissionsId.value = a.id;
-  submissionsError.value = "";
-  if (submissionsByAccount.value[a.id]) return;
+const query = ref("");
+const sortKey = ref<SortKey>("createdAt");
+// Newest first, which is the order the endpoint already returns.
+const sortDir = ref<"asc" | "desc">("desc");
 
-  loadingSubmissionsId.value = a.id;
-  try {
-    submissionsByAccount.value[a.id] = await $fetch<AccountSubmission[]>(
-      `/api/admin/users/${a.id}/submissions`,
-    );
-  } catch (e: unknown) {
-    submissionsError.value = apiErrorMessage(e, "Could not load submissions.");
-    openSubmissionsId.value = null;
-  } finally {
-    loadingSubmissionsId.value = null;
+/** An account with no display name is listed under the handle it does have. */
+function sortName(a: AccountRow) {
+  return (a.displayName || a.username).toLowerCase();
+}
+
+function compare(a: AccountRow, b: AccountRow) {
+  switch (sortKey.value) {
+    case "name":
+      return sortName(a).localeCompare(sortName(b));
+    case "username":
+      return a.username.localeCompare(b.username);
+    case "email":
+      return a.email.localeCompare(b.email);
+    case "submissionCount":
+      return a.submissionCount - b.submissionCount;
+    case "annotationCount":
+      return a.annotationCount - b.annotationCount;
+    default:
+      // Sqlite datetimes sort correctly as strings. Ties broken by id so the
+      // order is stable: accounts created in the same second otherwise shuffle
+      // between refreshes.
+      return a.createdAt.localeCompare(b.createdAt) || a.id - b.id;
   }
 }
+
+const visibleAccounts = computed(() => {
+  const q = query.value.trim().toLowerCase();
+  const list = (accounts.value ?? []).filter((a) => {
+    if (!q) return true;
+    return (
+      a.username.toLowerCase().includes(q) ||
+      a.email.toLowerCase().includes(q) ||
+      (a.displayName ?? "").toLowerCase().includes(q)
+    );
+  });
+
+  const dir = sortDir.value === "asc" ? 1 : -1;
+  return [...list].sort((a, b) => compare(a, b) * dir);
+});
+
+/* --- Submissions and annotations dropdowns --------------------------------- */
+
+/**
+ * What each account has submitted and written, behind the same disclosure the
+ * catalog uses for a restroom's annotations: a count that is always visible, and
+ * a list that is not.
+ *
+ * The counts arrive with the accounts list, so every row reads complete before
+ * anything is expanded; the entries themselves are fetched per account on first
+ * open and kept, since an admin opening one row usually opens a few.
+ *
+ * The two lists are independent — an admin comparing what someone submitted
+ * against what they wrote wants both open at once — so this is a factory rather
+ * than one shared open-id.
+ */
+function accountDisclosure<T>(path: string, fallbackError: string) {
+  const openId = ref<number | null>(null);
+  const loadingId = ref<number | null>(null);
+  const error = ref("");
+  const byAccount = ref<Record<number, T[]>>({});
+
+  async function toggle(a: AccountRow) {
+    if (openId.value === a.id) {
+      openId.value = null;
+      return;
+    }
+
+    openId.value = a.id;
+    error.value = "";
+    if (byAccount.value[a.id]) return;
+
+    loadingId.value = a.id;
+    try {
+      byAccount.value[a.id] = (await $fetch(
+        `/api/admin/users/${a.id}/${path}`,
+      )) as T[];
+    } catch (e: unknown) {
+      error.value = apiErrorMessage(e, fallbackError);
+      openId.value = null;
+    } finally {
+      loadingId.value = null;
+    }
+  }
+
+  return { openId, loadingId, error, byAccount, toggle };
+}
+
+// Destructured so each stays a top-level ref, which is what lets the template
+// read them without `.value`.
+const {
+  openId: openSubmissionsId,
+  loadingId: loadingSubmissionsId,
+  error: submissionsError,
+  byAccount: submissionsByAccount,
+  toggle: toggleSubmissions,
+} = accountDisclosure<AccountSubmission>(
+  "submissions",
+  "Could not load submissions.",
+);
+
+const {
+  openId: openAnnotationsId,
+  loadingId: loadingAnnotationsId,
+  error: annotationsError,
+  byAccount: annotationsByAccount,
+  toggle: toggleAnnotations,
+} = accountDisclosure<AccountAnnotation>(
+  "annotations",
+  "Could not load annotations.",
+);
 
 const SUBMISSION_STATUS_LABEL: Record<string, string> = {
   pending: "Awaiting review",
@@ -282,14 +392,93 @@ async function submitRename(a: AccountRow) {
     <p v-if="submissionsError" class="form-error action-error">
       {{ submissionsError }}
     </p>
+    <p v-if="annotationsError" class="form-error action-error">
+      {{ annotationsError }}
+    </p>
+
+    <div v-if="accounts?.length" class="account-controls">
+      <label class="search">
+        <button
+          v-if="query"
+          type="button"
+          class="search-icon clear"
+          aria-label="Clear search"
+          @click="query = ''"
+        >
+          <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true">
+            <path
+              d="M2 2 L10 10 M10 2 L2 10"
+              stroke="currentColor"
+              stroke-width="1.25"
+              fill="none"
+              stroke-linecap="round"
+            />
+          </svg>
+        </button>
+
+        <span v-else class="search-icon" aria-hidden="true">
+          <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true">
+            <circle
+              cx="5"
+              cy="5"
+              r="3.25"
+              stroke="currentColor"
+              stroke-width="1.25"
+              fill="none"
+            />
+            <path
+              d="M7.5 7.5 L10.5 10.5"
+              stroke="currentColor"
+              stroke-width="1.25"
+              stroke-linecap="round"
+            />
+          </svg>
+        </span>
+
+        <input
+          v-model="query"
+          type="search"
+          placeholder="Search accounts"
+          aria-label="Search accounts"
+        />
+      </label>
+
+      <div class="sort-control">
+        <label class="sort-label" for="account-sort">Sort by</label>
+        <select id="account-sort" v-model="sortKey" class="sort-select">
+          <option v-for="opt in SORT_OPTIONS" :key="opt.key" :value="opt.key">
+            {{ opt.label }}
+          </option>
+        </select>
+        <button
+          type="button"
+          class="sort-dir"
+          :aria-label="
+            sortDir === 'asc' ? 'Sorted ascending' : 'Sorted descending'
+          "
+          :title="sortDir === 'asc' ? 'Ascending' : 'Descending'"
+          @click="sortDir = sortDir === 'asc' ? 'desc' : 'asc'"
+        >
+          <span class="sort-arrow" :class="{ desc: sortDir === 'desc' }">
+            ▲
+          </span>
+        </button>
+      </div>
+    </div>
 
     <div v-if="!accounts?.length" class="empty">No accounts.</div>
+    <div v-else-if="!visibleAccounts.length" class="empty">
+      No accounts match “{{ query }}”.
+    </div>
 
     <ul v-else class="simple-list">
-      <li v-for="a in accounts" :key="a.id" class="account-row">
+      <li v-for="a in visibleAccounts" :key="a.id" class="account-row">
         <div
           class="simple-row"
-          :class="{ 'row-expanded': openSubmissionsId === a.id }"
+          :class="{
+            'row-expanded':
+              openSubmissionsId === a.id || openAnnotationsId === a.id,
+          }"
         >
           <div class="simple-main">
             <span class="simple-title">
@@ -312,42 +501,91 @@ async function submitRename(a: AccountRow) {
               “{{ a.adminMessage }}”
             </span>
 
-            <div v-if="a.submissionCount" class="submissions">
-              <button
-                type="button"
-                class="submissions-toggle"
-                :aria-expanded="openSubmissionsId === a.id"
-                @click="toggleSubmissions(a)"
-              >
-                Submissions ({{ a.submissionCount }})
-                <span
-                  class="toggle-caret"
-                  :class="{ open: openSubmissionsId === a.id }"
+            <div
+              v-if="a.submissionCount || a.annotationCount"
+              class="disclosures"
+            >
+              <div class="disclosure-toggles">
+                <button
+                  v-if="a.submissionCount"
+                  type="button"
+                  class="disclosure-toggle"
+                  :aria-expanded="openSubmissionsId === a.id"
+                  @click="toggleSubmissions(a)"
                 >
-                  ›
-                </span>
-              </button>
+                  Submissions ({{ a.submissionCount }})
+                  <span
+                    class="toggle-caret"
+                    :class="{ open: openSubmissionsId === a.id }"
+                  >
+                    ›
+                  </span>
+                </button>
+
+                <button
+                  v-if="a.annotationCount"
+                  type="button"
+                  class="disclosure-toggle"
+                  :aria-expanded="openAnnotationsId === a.id"
+                  @click="toggleAnnotations(a)"
+                >
+                  Annotations ({{ a.annotationCount }})
+                  <span
+                    class="toggle-caret"
+                    :class="{ open: openAnnotationsId === a.id }"
+                  >
+                    ›
+                  </span>
+                </button>
+              </div>
 
               <template v-if="openSubmissionsId === a.id">
-                <p v-if="loadingSubmissionsId === a.id" class="submissions-note">
+                <p v-if="loadingSubmissionsId === a.id" class="disclosure-note">
                   Loading…
                 </p>
-                <ul v-else class="submission-list thin-scroll">
+                <ul v-else class="disclosure-list thin-scroll">
                   <li
                     v-for="s in submissionsByAccount[a.id]"
                     :key="s.id"
-                    class="submission-item"
+                    class="disclosure-item"
                   >
                     <NuxtLink
                       v-if="isInArchive(s)"
-                      class="submission-title link"
+                      class="disclosure-title link"
                       :to="`/r/${s.slug}`"
                     >
                       {{ s.name }}
                     </NuxtLink>
-                    <span v-else class="submission-title">{{ s.name }}</span>
-                    <span class="submission-meta">
+                    <span v-else class="disclosure-title">{{ s.name }}</span>
+                    <span class="disclosure-meta">
                       {{ s.date }} · {{ s.location }}{{ statusSuffix(s) }}
+                    </span>
+                  </li>
+                </ul>
+              </template>
+
+              <template v-if="openAnnotationsId === a.id">
+                <p v-if="loadingAnnotationsId === a.id" class="disclosure-note">
+                  Loading…
+                </p>
+                <ul v-else class="disclosure-list thin-scroll">
+                  <li
+                    v-for="n in annotationsByAccount[a.id]"
+                    :key="n.id"
+                    class="disclosure-item"
+                    :class="{ 'is-hidden': n.hiddenAt }"
+                  >
+                    <!-- The annotation's own text leads, because unlike a
+                         submission it is the thing being moderated; the restroom
+                         it sits on is the context under it. -->
+                    <span class="disclosure-title">{{ n.body }}</span>
+                    <span class="disclosure-meta">
+                      On
+                      <NuxtLink class="link" :to="`/r/${n.restroomSlug}`">
+                        {{ n.restroomName }}
+                      </NuxtLink>
+                      · {{ n.createdAt
+                      }}<template v-if="n.hiddenAt"> · Hidden</template>
                     </span>
                   </li>
                 </ul>
@@ -620,6 +858,114 @@ async function submitRename(a: AccountRow) {
 </template>
 
 <style scoped>
+/* --- Control bar ----------------------------------------------------------- */
+/* The catalog's controls strip, brought down to the account area's type scale:
+   an underlined search field and plain text controls with no boxes, so the row
+   reads as a set of labels rather than a toolbar competing with the sub-tabs
+   directly above it. 12px is the support step the sub-tabs use, which is what
+   keeps the two rows reading as one band. */
+
+.account-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 20px;
+  padding-bottom: 12px;
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 1px solid #000;
+}
+
+.search input {
+  border: 0;
+  padding: 2px 0;
+  font: inherit;
+  font-size: 12px;
+  width: 150px;
+  background: transparent;
+  outline: none;
+}
+
+.search-icon {
+  display: inline-flex;
+  align-items: center;
+  color: #000;
+}
+
+.search-icon.clear {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.sort-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.sort-label {
+  color: #666;
+}
+
+/* Stripped of the native chrome for the same reason the buttons are: this strip
+   is text, and a platform select box would be the only raised object on the
+   page. The menu it drops is still the native one. */
+.sort-select {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid #000;
+  border-radius: 0;
+  padding: 2px 0;
+  font: inherit;
+  font-size: 12px;
+  color: #000;
+  cursor: pointer;
+}
+
+.sort-dir {
+  display: inline-flex;
+  align-items: center;
+  background: none;
+  border: 0;
+  padding: 2px;
+  font: inherit;
+  color: #000;
+  cursor: pointer;
+}
+
+/* One caret that turns over, as in the catalog's grid sort: the direction is
+   the same fact either way, so it is one control rather than two arrows of
+   which one is always inert. */
+.sort-arrow {
+  display: inline-block;
+  font-size: 9px;
+  line-height: 1;
+  transition: transform 0.15s;
+}
+
+.sort-arrow.desc {
+  transform: rotate(180deg);
+}
+
+@media (hover: hover) {
+  .search-icon.clear:hover,
+  .sort-dir:hover,
+  .sort-select:hover {
+    color: #555;
+  }
+}
+
+/* --- Account rows ---------------------------------------------------------- */
+
 .account-row {
   border-bottom: 1px solid #e8e8e8;
 }
@@ -648,19 +994,31 @@ async function submitRename(a: AccountRow) {
   font-style: italic;
 }
 
-/* --- Submissions dropdown -------------------------------------------------- */
+/* --- Submissions and annotations dropdowns --------------------------------- */
 /* The catalog's annotation disclosure, applied to an account: the count reads
-   from the collapsed row, and the list opens under it. Nothing here acts, so it
-   stays a text control rather than joining the buttons on the right.
+   from the collapsed row, and the list opens under it. Nothing here acts, so
+   these stay text controls rather than joining the buttons on the right.
+
+   Both toggles share one line, because they are two readings of the same
+   question — what has this account put into the archive — and stacking them
+   made the row look like it had two unrelated sections. Whichever is open
+   expands underneath the pair.
 
    The rows themselves are the published-submissions format, a linked name over
    one line of context. */
 
-.submissions {
+.disclosures {
   margin-top: 4px;
 }
 
-.submissions-toggle {
+.disclosure-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+}
+
+.disclosure-toggle {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -673,7 +1031,7 @@ async function submitRename(a: AccountRow) {
   cursor: pointer;
 }
 
-.submissions-toggle:hover {
+.disclosure-toggle:hover {
   color: #555;
 }
 
@@ -688,7 +1046,7 @@ async function submitRename(a: AccountRow) {
   transform: rotate(90deg);
 }
 
-.submissions-note {
+.disclosure-note {
   margin: 4px 0 0;
   font-size: 12px;
   color: #999;
@@ -696,7 +1054,7 @@ async function submitRename(a: AccountRow) {
 
 /* An account with a hundred entries would otherwise push every account below it
    off the screen, so a long list scrolls in place. */
-.submission-list {
+.disclosure-list {
   list-style: none;
   margin: 4px 0 0;
   padding: 0;
@@ -706,7 +1064,7 @@ async function submitRename(a: AccountRow) {
   overflow-y: auto;
 }
 
-.submission-item {
+.disclosure-item {
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -714,21 +1072,29 @@ async function submitRename(a: AccountRow) {
   border-bottom: 1px solid #e8e8e8;
 }
 
-.submission-item:last-child {
+.disclosure-item:last-child {
   border-bottom: 0;
 }
 
-.submission-title {
+/* Same recession the Annotations section gives a hidden row: still legible, so
+   the list reads as one sequence rather than two. */
+.disclosure-item.is-hidden {
+  opacity: 0.55;
+}
+
+.disclosure-title {
   font-size: 13px;
   color: #000;
   line-height: 1.3;
 }
 
-.submission-title.link {
+.disclosure-title.link,
+.disclosure-meta .link {
+  color: inherit;
   text-decoration: underline;
 }
 
-.submission-meta {
+.disclosure-meta {
   font-size: 12px;
   color: #999;
 }
