@@ -393,7 +393,7 @@ async function submitContact() {
   margin-top: 1.2em;
   border: 1px solid var(--ink);
   padding: 16px;
-  max-width: 346px;
+  /* max-width: 346px; */
 }
 
 .support p {
