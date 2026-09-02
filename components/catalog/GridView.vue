@@ -71,17 +71,17 @@ onMounted(() => scrollToSelected(props.selectedSlug));
                 {{ r.description ?? "No description yet." }}
               </p>
 
+              <UserAttribution
+                class="submitter-line"
+                :user="r.submitter"
+                prefix="Uploaded by "
+              />
+
               <DescriptorChips
                 :tags="r.descriptors ?? []"
                 :active-tags="activeTags"
                 density="compact"
                 @toggle-tag="emit('toggleTag', $event)"
-              />
-
-              <UserAttribution
-                class="submitter-line"
-                :user="r.submitter"
-                prefix="Uploaded by "
               />
 
               <div class="annotations-section">

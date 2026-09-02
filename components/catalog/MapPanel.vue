@@ -42,18 +42,18 @@ const emit = defineEmits<{
         {{ restroom.description ?? "No description yet." }}
       </p>
 
-      <DescriptorChips
-        :tags="restroom.descriptors ?? []"
-        :active-tags="activeTags"
-        @toggle-tag="emit('toggleTag', $event)"
-      />
-
       <UserAttribution
         class="submitter-line"
         :user="restroom.submitter"
         prefix="Uploaded by "
       />
     </div>
+
+    <DescriptorChips
+      :tags="restroom.descriptors ?? []"
+      :active-tags="activeTags"
+      @toggle-tag="emit('toggleTag', $event)"
+    />
 
     <div class="annotations-section">
       <AnnotationList :slug="restroom.slug" />

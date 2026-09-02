@@ -308,17 +308,17 @@ function sortArrow(key: SortKey) {
               {{ r.description ?? "No description yet." }}
             </p>
 
+            <UserAttribution
+              class="submitter-line"
+              :user="r.submitter"
+              prefix="Uploaded by "
+            />
+
             <DescriptorChips
               class="row-chips"
               :tags="r.descriptors ?? []"
               :active-tags="activeTags"
               @toggle-tag="emit('toggleTag', $event)"
-            />
-
-            <UserAttribution
-              class="submitter-line"
-              :user="r.submitter"
-              prefix="Uploaded by "
             />
 
             <div class="annotations-section">
