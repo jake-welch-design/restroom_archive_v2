@@ -266,6 +266,7 @@ async function submitContact() {
 
       <footer class="about-footer">
         <p>© 2026 Jake Welch</p>
+        <p>• </p>
         <p class="dim">
           <a href="#" @click.prevent="legalOpen = true">Privacy and Terms</a>
         </p>
@@ -375,6 +376,9 @@ async function submitContact() {
 .about-footer {
   margin-top: auto;
   padding-top: 1.5em;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5em;
 }
 
 .about-footer p {
@@ -389,6 +393,7 @@ async function submitContact() {
   margin-top: 1.2em;
   border: 1px solid var(--ink);
   padding: 16px;
+  max-width: 346px;
 }
 
 .support p {
@@ -415,6 +420,8 @@ async function submitContact() {
   display: inline-block;
   color: var(--paper);
   text-decoration: none;
+  font-size: 12px;
+  padding: 3px 8px;
 }
 
 /* Same panel-width step as the catalog and its header. The page scales with

@@ -281,17 +281,19 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
       </div>
     </div>
 
-    <div v-if="filterOpen && allTags.length" class="filter-panel thin-scroll">
-      <button
-        v-for="t in allTags"
-        :key="t"
-        type="button"
-        class="filter-chip"
-        :class="{ active: isTagActive(t, activeTags) }"
-        @click="toggleTag(t)"
-      >
-        {{ t }}
-      </button>
+    <div v-if="allTags.length" class="filter-wrap" :class="{ open: filterOpen }">
+      <div class="filter-panel thin-scroll">
+        <button
+          v-for="t in allTags"
+          :key="t"
+          type="button"
+          class="filter-chip"
+          :class="{ active: isTagActive(t, activeTags) }"
+          @click="toggleTag(t)"
+        >
+          {{ t }}
+        </button>
+      </div>
     </div>
 
     <div v-if="viewMode === 'grid'" class="sub-header">
@@ -606,13 +608,35 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
   transform: rotate(90deg);
 }
 
+/* Gentle slide open/closed, mirroring the mobile nav drawer in CatalogHeader:
+   a grid whose single row eases between 0fr and 1fr while the inner panel clips
+   its own content. The vertical padding and the divider animate with it so the
+   strip grows as one piece rather than snapping. */
+.filter-wrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.25s ease;
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+
+.filter-wrap.open {
+  grid-template-rows: 1fr;
+  border-bottom: 1px solid #000;
+}
+
 .filter-panel {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  padding: 10px 16px;
-  border-bottom: 1px solid #000;
-  flex: 0 0 auto;
+  padding: 0 16px;
+  min-height: 0;
+  transition: padding 0.25s ease;
+}
+
+.filter-wrap.open .filter-panel {
+  padding-top: 10px;
+  padding-bottom: 10px;
 }
 
 .filter-chip {
@@ -717,7 +741,12 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
     width: 60px;
   }
   .filter-panel {
-    padding: 8px 8px;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+  .filter-wrap.open .filter-panel {
+    padding-top: 8px;
+    padding-bottom: 8px;
   }
 }
 
