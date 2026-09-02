@@ -47,6 +47,12 @@ const emit = defineEmits<{
         :active-tags="activeTags"
         @toggle-tag="emit('toggleTag', $event)"
       />
+
+      <UserAttribution
+        class="submitter-line"
+        :user="restroom.submitter"
+        prefix="Uploaded by "
+      />
     </div>
 
     <div class="annotations-section">
@@ -123,6 +129,12 @@ const emit = defineEmits<{
   color: #000;
   font-size: 12px;
   line-height: 1.35;
+}
+.submitter-line {
+  display: block;
+  color: #999;
+  font-size: 11px;
+  line-height: 1.2;
 }
 
 /* Divider matches the one under `.panel-header`, so the panel reads as three

@@ -315,6 +315,12 @@ function sortArrow(key: SortKey) {
               @toggle-tag="emit('toggleTag', $event)"
             />
 
+            <UserAttribution
+              class="submitter-line"
+              :user="r.submitter"
+              prefix="Uploaded by "
+            />
+
             <div class="annotations-section">
               <AnnotationList :slug="r.slug" />
             </div>
@@ -448,6 +454,12 @@ function sortArrow(key: SortKey) {
   color: #000;
   font-size: 14px;
   line-height: 1.35;
+}
+.submitter-line {
+  display: block;
+  color: #999;
+  font-size: 12px;
+  line-height: 1.2;
 }
 .edit-link {
   background: transparent;
