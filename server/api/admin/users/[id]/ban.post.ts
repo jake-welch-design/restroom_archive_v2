@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { useDb, schema } from "~~/server/utils/db";
 import { requireRole } from "~~/server/utils/requireRole";
@@ -48,12 +48,30 @@ export default defineEventHandler(async (event) => {
     .where(eq(schema.users.id, id));
 
   // Soft-hide the banned user's submissions so the public archive treats the
-  // account's contributions as withdrawn. Hidden rows stay in the DB and R2 so
-  // the action is reversible (e.g. by manually flipping the status back).
+  // account's contributions as withdrawn. Hidden rows stay in the DB and R2, and
+  // each one carries the status it is leaving into `pre_ban_status`, so lifting
+  // the ban puts every entry back where it was instead of guessing. Without
+  // that, a `pending` entry would come back published without review and a
+  // `removed` one would come back pointing at blobs that were deleted.
+  //
+  // Rows already hidden are skipped: re-banning an account that is still banned
+  // would otherwise record "hidden" as the status to return to.
   await db
     .update(schema.restrooms)
-    .set({ status: "hidden", updatedAt: now() })
-    .where(eq(schema.restrooms.submittedBy, id));
+    .set({
+      status: "hidden",
+      // Unqualified on purpose. A single-table UPDATE reads a bare column name
+      // as this row's own value, and SQLite evaluates every SET expression
+      // against the row as it was before the statement ran.
+      preBanStatus: sql`status`,
+      updatedAt: now(),
+    })
+    .where(
+      and(
+        eq(schema.restrooms.submittedBy, id),
+        ne(schema.restrooms.status, "hidden"),
+      ),
+    );
 
   await recordAdminAction(
     event,

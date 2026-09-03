@@ -51,6 +51,9 @@ export const restrooms = sqliteTable(
     descriptors: text("descriptors"),
     thumbKey: text("thumb_key"),
     status: text("status").notNull().default("published"),
+    // The status this entry held when its submitter was banned, so lifting the
+    // ban restores it exactly. NULL means no ban is currently hiding it.
+    preBanStatus: text("pre_ban_status"),
     submittedBy: integer("submitted_by").references(() => users.id),
     removalRequestedBy: integer("removal_requested_by").references(
       () => users.id,

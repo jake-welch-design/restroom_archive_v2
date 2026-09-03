@@ -332,7 +332,7 @@ Six tables in `server/db/schema.ts`.
       │                       │
       │                       └──reject──► rejected
       │
-      ├──admin bans submitter──► hidden
+      ├──ban submitter──► hidden ──lift ban──► back to the previous status
       │
       └──remove (grants a request)──► removed
 ```
@@ -347,6 +347,15 @@ statuses:
 - **`hidden` versus `rejected`.** `hidden` is applied in bulk when a submitter is
   banned; `rejected` is a per-entry decision. The submitter's own list shows both
   as "Rejected", because from their side the difference is not meaningful.
+
+`hidden` is the one status that carries its own way back. Banning writes each
+entry's outgoing status to `restrooms.pre_ban_status`, and lifting the ban reads
+it back and clears it, so an account restored after a ban returns to exactly the
+mix of published, pending, rejected and removed entries it had. This is why the
+restore is not simply "publish everything they submitted": that would put an
+unreviewed entry into the archive, and a `removed` one back as a listing whose
+blobs are gone. Only the ban writes `pre_ban_status`, so an entry an admin
+rejected or removed on its own terms is left where the admin put it.
 
 `rejected` and `removed` both delete the R2 blobs, through
 `deleteRestroomBlobs`. The database row survives so the submitter can still see

@@ -360,11 +360,15 @@ function mute(a: AccountRow) {
 
 function ban(a: AccountRow) {
   const confirmed = confirm(
-    `ARE YOU SURE? This will permanently ban @${a.username} and hide all of their submissions.`,
+    `Ban @${a.username}? They lose access and all of their submissions are hidden from the archive. You can lift the ban later, which puts everything back.`,
   );
   if (!confirmed) return;
   return runAccountAction(a, "ban", "ban");
 }
+
+// No confirm, for the same reason lifting a suspension has none: it restores
+// access rather than taking it away, and re-banning undoes it.
+const unban = (a: AccountRow) => runAccountAction(a, "unban", "unban");
 
 function remove(a: AccountRow) {
   const confirmed = confirm(
@@ -865,7 +869,18 @@ async function submitRename(a: AccountRow) {
                   <span v-else class="dim">Not banned</span>
                 </span>
                 <button
-                  v-if="!a.bannedAt"
+                  v-if="a.bannedAt"
+                  type="button"
+                  class="btn settings-change"
+                  :disabled="action.isRunning(`acct-${a.id}-unban`)"
+                  @click="unban(a)"
+                >
+                  {{
+                    action.isRunning(`acct-${a.id}-unban`) ? "…" : "Lift ban"
+                  }}
+                </button>
+                <button
+                  v-else
                   type="button"
                   class="btn btn-reject settings-change"
                   :disabled="action.isRunning(`acct-${a.id}-ban`)"
@@ -873,9 +888,18 @@ async function submitRename(a: AccountRow) {
                 >
                   {{ action.isRunning(`acct-${a.id}-ban`) ? "…" : "Ban" }}
                 </button>
-                <span v-if="!a.bannedAt" class="settings-note">
-                  Permanent. Hides every restroom they have submitted from the
-                  archive.
+
+                <span class="settings-note">
+                  <template v-if="a.bannedAt">
+                    Restores their access, and returns every submission to the
+                    status it held when the ban landed. Entries that were
+                    awaiting review go back to the queue, not to the archive.
+                  </template>
+                  <template v-else>
+                    Blocks sign-in and hides every restroom they have submitted
+                    from the archive. Reversible: lifting the ban puts the
+                    submissions back.
+                  </template>
                 </span>
               </div>
 

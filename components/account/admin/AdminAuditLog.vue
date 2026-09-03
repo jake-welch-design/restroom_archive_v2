@@ -19,6 +19,7 @@ const ACTION_LABEL: Record<string, string> = {
   "user.approve": "approved user",
   "user.reject": "rejected user request",
   "user.ban": "banned user",
+  "user.unban": "lifted ban on user",
   "user.mute": "muted user",
   "user.unmute": "unmuted user",
   "user.promote": "promoted user to admin",
