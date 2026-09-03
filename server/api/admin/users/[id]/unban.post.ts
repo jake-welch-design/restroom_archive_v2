@@ -37,33 +37,39 @@ export default defineEventHandler(async (event) => {
   if (!target)
     throw createError({ statusCode: 404, statusMessage: "User not found" });
 
-  // No check that the account is actually banned, and no self guard: clearing a
-  // null column is a no-op, and an admin cannot have banned themselves.
-  await db
-    .update(schema.users)
-    .set({
-      bannedAt: null,
-      ...adminMessagePatch(body.message),
-    })
-    .where(eq(schema.users.id, id));
+  // One batch, so D1's implicit transaction keeps the two halves together. Run
+  // sequentially, a failure on the restore left the account unbanned with every
+  // submission still hidden — and, because the throw came first, no audit entry
+  // recording that the ban had been lifted at all.
+  await db.batch([
+    // No check that the account is actually banned, and no self guard: clearing
+    // a null column is a no-op, and an admin cannot have banned themselves.
+    db
+      .update(schema.users)
+      .set({
+        bannedAt: null,
+        ...adminMessagePatch(body.message),
+      })
+      .where(eq(schema.users.id, id)),
 
-  // Only rows this account's ban hid carry a `pre_ban_status`, so the filter is
-  // what keeps an entry an admin hid or removed on its own terms out of the
-  // restore. Both assignments read the pre-update row, so `status` takes the
-  // saved value even though the same statement clears it.
-  await db
-    .update(schema.restrooms)
-    .set({
-      status: sql`pre_ban_status`,
-      preBanStatus: null,
-      updatedAt: now(),
-    })
-    .where(
-      and(
-        eq(schema.restrooms.submittedBy, id),
-        isNotNull(schema.restrooms.preBanStatus),
+    // Only rows this account's ban hid carry a `pre_ban_status`, so the filter is
+    // what keeps an entry an admin hid or removed on its own terms out of the
+    // restore. Both assignments read the pre-update row, so `status` takes the
+    // saved value even though the same statement clears it.
+    db
+      .update(schema.restrooms)
+      .set({
+        status: sql`pre_ban_status`,
+        preBanStatus: null,
+        updatedAt: now(),
+      })
+      .where(
+        and(
+          eq(schema.restrooms.submittedBy, id),
+          isNotNull(schema.restrooms.preBanStatus),
+        ),
       ),
-    );
+  ]);
 
   await recordAdminAction(
     event,
