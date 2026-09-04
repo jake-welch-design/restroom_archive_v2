@@ -42,19 +42,42 @@ async function scrollToSelected(slug: string | null | undefined) {
 
 watch(() => props.selectedSlug, scrollToSelected);
 onMounted(() => scrollToSelected(props.selectedSlug));
+
+/**
+ * An unselected tile is a real `<a href="/r/:slug">` so the grid links the
+ * pages it lists; without it every entry is an orphan only the sitemap knows
+ * about. The selected tile stays a `<button>` because its expanded state nests
+ * its own buttons (descriptor chips, annotations), which may not live inside an
+ * anchor — and a link to the entry already open is worth nothing anyway.
+ *
+ * Selection still happens here, so a plain click must not let the browser
+ * navigate on top of it. Modified clicks are left alone: cmd/middle-click opens
+ * the entry in a new tab, which the old <button> tile couldn't do.
+ */
+function onTileClick(slug: string, e: MouseEvent) {
+  if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0)
+    return;
+  e.preventDefault();
+  emit("select", slug);
+}
 </script>
 
 <template>
   <div ref="gridWrapRef" class="grid-wrap thin-scroll">
     <div class="grid">
-      <button
+      <component
+        :is="r.slug === selectedSlug ? 'button' : 'a'"
         v-for="r in rows"
         :key="r.id"
         :data-slug="r.slug"
-        type="button"
+        v-bind="
+          r.slug === selectedSlug
+            ? { type: 'button' }
+            : { href: `/r/${r.slug}` }
+        "
         class="tile"
         :class="{ selected: r.slug === selectedSlug }"
-        @click="emit('select', r.slug)"
+        @click="onTileClick(r.slug, $event)"
       >
         <div class="thumb">
           <template v-if="r.slug === selectedSlug">
@@ -104,7 +127,7 @@ onMounted(() => scrollToSelected(props.selectedSlug));
             </div>
           </template>
         </div>
-      </button>
+      </component>
     </div>
   </div>
 </template>
@@ -138,12 +161,22 @@ onMounted(() => scrollToSelected(props.selectedSlug));
     gap: 8px;
   }
 }
+/* Shared by both tile elements: the <button> the selected tile renders as, and
+   the <a> every other tile renders as. The link inherits so it reads exactly as
+   the button it replaced. */
 .tile {
   background: transparent;
   border: 0;
   padding: 0;
   cursor: pointer;
   text-align: left;
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  /* A <button> takes the UA's own font rather than inheriting, an <a> inherits.
+     Without this the selected tile and the rest would disagree on font family in
+     browsers whose button font isn't Arial. Both now take `.grid-wrap`'s. */
+  font: inherit;
 }
 .tile:hover:not(.selected) .thumb img,
 .tile:hover:not(.selected) .thumb-placeholder {

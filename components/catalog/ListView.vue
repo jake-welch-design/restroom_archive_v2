@@ -149,6 +149,18 @@ function sortArrow(key: SortKey) {
   if (props.sortKey !== key) return "";
   return props.sortDir === "asc" ? "▲" : "▼";
 }
+
+// The name cell is a real `<a href="/r/:slug">` so the catalog links the pages
+// it lists — without it every entry is an orphan that only the sitemap knows
+// about. Selection is still the row's own @click (which rewrites the URL via
+// replaceState), so a plain click must not let the browser navigate on top of
+// it. Modified clicks are left alone: cmd/middle-click opens the entry in a new
+// tab, which the old <li>-only row couldn't do.
+function onNameClick(e: MouseEvent) {
+  if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0)
+    return;
+  e.preventDefault();
+}
 </script>
 
 <template>
@@ -191,7 +203,11 @@ function sortArrow(key: SortKey) {
       >
         <div class="row-main">
           <div class="col-date">{{ formatDayMonthYear(r.isoDate) }}</div>
-          <div class="col-name">{{ r.name }}</div>
+          <div class="col-name">
+            <a class="name-link" :href="`/r/${r.slug}`" @click="onNameClick">{{
+              r.name
+            }}</a>
+          </div>
           <div class="col-loc">
             <span class="col-loc-text">{{ r.location }}</span>
             <!-- Sits on the row's own line, baseline-aligned with the location
@@ -382,6 +398,12 @@ function sortArrow(key: SortKey) {
 }
 .col-name {
   order: 1;
+}
+/* Inherits everything so the cell reads exactly as the bare text it replaced;
+   the row above it still owns the hover and cursor. */
+.name-link {
+  color: inherit;
+  text-decoration: none;
 }
 .col-date {
   order: 2;

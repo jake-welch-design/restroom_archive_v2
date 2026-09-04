@@ -4,16 +4,31 @@ await useRestrooms();
 const { selected } = useSelection();
 const { toAbsolute } = useAbsoluteUrl();
 
+/** Trims to a word boundary so a description never ends mid-word. */
+function clamp(text: string, max: number) {
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max);
+  const lastSpace = cut.lastIndexOf(" ");
+  return `${(lastSpace > 0 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
+}
+
 useHead(() => {
   const r = selected.value;
   if (!r) return { title: "Restroom" };
 
   const title = `The Restroom Archive – ${r.name}`;
-  const description = `${r.location} · scanned ${r.date}`;
+  // Every entry needs its own description. Left to the site-wide default in
+  // nuxt.config, all ~105 entries shipped the same one, which is a large part
+  // of why they read as near-duplicates of each other.
+  const summary = `${r.name} — ${r.location}. Scanned ${r.date}.`;
+  const description = r.description
+    ? clamp(`${summary} ${r.description.trim()}`, 200)
+    : summary;
   const image = toAbsolute(r.thumbUrl);
   const pageUrl = toAbsolute(`/r/${r.slug}`);
 
   const meta: Array<Record<string, string>> = [
+    { name: "description", content: description },
     { property: "og:title", content: title },
     { property: "og:description", content: description },
     { property: "og:type", content: "website" },
@@ -45,8 +60,13 @@ useHead(() => {
       url: pageUrl,
       description: r.description || description,
       image: image,
+      address: r.location,
       dateCreated: r.isoDate,
+      mainEntityOfPage: pageUrl,
     };
+    if (r.descriptors?.length) {
+      schema.keywords = r.descriptors.join(", ");
+    }
     if (r.lat != null && r.lng != null) {
       schema.geo = {
         "@type": "GeoCoordinates",
