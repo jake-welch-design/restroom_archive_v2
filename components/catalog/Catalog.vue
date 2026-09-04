@@ -753,11 +753,16 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
   }
 }
 
-/* Sheet layout, not a width step: the panel is a short top-anchored sheet, so
-   the filter panel caps its own height rather than crowding out the list. */
+/* Sheet layout, not a width step: on the top-anchored sheet the open panel
+   expands to its natural height so every tag is visible, rather than clipping
+   the chips to a couple of rows. Tags are user-submitted and unbounded, so the
+   wrap still stops at 60% of the sheet — past that the panel scrolls instead of
+   pushing the list out of the sheet entirely. */
 @media (max-width: 750px) {
+  .filter-wrap.open {
+    max-height: 60%;
+  }
   .filter-panel {
-    max-height: 75px;
     overflow: auto;
   }
 }
