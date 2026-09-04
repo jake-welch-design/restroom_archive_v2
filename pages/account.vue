@@ -193,6 +193,7 @@ type AdminSection =
   | "reports"
   | "removals"
   | "accounts"
+  | "archive"
   | "annotations"
   | "audit";
 type SubmissionsSection = "new" | "published" | "pending";
@@ -217,6 +218,7 @@ const ADMIN_SECTIONS: AdminSection[] = [
   "reports",
   "removals",
   "accounts",
+  "archive",
   "annotations",
   "audit",
 ];
@@ -247,6 +249,7 @@ const adminSubTabs = computed<SubTab[]>(() => [
     count: removalRequests.value?.length ?? 0,
   },
   { id: "accounts", label: "Accounts", gapBefore: true },
+  { id: "archive", label: "Archive" },
   { id: "annotations", label: "Annotations" },
   { id: "audit", label: "Audit" },
 ]);
@@ -443,6 +446,7 @@ applySectionFromQuery();
           :section="adminSection"
         />
         <AdminAccounts v-else-if="adminSection === 'accounts'" />
+        <AdminArchive v-else-if="adminSection === 'archive'" />
         <AdminAnnotations v-else-if="adminSection === 'annotations'" />
         <AdminAuditLog v-else-if="adminSection === 'audit'" />
       </div>

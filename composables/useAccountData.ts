@@ -2,6 +2,7 @@ import type {
   AccountRow,
   AdminAnnotation,
   AnnotationReport,
+  ArchiveEntry,
   AuditLogEntry,
   MyAnnotation,
   MySubmission,
@@ -85,6 +86,13 @@ export function useAnnotationReports() {
 
 export function useAdminAccounts() {
   return privateList<AccountRow>("admin-accounts", "/api/admin/users");
+}
+
+export function useAdminArchive() {
+  return privateList<ArchiveEntry>(
+    "admin-archive",
+    "/api/admin/restrooms/archive",
+  );
 }
 
 export function useAdminAnnotations() {

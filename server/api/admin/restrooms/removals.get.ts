@@ -1,7 +1,15 @@
-import { asc, eq, isNotNull } from "drizzle-orm";
+import { and, asc, eq, isNotNull, ne } from "drizzle-orm";
 import { useDb, schema } from "~~/server/utils/db";
 import { requireRole } from "~~/server/utils/requireRole";
 
+/**
+ * Submitters asking for their own entry to be taken down.
+ *
+ * A request leaves this queue in one of two ways: dismissed, which clears
+ * `removal_requested_by`, or granted, which sets the status to `removed` and
+ * leaves that column standing as the record of who asked. Hence both
+ * conditions — neither alone describes an open request.
+ */
 export default defineEventHandler(async (event) => {
   requireRole(event, "admin");
 
@@ -25,7 +33,12 @@ export default defineEventHandler(async (event) => {
       schema.users,
       eq(schema.restrooms.removalRequestedBy, schema.users.id),
     )
-    .where(isNotNull(schema.restrooms.removalRequestedBy))
+    .where(
+      and(
+        isNotNull(schema.restrooms.removalRequestedBy),
+        ne(schema.restrooms.status, "removed"),
+      ),
+    )
     .orderBy(asc(schema.restrooms.updatedAt))
     .all();
 

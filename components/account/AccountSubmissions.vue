@@ -13,6 +13,8 @@
  * an uploaded scan in memory and hands it to the viewer for preview, and
  * unmounting it to switch sub-tabs would throw that away.
  */
+import type { MySubmission } from "~/types/account";
+
 const props = defineProps<{ section: "new" | "published" | "pending" }>();
 
 const { canSubmit, submissionRequested, isAdmin } = useAuth();
@@ -46,11 +48,31 @@ const STATUS_LABEL: Record<string, string> = {
   // A hidden entry was rejected after the fact. From the submitter's side the
   // distinction is not meaningful, so it reads the same.
   hidden: "Rejected",
-  removed: "Removed at your request",
+  removed: "Removed from the archive",
 };
 
 function statusLabel(status: string) {
   return STATUS_LABEL[status] ?? status;
+}
+
+/**
+ * A removed entry has two quite different stories behind it, and the submitter
+ * is owed the right one: either they asked for it to be taken down, or the
+ * archive took it down and has to say why.
+ *
+ * `removalRequested` survives the request being granted, which is what lets
+ * these be told apart after the fact.
+ */
+function removalLabel(r: MySubmission) {
+  if (r.status !== "removed") return statusLabel(r.status);
+  return r.removalRequested ? "Removed at your request" : "Removed by an admin";
+}
+
+/** The one message shown under an entry that is not in the archive. */
+function adminNote(r: MySubmission) {
+  if (r.status === "removed") return r.removalMessage;
+  if (r.status === "rejected") return r.rejectionMessage;
+  return null;
 }
 
 /** The row currently acting, so only its own control shows a pending state. */
@@ -197,13 +219,10 @@ async function onSubmitted() {
           <div class="simple-main">
             <span class="simple-title">{{ r.name }}</span>
             <span class="simple-meta">
-              {{ r.date }} · {{ r.location }} · {{ statusLabel(r.status) }}
+              {{ r.date }} · {{ r.location }} · {{ removalLabel(r) }}
             </span>
-            <span
-              v-if="r.status === 'rejected' && r.rejectionMessage"
-              class="simple-meta rejection-msg"
-            >
-              {{ r.rejectionMessage }}
+            <span v-if="adminNote(r)" class="simple-meta rejection-msg">
+              {{ adminNote(r) }}
             </span>
           </div>
           <div class="simple-actions">

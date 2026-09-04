@@ -1,0 +1,12 @@
+-- Admins can take an entry out of the archive, and say why.
+--
+-- Until now `removed` had exactly one cause: a submitter asked for their own
+-- scan to be taken down, and an admin granted it. Nobody needed to be told why,
+-- because the person being told had asked. An admin-initiated takedown is the
+-- opposite case — the submitter learns their entry is gone from the archive
+-- itself — so it carries a message, the way a rejection does.
+--
+-- Deliberately not `rejection_message`. That column means "this submission was
+-- never accepted", and it is read as such by the submitter's own list; an entry
+-- that was published for a year and then taken down is a different story.
+ALTER TABLE `restrooms` ADD COLUMN `removal_message` text;

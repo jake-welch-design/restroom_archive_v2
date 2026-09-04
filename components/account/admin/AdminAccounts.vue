@@ -192,7 +192,32 @@ function accountDisclosure<T>(path: string, fallbackError: string) {
     }
   }
 
-  return { openId, loadingId, error, byAccount, toggle };
+  /**
+   * Drops one account's cached list and fetches it again, for when an action
+   * changes what it should say. Without this the cache is the whole point of
+   * the disclosure and also the reason a removed entry would keep reading as
+   * published until the section was left and re-entered.
+   */
+  async function reload(id: number) {
+    // Rebuilt without the key rather than deleted from, so a row that is closed
+    // when this runs refetches the next time it is opened instead of showing
+    // what the list said before the action.
+    const { [id]: _stale, ...rest } = byAccount.value;
+    byAccount.value = rest;
+    if (openId.value !== id) return;
+    loadingId.value = id;
+    try {
+      byAccount.value[id] = (await $fetch(
+        `/api/admin/users/${id}/${path}`,
+      )) as T[];
+    } catch (e: unknown) {
+      error.value = apiErrorMessage(e, fallbackError);
+    } finally {
+      loadingId.value = null;
+    }
+  }
+
+  return { openId, loadingId, error, byAccount, toggle, reload };
 }
 
 // Destructured so each stays a top-level ref, which is what lets the template
@@ -203,6 +228,7 @@ const {
   error: submissionsError,
   byAccount: submissionsByAccount,
   toggle: toggleSubmissions,
+  reload: reloadSubmissions,
 } = accountDisclosure<AccountSubmission>(
   "submissions",
   "Could not load submissions.",
@@ -238,6 +264,57 @@ function statusSuffix(s: AccountSubmission) {
  */
 function isInArchive(s: AccountSubmission) {
   return s.status === "published" || s.status === "pending";
+}
+
+/* --- Removing one of an account's entries ---------------------------------- */
+
+/**
+ * The other way into a takedown, beside the Archive list.
+ *
+ * An admin dealing with a specific person — a complaint about them, a pattern
+ * across their submissions — is already looking at this list, and sending them
+ * to a separate section to search for the entry by name loses the context they
+ * came here with.
+ *
+ * Only published and hidden entries can go: pending ones belong to the
+ * submissions queue, which previews the scan before judging it, and rejected or
+ * already-removed ones have no scan left to delete.
+ */
+const REMOVABLE_STATUSES = ["published", "hidden"];
+
+function isRemovable(s: AccountSubmission) {
+  return REMOVABLE_STATUSES.includes(s.status);
+}
+
+/** Which submission has its reason form open, across every expanded account. */
+const removingSubmissionId = ref<number | null>(null);
+
+const { refresh: refreshRemovalQueue } = useRemovalQueue();
+
+async function removeSubmission(
+  accountId: number,
+  submissionId: number,
+  message: string,
+) {
+  const ok = await action.run(
+    `sub-remove-${submissionId}`,
+    `/api/admin/restrooms/${submissionId}/remove`,
+    {
+      body: { message },
+      after: async () => {
+        await Promise.all([
+          reloadSubmissions(accountId),
+          // Gone from the public archive, so the catalog everyone else sees is
+          // stale. And if the submitter had asked for this takedown themselves,
+          // their request has just left the removals queue.
+          refreshNuxtData("restrooms"),
+          refreshRemovalQueue(),
+        ]);
+      },
+      fallbackError: "Could not remove entry.",
+    },
+  );
+  if (ok) removingSubmissionId.value = null;
 }
 
 /* --- Status ---------------------------------------------------------------- */
@@ -612,6 +689,25 @@ async function submitRename(a: AccountRow) {
                     <span class="disclosure-meta">
                       {{ s.date }} · {{ s.location }}{{ statusSuffix(s) }}
                     </span>
+
+                    <button
+                      v-if="isRemovable(s) && removingSubmissionId !== s.id"
+                      type="button"
+                      class="btn btn-sm btn-reject disclosure-action"
+                      @click="removingSubmissionId = s.id"
+                    >
+                      Remove
+                    </button>
+
+                    <AdminRemovalForm
+                      v-if="removingSubmissionId === s.id"
+                      :name="s.name"
+                      :pending="action.isRunning(`sub-remove-${s.id}`)"
+                      @cancel="removingSubmissionId = null"
+                      @confirm="
+                        (message) => removeSubmission(a.id, s.id, message)
+                      "
+                    />
                   </li>
                 </ul>
               </template>
@@ -1186,6 +1282,13 @@ async function submitRename(a: AccountRow) {
 .disclosure-meta {
   font-size: 12px;
   color: #999;
+}
+
+/* The item is a column, so a button would otherwise stretch the full width of
+   the list and read as a section heading rather than an action on one row. */
+.disclosure-action {
+  align-self: flex-start;
+  margin-top: 4px;
 }
 
 .account-options {

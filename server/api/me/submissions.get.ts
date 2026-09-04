@@ -18,6 +18,7 @@ export default defineEventHandler(async (event) => {
       status: schema.restrooms.status,
       createdAt: schema.restrooms.createdAt,
       removalRequestedBy: schema.restrooms.removalRequestedBy,
+      removalMessage: schema.restrooms.removalMessage,
       rejectionMessage: schema.restrooms.rejectionMessage,
     })
     .from(schema.restrooms)
@@ -34,7 +35,10 @@ export default defineEventHandler(async (event) => {
     isoDate: r.isoDate,
     status: r.status,
     createdAt: r.createdAt,
+    // Survives being granted, so a `removed` entry can still say whether its
+    // own submitter is the one who asked for it to go.
     removalRequested: r.removalRequestedBy != null,
+    removalMessage: r.removalMessage ?? null,
     rejectionMessage: r.rejectionMessage ?? null,
   }));
 });

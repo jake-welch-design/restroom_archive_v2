@@ -55,10 +55,18 @@ export const restrooms = sqliteTable(
     // ban restores it exactly. NULL means no ban is currently hiding it.
     preBanStatus: text("pre_ban_status"),
     submittedBy: integer("submitted_by").references(() => users.id),
+    // Who asked for this entry to be taken down, and why they said they wanted
+    // it gone. Set by the submitter, and kept after the request is granted so
+    // a `removed` entry still records that its own submitter asked for it.
+    // The removals queue keys off status rather than this column; see
+    // server/api/admin/restrooms/removals.get.ts.
     removalRequestedBy: integer("removal_requested_by").references(
       () => users.id,
     ),
     removalReason: text("removal_reason"),
+    // The admin's explanation, going the other way: why the archive took this
+    // entry down. Only ever set on an admin-initiated takedown.
+    removalMessage: text("removal_message"),
     rejectionMessage: text("rejection_message"),
     createdAt: text("created_at")
       .notNull()

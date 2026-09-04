@@ -30,6 +30,8 @@ export interface MySubmission {
   status: string;
   createdAt: string;
   removalRequested: boolean;
+  /** Why an admin took the entry down. Null when nobody but the submitter did. */
+  removalMessage: string | null;
   rejectionMessage: string | null;
 }
 
@@ -112,6 +114,22 @@ export interface AdminAnnotation {
   openReportCount: number;
   restroom: { slug: string; name: string; location: string; date: string };
   author: AdminUserRef | null;
+}
+
+/** GET /api/admin/restrooms/archive: every entry that reached the archive. */
+export interface ArchiveEntry {
+  id: number;
+  slug: string;
+  name: string;
+  location: string;
+  date: string;
+  isoDate: string;
+  status: string;
+  removalMessage: string | null;
+  /** True when the submitter is the one who asked for the takedown. */
+  removalRequested: boolean;
+  createdAt: string;
+  submitter: AdminUserRef | null;
 }
 
 /** GET /api/admin/users: every account, for moderation. */
