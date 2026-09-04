@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { apiErrorMessage } from "~~/shared/utils/apiError";
+import { SUBMISSION_AGREEMENTS } from "~~/shared/utils/agreements";
 const emit = defineEmits<{ submitted: [] }>();
 
 const { isAdmin } = useAuth();
@@ -26,6 +27,19 @@ const uploadFile = ref<File | null>(null);
 const uploadError = ref("");
 const uploadLoading = ref(false);
 const uploadSuccess = ref(false);
+
+/**
+ * The review step's attestation.
+ *
+ * The guidelines were ticked once, when the account requested submission
+ * access; this is the per-scan affirmation that this particular scan meets
+ * them, which is the point the archivist is actually looking at the scan. The
+ * terms reopen in place rather than behind a link to the About page: leaving
+ * the wizard would throw away the loaded scan along with everything typed.
+ */
+const AGREEMENTS = SUBMISSION_AGREEMENTS;
+const compliesWithAgreements = ref(false);
+const agreementsOpen = ref(false);
 
 function onFileChange(e: Event) {
   const input = e.target as HTMLInputElement;
@@ -71,15 +85,22 @@ const step2Valid = computed(() => {
   return true;
 });
 
+// A scan without a description is a model with no way in: the catalog entry
+// carries the room, and the description is the only part of it a reader can
+// search, so it is required rather than encouraged.
+const step3Valid = computed(() => !!uploadDescription.value.trim());
+
 function canAccessStep(n: number) {
   if (n <= 1) return true;
   if (n === 2) return step1Valid.value;
-  return step1Valid.value && step2Valid.value;
+  if (n === 3) return step1Valid.value && step2Valid.value;
+  return step1Valid.value && step2Valid.value && step3Valid.value;
 }
 
 function goNext() {
   if (currentStep.value === 1 && !step1Valid.value) return;
   if (currentStep.value === 2 && !step2Valid.value) return;
+  if (currentStep.value === 3 && !step3Valid.value) return;
   currentStep.value = Math.min(4, currentStep.value + 1);
 }
 function goBack() {
@@ -118,6 +139,15 @@ async function submitUpload() {
     uploadError.value = "Please select a .glb file.";
     return;
   }
+  if (!step3Valid.value) {
+    uploadError.value = "Please add a description.";
+    return;
+  }
+  if (!compliesWithAgreements.value) {
+    uploadError.value =
+      "Please confirm this submission complies with the agreements.";
+    return;
+  }
   uploadError.value = "";
   uploadLoading.value = true;
   try {
@@ -128,8 +158,7 @@ async function submitUpload() {
     fd.append("isoDate", uploadDate.value);
     if (uploadLat.value) fd.append("lat", uploadLat.value);
     if (uploadLng.value) fd.append("lng", uploadLng.value);
-    if (uploadDescription.value)
-      fd.append("description", uploadDescription.value);
+    fd.append("description", uploadDescription.value.trim());
     if (uploadDescriptors.value.length)
       fd.append("descriptors", JSON.stringify(uploadDescriptors.value));
 
@@ -168,6 +197,10 @@ function resetUpload() {
   hasUnsavedSubmission.value = false;
   uploadError.value = "";
   uploadSuccess.value = false;
+  // Reset rather than carry over: the next scan is a new attestation, and an
+  // admin submitting a run of scans should not tick this once for all of them.
+  compliesWithAgreements.value = false;
+  agreementsOpen.value = false;
   currentStep.value = 1;
 }
 </script>
@@ -326,8 +359,13 @@ function resetUpload() {
       <div v-else-if="currentStep === 3" class="form">
         <label class="field">
           <span class="field-label-row">
-            <span class="field-label">Description</span>
-            <InfoTooltip>
+            <span class="field-label"
+              >Description <span class="req">*</span></span
+            >
+            <!-- Opened on arrival: these are the questions a description has to
+                 answer, and they are worth reading before the box is filled in
+                 rather than after. -->
+            <InfoTooltip :auto-show-ms="3000">
               <p>A good description tells us:</p>
               <ul>
                 <li>
@@ -387,7 +425,12 @@ function resetUpload() {
 
         <div class="step-actions">
           <button type="button" class="link-btn" @click="goBack">Back</button>
-          <button type="button" class="primary-btn step-next" @click="goNext">
+          <button
+            type="button"
+            class="primary-btn step-next"
+            :disabled="!step3Valid"
+            @click="goNext"
+          >
             Next
           </button>
         </div>
@@ -429,6 +472,33 @@ function resetUpload() {
           </div>
         </div>
 
+        <div class="attest">
+          <label class="attest-row">
+            <input
+              v-model="compliesWithAgreements"
+              type="checkbox"
+              class="attest-check"
+            />
+            <span>My submission complies with the submission agreements</span>
+          </label>
+
+          <button
+            type="button"
+            class="disclosure-toggle"
+            :aria-expanded="agreementsOpen"
+            @click="agreementsOpen = !agreementsOpen"
+          >
+            Review Agreement Terms
+            <span class="toggle-caret" :class="{ open: agreementsOpen }">
+              ›
+            </span>
+          </button>
+
+          <ul v-if="agreementsOpen" class="agreement-terms">
+            <li v-for="text in AGREEMENTS" :key="text">{{ text }}</li>
+          </ul>
+        </div>
+
         <p v-if="uploadError" class="form-error">{{ uploadError }}</p>
 
         <div class="step-actions">
@@ -436,7 +506,7 @@ function resetUpload() {
           <button
             type="button"
             class="primary-btn step-next"
-            :disabled="uploadLoading"
+            :disabled="uploadLoading || !compliesWithAgreements"
             @click="submitUpload"
           >
             {{
@@ -548,5 +618,71 @@ function resetUpload() {
   color: #fff;
   font-size: 11px;
   padding: 2px 6px;
+}
+
+/* Attestation. The checkbox row is the access-request form's agreement row,
+   so the two places an archivist meets these terms look like the same thing.
+   The toggle under it is the admin account disclosure -- same caret, same
+   quarter-turn -- but grey rather than black: this reopens something already
+   agreed to, so it should sit below the checkbox it supports rather than
+   compete with it. */
+.attest {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.attest-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.attest-check {
+  margin: 2px 0 0;
+  flex-shrink: 0;
+}
+
+.disclosure-toggle {
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: 12px;
+  color: #666;
+  cursor: pointer;
+}
+
+.disclosure-toggle:hover {
+  color: #000;
+}
+
+.toggle-caret {
+  display: inline-block;
+  transform: rotate(0deg);
+  transition: transform 0.15s;
+}
+
+.toggle-caret.open {
+  transform: rotate(90deg);
+}
+
+.agreement-terms {
+  list-style: disc;
+  margin: 0;
+  padding-left: 1.2em;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #666;
 }
 </style>

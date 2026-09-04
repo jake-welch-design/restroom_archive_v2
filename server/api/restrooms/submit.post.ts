@@ -25,7 +25,13 @@ const MetaSchema = z.object({
   isoDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD"),
   lat: z.coerce.number().min(-90).max(90).optional(),
   lng: z.coerce.number().min(-180).max(180).optional(),
-  description: z.string().max(1000).optional(),
+  // Required, matching the wizard: a whitespace-only body is not a description,
+  // so trim before the length check rather than after storing it.
+  description: z
+    .string({ required_error: "Description is required" })
+    .trim()
+    .min(1, "Description is required")
+    .max(1000),
   descriptors: z.string().max(2000).optional(),
 });
 
@@ -145,7 +151,7 @@ export default defineEventHandler(async (event) => {
       lat: lat ?? null,
       lng: lng ?? null,
       file: fileKey,
-      description: description ?? null,
+      description,
       descriptors: serializeDescriptors(descriptorTags),
       status: user.role === "admin" ? "published" : "pending",
       submittedBy: user.id,

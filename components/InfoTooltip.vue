@@ -1,7 +1,19 @@
 <script setup lang="ts">
-withDefaults(defineProps<{ ariaLabel?: string }>(), {
-  ariaLabel: "More info",
-});
+/* `autoShowMs` opens the bubble on mount and closes it again after that many
+   milliseconds -- for a field whose tooltip is instruction rather than
+   reference, and so should be read once without being hunted for. 0 (the
+   default) leaves the tooltip entirely hover/focus/click driven.
+
+   It fires on mount rather than on a watched flag, so a step that mounts its
+   fields fresh on each visit gets the prompt each visit, and one that stays
+   mounted shows it once. */
+const props = withDefaults(
+  defineProps<{ ariaLabel?: string; autoShowMs?: number }>(),
+  {
+    ariaLabel: "More info",
+    autoShowMs: 0,
+  },
+);
 
 /* The bubble is teleported to <body> and positioned with fixed coordinates so
    it can't be clipped by the scrolling/overflow-hidden panels it lives in
@@ -71,18 +83,40 @@ function place() {
   }
 }
 
+// Pending auto-hide, cancelled the moment the reader takes over: a hover or a
+// click that lands inside the auto-shown window should not have the bubble
+// pulled out from under it partway through a sentence.
+let autoHideTimer: ReturnType<typeof setTimeout> | null = null;
+function cancelAutoHide() {
+  if (autoHideTimer === null) return;
+  clearTimeout(autoHideTimer);
+  autoHideTimer = null;
+}
+
 async function show() {
+  cancelAutoHide();
   open.value = true;
   await nextTick();
   place();
 }
 function hide() {
+  cancelAutoHide();
   open.value = false;
 }
 function toggle() {
   if (open.value) hide();
   else show();
 }
+
+onMounted(() => {
+  if (props.autoShowMs <= 0) return;
+  show();
+  // Set after `show()`, which clears any pending timer of its own.
+  autoHideTimer = setTimeout(() => {
+    autoHideTimer = null;
+    hide();
+  }, props.autoShowMs);
+});
 
 // Keep the bubble glued to its button while anything scrolls or the window
 // resizes. Capture phase so scrolls inside nested containers are seen too.
@@ -98,6 +132,7 @@ watch(open, (isOpen) => {
 });
 
 onBeforeUnmount(() => {
+  cancelAutoHide();
   if (typeof window === "undefined") return;
   window.removeEventListener("scroll", place, { capture: true } as never);
   window.removeEventListener("resize", place);
