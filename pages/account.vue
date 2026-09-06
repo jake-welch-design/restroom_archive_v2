@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import type { SubTab } from "~/components/AccountSubTabs.vue";
+import type { LocationQueryRaw } from "vue-router";
+import type { AccountTab } from "~/composables/useAccountNav";
 const {
   user,
   loggedIn,
@@ -101,9 +103,20 @@ const roleLabel = computed(() => {
 });
 
 // -------------- Account tabs --------------
-type AccountTab = "admin" | "profile" | "submissions" | "annotations";
+// Tab, group and section live in `useAccountNav`, a shared singleton, so the
+// position survives leaving the page. The header links back to a bare
+// `/account`, so page-local refs sent an admin who stepped out to the catalog
+// back to the Profile tab every time.
 const route = useRoute();
 const router = useRouter();
+
+const {
+  tab: accountTab,
+  adminGroup,
+  adminSectionByGroup,
+  adminSection,
+  submissionsSection,
+} = useAccountNav();
 
 function isValidTab(v: unknown): v is AccountTab {
   return (
@@ -114,60 +127,79 @@ function isValidTab(v: unknown): v is AccountTab {
   );
 }
 
-const accountTab = ref<AccountTab>(
-  isValidTab(route.query.tab) ? route.query.tab : "profile",
-);
-
-// -------------- Admin nav state --------------
-// Declared here, above `setTab` and the pending-queue watch, because both read
-// it during setup. Left further down with the rest of the sub-tab code it was a
-// temporal dead zone: the watch evaluates its computed immediately and crashed
-// the page with "Cannot access 'adminGroup' before initialization".
-type AdminGroup = "submissions" | "accounts" | "annotations" | "audit";
-type SubmissionsSection = "new" | "published" | "pending";
-
 /**
- * The sections inside each admin group, in the order they appear.
+ * Seeds the position from the URL, where the URL says anything.
  *
- * `audit` is deliberately empty: it is one list, so a second row holding a
- * single button would be navigation that never navigates anywhere. Groups with
- * no sections render the first row only.
+ * An explicit link beats what was remembered — following `?tab=profile` has to
+ * land on Profile even if the last visit ended on the Admin tab — but a bare
+ * `/account`, which is what the header link produces, leaves the remembered
+ * position alone.
+ *
+ * Runs on setup and again when `isAdmin` resolves, for the same reason the tab
+ * is re-applied: the session is not known during the first render, so an
+ * admin's own deep link looks invalid until it is.
  */
-const ADMIN_GROUP_SECTIONS = {
-  submissions: ["pending", "archived", "rejected", "removals"],
-  accounts: ["directory", "upgrades"],
-  annotations: ["all", "reports"],
-  audit: [],
-} as const satisfies Record<AdminGroup, readonly string[]>;
+function applyQuery() {
+  const { tab, group, section } = route.query;
 
-const ADMIN_GROUPS = Object.keys(ADMIN_GROUP_SECTIONS) as AdminGroup[];
+  if (isValidTab(tab)) accountTab.value = tab;
 
-const SUBMISSIONS_SECTIONS: SubmissionsSection[] = [
-  "new",
-  "published",
-  "pending",
-];
+  if (isAdminGroup(group)) adminGroup.value = group;
 
-const adminGroup = ref<AdminGroup>("submissions");
-/** The chosen section per group, so switching away and back returns to it. */
-const adminSectionByGroup = ref<Record<AdminGroup, string>>({
-  submissions: "pending",
-  accounts: "directory",
-  annotations: "all",
-  audit: "",
-});
-const submissionsSection = ref<SubmissionsSection>("new");
+  if (typeof section !== "string") return;
 
-const adminSection = computed(
-  () => adminSectionByGroup.value[adminGroup.value],
-);
-
-function isAdminGroup(v: unknown): v is AdminGroup {
-  return typeof v === "string" && (ADMIN_GROUPS as string[]).includes(v);
+  if (accountTab.value === "admin") {
+    // Only accepted against the group it belongs to, so
+    // `?group=accounts&section=rejected` opens the Accounts group at its own
+    // remembered section rather than at one that would render nothing.
+    if (sectionsFor(adminGroup.value).includes(section)) {
+      adminSectionByGroup.value[adminGroup.value] = section;
+    }
+  } else if (
+    accountTab.value === "submissions" &&
+    isSubmissionsSection(section)
+  ) {
+    submissionsSection.value = section;
+  }
 }
 
-function sectionsFor(group: AdminGroup): readonly string[] {
-  return ADMIN_GROUP_SECTIONS[group];
+applyQuery();
+
+/**
+ * Keeps the address bar matching the position, so a reload or a copied link
+ * lands where the page actually is.
+ *
+ * One watcher owns every write to the query, rather than each setter doing its
+ * own: the setters then only move state, and the URL cannot drift from it. The
+ * params are rebuilt rather than merged so a tab that has no group or section
+ * drops the previous tab's — `group` is the Admin tab's alone and would
+ * otherwise linger on Profile.
+ *
+ * Client-only. There is no address bar to update during SSR, and a
+ * `router.replace` there is a redirect.
+ */
+function syncQueryToState() {
+  const { tab: _t, group: _g, section: _s, ...rest } = route.query;
+  const query: LocationQueryRaw = { ...rest, tab: accountTab.value };
+
+  if (accountTab.value === "admin") {
+    query.group = adminGroup.value;
+    if (adminSection.value) query.section = adminSection.value;
+  } else if (accountTab.value === "submissions") {
+    query.section = submissionsSection.value;
+  }
+
+  router.replace({ query });
+}
+
+if (import.meta.client) {
+  watch(
+    [accountTab, adminGroup, adminSection, submissionsSection],
+    syncQueryToState,
+    // Immediate, so arriving on a bare `/account` writes the remembered
+    // position into the URL instead of leaving the two disagreeing.
+    { immediate: true },
+  );
 }
 
 const LEAVE_SUBMISSION_WARNING =
@@ -182,32 +214,9 @@ function setTab(tab: AccountTab) {
   ) {
     return;
   }
+  // Only moves state; `syncQueryToState` re-points the URL at the new tab's own
+  // sub-tabs, dropping any that the tab cannot show.
   accountTab.value = tab;
-  // Re-point `?group=` and `?section=` at the new tab's own sub-tabs (dropping
-  // them for tabs that have none) so the URL never advertises a section the tab
-  // cannot show. Both are stripped first, because `group` is the Admin tab's
-  // alone and would otherwise linger on Profile.
-  const { section: _staleSection, group: _staleGroup, ...query } = route.query;
-
-  if (tab === "admin") {
-    const section = adminSection.value;
-    router.replace({
-      query: {
-        ...query,
-        tab,
-        group: adminGroup.value,
-        ...(section ? { section } : {}),
-      },
-    });
-    return;
-  }
-
-  router.replace({
-    query:
-      tab === "submissions"
-        ? { ...query, tab, section: submissionsSection.value }
-        : { ...query, tab },
-  });
 }
 
 // Warn before navigating away from the account page entirely (nav links,
@@ -245,9 +254,7 @@ watch(onPendingQueue, (showing) => {
 
 // The session resolves client-side, so `?tab=admin` looks invalid on first
 // render; re-apply it once admin status is known.
-watch(isAdmin, (v) => {
-  if (v && route.query.tab === "admin") accountTab.value = "admin";
-});
+watch(isAdmin, () => applyQuery());
 
 // The Admin tab's own badge: every queue in every group, since the tab is one
 // button and cannot say which group the backlog is in.
@@ -369,79 +376,24 @@ const secondarySelection = computed({
   set: (v: string) => setAdminSection(v),
 });
 
-/**
- * Merges query params, dropping any whose new value is undefined.
- *
- * Built by filtering rather than by assigning and deleting, so a group with no
- * sections drops `?section=` instead of leaving the previous group's section
- * in the URL.
- */
-function syncQuery(extra: Record<string, string | undefined>) {
-  const merged = { ...route.query, ...extra };
-  const query = Object.fromEntries(
-    Object.entries(merged).filter(([, v]) => v !== undefined),
-  );
-  router.replace({ query });
-}
-
 function setPrimary(value: string) {
   if (accountTab.value === "admin") {
     if (!isAdminGroup(value)) return;
     adminGroup.value = value;
-    syncQuery({
-      group: value,
-      section: adminSectionByGroup.value[value] || undefined,
-    });
     return;
   }
   if (accountTab.value !== "submissions") return;
-  if (!SUBMISSIONS_SECTIONS.includes(value as SubmissionsSection)) return;
+  if (!isSubmissionsSection(value)) return;
   // No unsaved-work guard here: the sub-tab panels are v-show, so the wizard
   // stays mounted and an in-progress scan survives the switch. Only leaving
   // the Submissions tab entirely (setTab) unmounts it.
-  submissionsSection.value = value as SubmissionsSection;
-  syncQuery({ section: value });
+  submissionsSection.value = value;
 }
 
 function setAdminSection(value: string) {
   if (!sectionsFor(adminGroup.value).includes(value)) return;
   adminSectionByGroup.value[adminGroup.value] = value;
-  syncQuery({ section: value });
 }
-
-/**
- * Restores `?group=` and `?section=` for whichever tab is active.
- *
- * Runs on mount and again when `isAdmin` resolves client-side, for the same
- * reason `?tab=admin` is re-applied: the session is not known during the first
- * render, so an admin's own deep link looks invalid until it is.
- */
-function applySectionFromQuery() {
-  const { group, section } = route.query;
-
-  if (accountTab.value === "admin") {
-    if (isAdminGroup(group)) adminGroup.value = group;
-    if (typeof section === "string") {
-      // Only accepted against the group it belongs to, so `?group=accounts&
-      // section=rejected` opens the Accounts group at its own default rather
-      // than at a section that would render nothing.
-      const sections = sectionsFor(adminGroup.value);
-      if (sections.includes(section)) {
-        adminSectionByGroup.value[adminGroup.value] = section;
-      }
-    }
-    return;
-  }
-
-  if (
-    accountTab.value === "submissions" &&
-    typeof section === "string" &&
-    SUBMISSIONS_SECTIONS.includes(section as SubmissionsSection)
-  ) {
-    submissionsSection.value = section as SubmissionsSection;
-  }
-}
-applySectionFromQuery();
 </script>
 
 <template>

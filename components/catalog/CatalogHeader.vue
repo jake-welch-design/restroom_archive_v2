@@ -44,7 +44,12 @@ watch(
   <header class="catalog-head">
     <div class="head-row">
       <component :is="isHome ? 'h1' : 'p'" class="site-title">
-        <a href="/">The Restroom Archive</a>
+        <!-- A NuxtLink, not a bare anchor: a plain href is a full page load,
+             which drops the viewer's loaded scan and every `useState` singleton
+             — including the account page's remembered tab. Reaching the catalog
+             by the title used to lose the position that the Catalog nav link
+             beside it preserves. -->
+        <NuxtLink to="/">The Restroom Archive</NuxtLink>
       </component>
 
       <nav class="top-nav">

@@ -123,6 +123,7 @@ unrelated components must agree on.
 | `useCatalogRows`                             | The filtered, sorted rows, so the viewer's next/previous match what the list shows |
 | `useStripGeom`                               | The measured header strip (§2)                                                     |
 | `useSubmissionPreview`                       | The wizard's or admin queue's viewer takeover                                      |
+| `useAccountNav`                              | Where the account page is pointed: tab, admin group, section per group             |
 | `useRestrooms`, `useStats`, `useAnnotations` | Keyed `useFetch` results                                                           |
 
 ### Per-caller helpers
@@ -202,16 +203,34 @@ nothing but position to say which one contained the other.
 
 State notes worth knowing before editing this:
 
-- **Declaration order matters.** The group and section refs are declared high in
-  the setup, above `setTab` and the pending-queue watch, both of which read them
-  during setup. Moved down with the rest of the sub-tab code they are a temporal
-  dead zone, and the page renders a 500.
+- **The position is a `useState` singleton**, `useAccountNav`, not page-local
+  refs. It has to outlive the page: the header links back to a bare `/account`
+  with no query, so plain refs sent an admin who stepped out to the catalog to
+  check one entry back to the Profile tab, two rows of sub-tabs from where they
+  were. Persistence is per session — a genuinely fresh load with no query opens
+  on Profile.
+- **Declaration order matters.** The nav state is destructured high in the
+  setup, above `setTab` and the pending-queue watch, both of which read it during
+  setup. Moved down with the rest of the sub-tab code it is a temporal dead zone,
+  and the page renders a 500.
 - **A section is remembered per group** (`adminSectionByGroup`), so leaving a
   group and coming back returns to where you were rather than to its first
   section.
-- **`?group=` and `?section=` both round-trip**, and a section is only accepted
-  against the group it belongs to, so `?group=accounts&section=rejected` opens
-  Accounts at its own default instead of at a section that would render nothing.
+- **One watcher owns the URL.** `syncQueryToState` is the only thing that writes
+  `?tab=`, `?group=` and `?section=`; the setters just move state. The params are
+  rebuilt rather than merged, so a tab with no group or section drops the
+  previous tab's rather than leaving `group` stranded on Profile.
+- **A link beats memory.** `applyQuery` seeds from the URL where the URL says
+  anything, so `?tab=profile` lands on Profile even if the last visit ended on
+  Admin. A section is only accepted against the group it belongs to, so
+  `?group=accounts&section=rejected` opens Accounts at its own remembered section
+  instead of one that would render nothing.
+
+A corollary: **navigation inside the app must be `NuxtLink`, never a bare
+`href`.** A plain anchor is a full page load, which drops every `useState`
+singleton and the viewer's loaded scan with them. The site title in
+`CatalogHeader` was such an anchor, so reaching the catalog by the logo lost the
+position that the Catalog link beside it preserved.
 
 ### Admin list controls
 
