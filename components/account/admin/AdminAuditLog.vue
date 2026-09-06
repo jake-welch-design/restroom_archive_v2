@@ -9,6 +9,8 @@
  * Actions are stored as machine-readable keys (`user.ban`, `restroom.publish`)
  * and translated for display, so a rename here never invalidates history.
  */
+import type { AuditLogEntry } from "~/types/account";
+
 const { data: entries, refresh } = useAdminAuditLog();
 
 // This component mounts only when its section is selected, so mounting is
@@ -59,16 +61,77 @@ function metadataSummary(metadata: Record<string, unknown> | null) {
   }
   return parts.join(" · ");
 }
+
+/* --- Search and sort ------------------------------------------------------- */
+
+type SortKey = "createdAt" | "actor" | "action";
+
+const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: "createdAt", label: "Date" },
+  { key: "actor", label: "Admin" },
+  { key: "action", label: "Action" },
+];
+
+function actorName(e: AuditLogEntry) {
+  return (e.actor?.displayName || e.actor?.username || "").toLowerCase();
+}
+
+const { query, sortKey, sortDir, visible, isEmptyFromSearch } = useListControls<
+  AuditLogEntry,
+  SortKey
+>({
+  source: entries,
+  // Searched on the translated label rather than the stored key, because that
+  // is what is on screen: "banned" should find `user.ban`. The raw key is
+  // included too, so a search for `restroom.publish` still works.
+  searchFields: (e) => [
+    actionLabel(e.action),
+    e.action,
+    e.actor?.username,
+    e.actor?.displayName,
+    metadataSummary(e.metadata),
+  ],
+  // Newest first, which is the order the endpoint returns and the only order a
+  // log is normally read in.
+  defaultKey: "createdAt",
+  defaultDir: "desc",
+  compare: (a, b, key) => {
+    switch (key) {
+      case "actor":
+        return actorName(a).localeCompare(actorName(b)) || a.id - b.id;
+      case "action":
+        return (
+          actionLabel(a.action).localeCompare(actionLabel(b.action)) ||
+          a.id - b.id
+        );
+      default:
+        return compareStamped(a, b, a.createdAt, b.createdAt);
+    }
+  },
+});
 </script>
 
 <template>
   <div>
+    <AdminListControls
+      v-if="entries?.length"
+      v-model:query="query"
+      v-model:sort-key="sortKey"
+      v-model:sort-dir="sortDir"
+      :sort-options="SORT_OPTIONS"
+      search-label="Search the log"
+      id-prefix="audit"
+    />
+
     <div v-if="!entries?.length" class="empty">
       No admin actions recorded yet.
     </div>
+    <div v-else-if="isEmptyFromSearch" class="empty">
+      No entries match “{{ query }}”.
+    </div>
 
     <ul v-else class="simple-list">
-      <li v-for="entry in entries" :key="entry.id" class="simple-row">
+      <li v-for="entry in visible" :key="entry.id" class="simple-row">
         <div class="simple-main">
           <span class="simple-title">
             <UserAttribution
@@ -77,7 +140,7 @@ function metadataSummary(metadata: Record<string, unknown> | null) {
               fallback="deleted admin"
             />
             <span v-else class="dim">deleted admin</span>
-            <span class="audit-action"> {{ actionLabel(entry.action) }}</span>
+            <span class="audit-action">{{ actionLabel(entry.action) }}</span>
             <span v-if="entry.targetId" class="audit-target">
               #{{ entry.targetId }}
             </span>
@@ -98,8 +161,13 @@ function metadataSummary(metadata: Record<string, unknown> | null) {
 </template>
 
 <style scoped>
+/* The gap is a margin rather than a space in the template. The name and the
+   action are separate inline elements with the interpolation flush against the
+   tag, and Vue's `condense` whitespace handling drops a leading space there, so
+   the two ran together as "Jakebanned user". */
 .audit-action {
   color: #000;
+  margin-left: 4px;
 }
 
 /* The target id is a database key, not prose, so it is set in a monospace face

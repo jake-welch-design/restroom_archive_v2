@@ -175,6 +175,58 @@ array. `useAnnotations` works around it by setting `watch: false` and driving
   progress. It gates the "leaving loses your submission" confirmation, which must
   not fire for the admin's read-only preview.
 
+### The admin tab's two nav rows
+
+The Admin tab nests two levels below the main tabs: a **group**, and the
+**sections** inside it. `pages/account.vue` owns both, and `ADMIN_GROUP_SECTIONS`
+is the single declaration of what exists:
+
+| Group         | Sections                                      |
+| ------------- | --------------------------------------------- |
+| `submissions` | Pending, Archived, Rejected, Removal requests |
+| `accounts`    | Directory, Upgrades                           |
+| `annotations` | All annotations, Reports                      |
+| `audit`       | — (one list, so no second row renders)        |
+
+The groups are the _subject_ each list is about. The earlier flat row had grown
+to nine buttons in two clusters that did not correspond to anything: `upgrades`
+sat beside `removals` although one is about accounts and the other about
+entries, and the three restroom lists were split across the row's gap. The
+queue/browse distinction moves inside the groups, where the badge already says
+which is which.
+
+Both rows are `AccountSubTabs`, in its two variants: the group row is
+`segmented` (the bordered block), the section row is `plain` (text with an
+underline on the active item). Rendering both as the same segmented block left
+nothing but position to say which one contained the other.
+
+State notes worth knowing before editing this:
+
+- **Declaration order matters.** The group and section refs are declared high in
+  the setup, above `setTab` and the pending-queue watch, both of which read them
+  during setup. Moved down with the rest of the sub-tab code they are a temporal
+  dead zone, and the page renders a 500.
+- **A section is remembered per group** (`adminSectionByGroup`), so leaving a
+  group and coming back returns to where you were rather than to its first
+  section.
+- **`?group=` and `?section=` both round-trip**, and a section is only accepted
+  against the group it belongs to, so `?group=accounts&section=rejected` opens
+  Accounts at its own default instead of at a section that would render nothing.
+
+### Admin list controls
+
+Every admin section carries the same search-and-sort strip, from
+`AdminListControls` (the markup) and `useListControls` (the state). Each caller
+supplies only the two genuinely per-list things: what a search matches against,
+and how two rows compare on a given key.
+
+Searching does not reorder by relevance the way the public catalog's fuzzy
+search does. An admin searching is narrowing a list they still want ordered by
+whatever they chose, so the match is a plain substring test and the sort stays in
+force. Sections that also have a status filter (Archived, Rejected) put those
+pills in the strip's `below` slot, where the accounts tally sits — a qualifier on
+the search field rather than a second toolbar.
+
 ---
 
 ## 4. The viewer

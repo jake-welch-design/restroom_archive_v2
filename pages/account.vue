@@ -58,9 +58,9 @@ watch(
   { immediate: true },
 );
 
-// The page holds the four queues only for their tab badges; AdminQueues renders
-// them. These are keyed fetches, so both callers share one request rather than
-// issuing two that drift apart after a refresh.
+// The page holds the four queues only for their tab badges; a section
+// component renders each. These are keyed fetches, so both callers share one
+// request rather than issuing two that drift apart after a refresh.
 const { data: pendingRestrooms, refresh: refreshRestroomQueue } =
   useRestroomQueue();
 const { data: pendingUsers, refresh: refreshUserQueue } = useUserQueue();
@@ -88,9 +88,9 @@ watch(
   { immediate: true },
 );
 
-// Which pending submission is expanded. Owned here rather than by AdminQueues
-// because expanding one previews its scan in the layout's viewer, and leaving
-// the Admin tab has to collapse it.
+// Which pending submission is expanded. Owned here rather than by the section
+// component because expanding one previews its scan in the layout's viewer, and
+// navigating away from the queue has to collapse it.
 const expandedPendingId = ref<number | null>(null);
 
 const roleLabel = computed(() => {
@@ -118,6 +118,58 @@ const accountTab = ref<AccountTab>(
   isValidTab(route.query.tab) ? route.query.tab : "profile",
 );
 
+// -------------- Admin nav state --------------
+// Declared here, above `setTab` and the pending-queue watch, because both read
+// it during setup. Left further down with the rest of the sub-tab code it was a
+// temporal dead zone: the watch evaluates its computed immediately and crashed
+// the page with "Cannot access 'adminGroup' before initialization".
+type AdminGroup = "submissions" | "accounts" | "annotations" | "audit";
+type SubmissionsSection = "new" | "published" | "pending";
+
+/**
+ * The sections inside each admin group, in the order they appear.
+ *
+ * `audit` is deliberately empty: it is one list, so a second row holding a
+ * single button would be navigation that never navigates anywhere. Groups with
+ * no sections render the first row only.
+ */
+const ADMIN_GROUP_SECTIONS = {
+  submissions: ["pending", "archived", "rejected", "removals"],
+  accounts: ["directory", "upgrades"],
+  annotations: ["all", "reports"],
+  audit: [],
+} as const satisfies Record<AdminGroup, readonly string[]>;
+
+const ADMIN_GROUPS = Object.keys(ADMIN_GROUP_SECTIONS) as AdminGroup[];
+
+const SUBMISSIONS_SECTIONS: SubmissionsSection[] = [
+  "new",
+  "published",
+  "pending",
+];
+
+const adminGroup = ref<AdminGroup>("submissions");
+/** The chosen section per group, so switching away and back returns to it. */
+const adminSectionByGroup = ref<Record<AdminGroup, string>>({
+  submissions: "pending",
+  accounts: "directory",
+  annotations: "all",
+  audit: "",
+});
+const submissionsSection = ref<SubmissionsSection>("new");
+
+const adminSection = computed(
+  () => adminSectionByGroup.value[adminGroup.value],
+);
+
+function isAdminGroup(v: unknown): v is AdminGroup {
+  return typeof v === "string" && (ADMIN_GROUPS as string[]).includes(v);
+}
+
+function sectionsFor(group: AdminGroup): readonly string[] {
+  return ADMIN_GROUP_SECTIONS[group];
+}
+
 const LEAVE_SUBMISSION_WARNING =
   "Leaving will lose your in-progress submission. Continue?";
 
@@ -131,17 +183,30 @@ function setTab(tab: AccountTab) {
     return;
   }
   accountTab.value = tab;
-  // Re-point `?section=` at the new tab's own sub-tab (dropping it for tabs
-  // that have none) so the URL never advertises a section the tab can't show.
-  const { section: _stale, ...query } = route.query;
-  const section =
-    tab === "admin"
-      ? adminSection.value
-      : tab === "submissions"
-        ? submissionsSection.value
-        : undefined;
+  // Re-point `?group=` and `?section=` at the new tab's own sub-tabs (dropping
+  // them for tabs that have none) so the URL never advertises a section the tab
+  // cannot show. Both are stripped first, because `group` is the Admin tab's
+  // alone and would otherwise linger on Profile.
+  const { section: _staleSection, group: _staleGroup, ...query } = route.query;
+
+  if (tab === "admin") {
+    const section = adminSection.value;
+    router.replace({
+      query: {
+        ...query,
+        tab,
+        group: adminGroup.value,
+        ...(section ? { section } : {}),
+      },
+    });
+    return;
+  }
+
   router.replace({
-    query: section ? { ...query, tab, section } : { ...query, tab },
+    query:
+      tab === "submissions"
+        ? { ...query, tab, section: submissionsSection.value }
+        : { ...query, tab },
   });
 }
 
@@ -163,10 +228,19 @@ watch(expandedPendingId, (id) => {
   previewModelUrl.value = r?.modelUrl ?? null;
 });
 
-// Leaving the Admin tab should collapse any expanded preview rather than
-// leave it orphaned in the viewer with no visible expanded row to match it.
-watch(accountTab, (tab) => {
-  if (tab !== "admin") expandedPendingId.value = null;
+// Navigating away from the pending queue should collapse any expanded preview
+// rather than leave it orphaned in the viewer with no visible expanded row to
+// match it. That is now three ways out — the tab, the group, and the section —
+// so it watches where the queue actually is rather than the tab alone.
+const onPendingQueue = computed(
+  () =>
+    accountTab.value === "admin" &&
+    adminGroup.value === "submissions" &&
+    adminSection.value === "pending",
+);
+
+watch(onPendingQueue, (showing) => {
+  if (!showing) expandedPendingId.value = null;
 });
 
 // The session resolves client-side, so `?tab=admin` looks invalid on first
@@ -175,7 +249,8 @@ watch(isAdmin, (v) => {
   if (v && route.query.tab === "admin") accountTab.value = "admin";
 });
 
-// Only the Review queues carry an actionable badge on the Admin tab.
+// The Admin tab's own badge: every queue in every group, since the tab is one
+// button and cannot say which group the backlog is in.
 const adminQueueCount = computed(
   () =>
     (pendingRestrooms.value?.length ?? 0) +
@@ -185,80 +260,73 @@ const adminQueueCount = computed(
 );
 
 // -------------- Sub-tabs --------------
-// Each main tab owns at most one row of sub-tabs; both share the `?section=`
-// query param so a queue can be linked to and survives a reload.
-type AdminSection =
-  | "submissions"
-  | "upgrades"
-  | "reports"
-  | "removals"
-  | "accounts"
-  | "archive"
-  | "rejected"
-  | "annotations"
-  | "audit";
-type SubmissionsSection = "new" | "published" | "pending";
+// The Admin tab has two rows: a group, and the sections inside it. Every other
+// tab with sub-tabs has one row, which is the group row's slot. Both rows carry
+// their own query param so any section can be linked to and survives a reload.
+//
+// The grouping exists because the flat row had grown to nine buttons in two
+// visual clusters that did not correspond to anything: `upgrades` sat beside
+// `removals` although one is about accounts and the other about entries, and
+// the three restroom lists were split across the row's gap. The groups are the
+// subject each list is about, and the queue/browse split moves inside them,
+// where the badge already says which is which.
+/* --- Badges ---------------------------------------------------------------- */
+// Only the four queues have a backlog. A group's badge is the sum of its own
+// queues, so a count never disappears just because it is one level down.
 
-/** The four sections AdminQueues renders, as opposed to the browse lists. */
-const QUEUE_SECTIONS = [
-  "submissions",
-  "upgrades",
-  "reports",
-  "removals",
-] as const;
+const pendingCount = computed(() => pendingRestrooms.value?.length ?? 0);
+const removalCount = computed(() => removalRequests.value?.length ?? 0);
+const upgradeCount = computed(() => pendingUsers.value?.length ?? 0);
+const reportCount = computed(() => annotationReports.value?.length ?? 0);
 
-type QueueSection = (typeof QUEUE_SECTIONS)[number];
+const GROUP_LABEL: Record<AdminGroup, string> = {
+  submissions: "Submissions",
+  accounts: "Accounts",
+  annotations: "Annotations",
+  audit: "Audit",
+};
 
-function isQueueSection(section: AdminSection): section is QueueSection {
-  return (QUEUE_SECTIONS as readonly string[]).includes(section);
-}
+const groupCount = computed<Record<AdminGroup, number>>(() => ({
+  submissions: pendingCount.value + removalCount.value,
+  accounts: upgradeCount.value,
+  annotations: reportCount.value,
+  audit: 0,
+}));
 
-const ADMIN_SECTIONS: AdminSection[] = [
-  "submissions",
-  "upgrades",
-  "reports",
-  "removals",
-  "accounts",
-  "archive",
-  "rejected",
-  "annotations",
-  "audit",
-];
-const SUBMISSIONS_SECTIONS: SubmissionsSection[] = [
-  "new",
-  "published",
-  "pending",
-];
+const adminGroupTabs = computed<SubTab[]>(() =>
+  ADMIN_GROUPS.map((id) => ({
+    id,
+    label: GROUP_LABEL[id],
+    count: groupCount.value[id],
+  })),
+);
 
-const adminSection = ref<AdminSection>("submissions");
-const submissionsSection = ref<SubmissionsSection>("new");
+const SECTION_LABEL: Record<string, string> = {
+  pending: "Pending",
+  archived: "Archived",
+  rejected: "Rejected",
+  removals: "Removal requests",
+  directory: "Directory",
+  upgrades: "Upgrades",
+  all: "All annotations",
+  reports: "Reports",
+};
 
-const adminSubTabs = computed<SubTab[]>(() => [
-  {
-    id: "submissions",
-    label: "Submissions",
-    count: pendingRestrooms.value?.length ?? 0,
-  },
-  { id: "upgrades", label: "Upgrades", count: pendingUsers.value?.length ?? 0 },
-  {
-    id: "reports",
-    label: "Reports",
-    count: annotationReports.value?.length ?? 0,
-  },
-  {
-    id: "removals",
-    label: "Removals",
-    count: removalRequests.value?.length ?? 0,
-  },
-  { id: "accounts", label: "Accounts", gapBefore: true },
-  { id: "archive", label: "Archive" },
-  // No count, despite the time limit on restoring one. A badge means "these are
-  // waiting on you", and a rejection expiring is the normal outcome rather than
-  // a backlog item; the countdown lives inside the section instead.
-  { id: "rejected", label: "Rejected" },
-  { id: "annotations", label: "Annotations" },
-  { id: "audit", label: "Audit" },
-]);
+/** Section badges, for the sections that are queues. Absent means no badge. */
+const sectionCount = computed<Record<string, number>>(() => ({
+  pending: pendingCount.value,
+  removals: removalCount.value,
+  upgrades: upgradeCount.value,
+  reports: reportCount.value,
+}));
+
+const adminSectionTabs = computed<SubTab[]>(() =>
+  sectionsFor(adminGroup.value).map((id) => ({
+    id,
+    label: SECTION_LABEL[id] ?? id,
+    count: sectionCount.value[id] ?? 0,
+  })),
+);
 
 const submissionsSubTabs = computed<SubTab[]>(() => [
   { id: "new", label: "New" },
@@ -274,50 +342,100 @@ const submissionsSubTabs = computed<SubTab[]>(() => [
   },
 ]);
 
-// The section for whichever main tab is showing, so one <AccountSubTabs>
-// v-model and one URL param cover both rows.
-const activeSection = computed({
-  get: () =>
-    accountTab.value === "admin"
-      ? adminSection.value
-      : submissionsSection.value,
-  set: (v: string) => setSection(v),
-});
+/* --- The two rows ---------------------------------------------------------- */
 
-const activeSubTabs = computed(() => {
-  if (accountTab.value === "admin" && isAdmin.value) return adminSubTabs.value;
+// The first row is the admin groups on the Admin tab and the submissions
+// sections everywhere else, so one <AccountSubTabs> covers both.
+const primarySubTabs = computed(() => {
+  if (accountTab.value === "admin" && isAdmin.value)
+    return adminGroupTabs.value;
   if (accountTab.value === "submissions") return submissionsSubTabs.value;
   return [];
 });
 
-function setSection(section: string) {
-  if (accountTab.value === "admin") {
-    if (!ADMIN_SECTIONS.includes(section as AdminSection)) return;
-    adminSection.value = section as AdminSection;
-  } else if (accountTab.value === "submissions") {
-    if (!SUBMISSIONS_SECTIONS.includes(section as SubmissionsSection)) return;
-    // No unsaved-work guard here: the sub-tab panels are v-show, so the wizard
-    // stays mounted and an in-progress scan survives the switch. Only leaving
-    // the Submissions tab entirely (setTab) unmounts it.
-    submissionsSection.value = section as SubmissionsSection;
-  } else {
-    return;
-  }
-  router.replace({ query: { ...route.query, section } });
+const primarySelection = computed({
+  get: () =>
+    accountTab.value === "admin" ? adminGroup.value : submissionsSection.value,
+  set: (v: string) => setPrimary(v),
+});
+
+// The second row exists only under an admin group that has sections.
+const secondarySubTabs = computed(() =>
+  accountTab.value === "admin" && isAdmin.value ? adminSectionTabs.value : [],
+);
+
+const secondarySelection = computed({
+  get: () => adminSection.value,
+  set: (v: string) => setAdminSection(v),
+});
+
+/**
+ * Merges query params, dropping any whose new value is undefined.
+ *
+ * Built by filtering rather than by assigning and deleting, so a group with no
+ * sections drops `?section=` instead of leaving the previous group's section
+ * in the URL.
+ */
+function syncQuery(extra: Record<string, string | undefined>) {
+  const merged = { ...route.query, ...extra };
+  const query = Object.fromEntries(
+    Object.entries(merged).filter(([, v]) => v !== undefined),
+  );
+  router.replace({ query });
 }
 
-// Restore `?section=` for whichever tab is active. Runs on mount and again
-// when `isAdmin` resolves client-side (same reason `?tab=admin` is re-applied).
+function setPrimary(value: string) {
+  if (accountTab.value === "admin") {
+    if (!isAdminGroup(value)) return;
+    adminGroup.value = value;
+    syncQuery({
+      group: value,
+      section: adminSectionByGroup.value[value] || undefined,
+    });
+    return;
+  }
+  if (accountTab.value !== "submissions") return;
+  if (!SUBMISSIONS_SECTIONS.includes(value as SubmissionsSection)) return;
+  // No unsaved-work guard here: the sub-tab panels are v-show, so the wizard
+  // stays mounted and an in-progress scan survives the switch. Only leaving
+  // the Submissions tab entirely (setTab) unmounts it.
+  submissionsSection.value = value as SubmissionsSection;
+  syncQuery({ section: value });
+}
+
+function setAdminSection(value: string) {
+  if (!sectionsFor(adminGroup.value).includes(value)) return;
+  adminSectionByGroup.value[adminGroup.value] = value;
+  syncQuery({ section: value });
+}
+
+/**
+ * Restores `?group=` and `?section=` for whichever tab is active.
+ *
+ * Runs on mount and again when `isAdmin` resolves client-side, for the same
+ * reason `?tab=admin` is re-applied: the session is not known during the first
+ * render, so an admin's own deep link looks invalid until it is.
+ */
 function applySectionFromQuery() {
-  const section = route.query.section;
-  if (typeof section !== "string") return;
+  const { group, section } = route.query;
+
+  if (accountTab.value === "admin") {
+    if (isAdminGroup(group)) adminGroup.value = group;
+    if (typeof section === "string") {
+      // Only accepted against the group it belongs to, so `?group=accounts&
+      // section=rejected` opens the Accounts group at its own default rather
+      // than at a section that would render nothing.
+      const sections = sectionsFor(adminGroup.value);
+      if (sections.includes(section)) {
+        adminSectionByGroup.value[adminGroup.value] = section;
+      }
+    }
+    return;
+  }
+
   if (
-    accountTab.value === "admin" &&
-    ADMIN_SECTIONS.includes(section as AdminSection)
-  ) {
-    adminSection.value = section as AdminSection;
-  } else if (
     accountTab.value === "submissions" &&
+    typeof section === "string" &&
     SUBMISSIONS_SECTIONS.includes(section as SubmissionsSection)
   ) {
     submissionsSection.value = section as SubmissionsSection;
@@ -415,9 +533,19 @@ applySectionFromQuery();
       </div>
 
       <AccountSubTabs
-        v-if="activeSubTabs.length"
-        v-model="activeSection"
-        :tabs="activeSubTabs"
+        v-if="primarySubTabs.length"
+        v-model="primarySelection"
+        :tabs="primarySubTabs"
+      />
+
+      <!-- The Admin tab's second row: the sections inside the chosen group.
+           Absent for a group that is a single list, so the row never appears
+           holding one button. -->
+      <AccountSubTabs
+        v-if="secondarySubTabs.length"
+        v-model="secondarySelection"
+        :tabs="secondarySubTabs"
+        variant="plain"
       />
 
       <!-- Profile -->
@@ -446,16 +574,45 @@ applySectionFromQuery();
         class="tab-panel"
         role="tabpanel"
       >
-        <AdminQueues
-          v-if="isQueueSection(adminSection)"
+        <!-- Submissions -->
+        <AdminSubmissionsPending
+          v-if="adminGroup === 'submissions' && adminSection === 'pending'"
           v-model:expanded-id="expandedPendingId"
-          :section="adminSection"
         />
-        <AdminAccounts v-else-if="adminSection === 'accounts'" />
-        <AdminArchive v-else-if="adminSection === 'archive'" />
-        <AdminRejected v-else-if="adminSection === 'rejected'" />
-        <AdminAnnotations v-else-if="adminSection === 'annotations'" />
-        <AdminAuditLog v-else-if="adminSection === 'audit'" />
+        <AdminArchive
+          v-else-if="
+            adminGroup === 'submissions' && adminSection === 'archived'
+          "
+        />
+        <AdminRejected
+          v-else-if="
+            adminGroup === 'submissions' && adminSection === 'rejected'
+          "
+        />
+        <AdminRemovals
+          v-else-if="
+            adminGroup === 'submissions' && adminSection === 'removals'
+          "
+        />
+
+        <!-- Accounts -->
+        <AdminAccounts
+          v-else-if="adminGroup === 'accounts' && adminSection === 'directory'"
+        />
+        <AdminUpgrades
+          v-else-if="adminGroup === 'accounts' && adminSection === 'upgrades'"
+        />
+
+        <!-- Annotations -->
+        <AdminAnnotations
+          v-else-if="adminGroup === 'annotations' && adminSection === 'all'"
+        />
+        <AdminReports
+          v-else-if="adminGroup === 'annotations' && adminSection === 'reports'"
+        />
+
+        <!-- Audit: one list, no sections -->
+        <AdminAuditLog v-else-if="adminGroup === 'audit'" />
       </div>
     </div>
   </div>

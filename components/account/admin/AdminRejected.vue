@@ -82,7 +82,7 @@ function goneNote(e: RejectedSubmission) {
     : "Scan deleted at rejection";
 }
 
-/* --- Filtering ------------------------------------------------------------ */
+/* --- Filtering, search and sort -------------------------------------------- */
 
 type RejectedFilter = "restorable" | "expired" | "all";
 
@@ -95,24 +95,69 @@ const FILTERS: { id: RejectedFilter; label: string }[] = [
 // Restorable first: it is the only group anything can still be done about, and
 // the expired rows are here as a record.
 const statusFilter = ref<RejectedFilter>("restorable");
-const query = ref("");
 
 function matchesFilter(e: RejectedSubmission, filter: RejectedFilter) {
   if (filter === "all") return true;
   return filter === "restorable" ? e.restorable : !e.restorable;
 }
 
-const filtered = computed(() => {
-  const q = query.value.trim().toLowerCase();
-  return (entries.value ?? []).filter((e) => {
-    if (!matchesFilter(e, statusFilter.value)) return false;
-    if (!q) return true;
-    return (
-      e.name.toLowerCase().includes(q) ||
-      e.location.toLowerCase().includes(q) ||
-      (e.submitter?.username.toLowerCase().includes(q) ?? false)
-    );
-  });
+type SortKey = "rejectedAt" | "name" | "location" | "isoDate" | "submitter";
+
+const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: "rejectedAt", label: "Date rejected" },
+  { key: "name", label: "Name" },
+  { key: "location", label: "Location" },
+  { key: "isoDate", label: "Scan date" },
+  { key: "submitter", label: "Submitter" },
+];
+
+function submitterName(e: RejectedSubmission) {
+  return (
+    e.submitter?.displayName ||
+    e.submitter?.username ||
+    ""
+  ).toLowerCase();
+}
+
+const byFilter = computed(() =>
+  (entries.value ?? []).filter((e) => matchesFilter(e, statusFilter.value)),
+);
+
+const { query, sortKey, sortDir, visible, isEmptyFromSearch } = useListControls<
+  RejectedSubmission,
+  SortKey
+>({
+  source: byFilter,
+  searchFields: (e) => [
+    e.name,
+    e.location,
+    e.rejectionMessage,
+    e.submitter?.username,
+    e.submitter?.displayName,
+  ],
+  // Most recently rejected first, which is also least time left: the rows worth
+  // a second look are the ones that just happened.
+  defaultKey: "rejectedAt",
+  defaultDir: "desc",
+  compare: (a, b, key) => {
+    switch (key) {
+      case "name":
+        return a.name.localeCompare(b.name) || a.id - b.id;
+      case "location":
+        return a.location.localeCompare(b.location);
+      case "isoDate":
+        return a.isoDate.localeCompare(b.isoDate) || a.id - b.id;
+      case "submitter":
+        return (
+          submitterName(a).localeCompare(submitterName(b)) ||
+          a.name.localeCompare(b.name)
+        );
+      default:
+        // Entries rejected before the grace period existed have no timestamp;
+        // `compareStamped` sorts those to the end, where they belong.
+        return compareStamped(a, b, a.rejectedAt, b.rejectedAt);
+    }
+  },
 });
 
 function countFor(id: RejectedFilter) {
@@ -149,39 +194,45 @@ async function restore(id: number, name: string) {
       deleted. Restoring one puts it back in the Submissions queue for review.
     </p>
 
-    <div class="archive-filters">
-      <input
-        v-model="query"
-        type="search"
-        class="field-input archive-search"
-        placeholder="Search name, location or submitter"
-        aria-label="Search rejected submissions"
-      />
-      <div class="filter-row" role="group" aria-label="Filter by state">
-        <button
-          v-for="f in FILTERS"
-          :key="f.id"
-          type="button"
-          class="btn btn-sm"
-          :class="{ active: statusFilter === f.id }"
-          @click="statusFilter = f.id"
-        >
-          {{ f.label }}
-          <span class="filter-count">{{ countFor(f.id) }}</span>
-        </button>
-      </div>
-    </div>
+    <AdminListControls
+      v-if="entries?.length"
+      v-model:query="query"
+      v-model:sort-key="sortKey"
+      v-model:sort-dir="sortDir"
+      :sort-options="SORT_OPTIONS"
+      search-label="Search rejected"
+      id-prefix="rejected"
+    >
+      <template #below>
+        <div class="filter-row" role="group" aria-label="Filter by state">
+          <button
+            v-for="f in FILTERS"
+            :key="f.id"
+            type="button"
+            class="btn btn-sm"
+            :class="{ active: statusFilter === f.id }"
+            @click="statusFilter = f.id"
+          >
+            {{ f.label }}
+            <span class="filter-count">{{ countFor(f.id) }}</span>
+          </button>
+        </div>
+      </template>
+    </AdminListControls>
 
     <div v-if="!entries?.length" class="empty">
       Nothing has been rejected yet.
     </div>
-    <div v-else-if="!filtered.length" class="empty">
+    <div v-else-if="isEmptyFromSearch" class="empty">
+      No entries match “{{ query }}”.
+    </div>
+    <div v-else-if="!visible.length" class="empty">
       No entries match that filter.
     </div>
 
     <ul v-else class="simple-list">
       <li
-        v-for="e in filtered"
+        v-for="e in visible"
         :key="e.id"
         class="simple-row"
         :class="{ 'is-hidden': !e.restorable }"
@@ -230,22 +281,11 @@ async function restore(id: number, name: string) {
 </template>
 
 <style scoped>
-/* The filter strip is the archive's, which this list is a sibling of. */
-.archive-filters {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 12px;
-  margin-bottom: 12px;
-}
-
-.archive-search {
-  flex: 1 1 220px;
-  max-width: 320px;
-}
-
+/* The archive's filter strip, which this list is a sibling of: a qualifier
+   sitting under the search field rather than a second toolbar. */
 .filter-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
 }
 

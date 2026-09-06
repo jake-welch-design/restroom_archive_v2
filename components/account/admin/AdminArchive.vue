@@ -23,7 +23,7 @@ onMounted(() => refresh());
 const { refresh: refreshRemovalQueue } = useRemovalQueue();
 const action = useAdminAction();
 
-/* --- Filtering ------------------------------------------------------------ */
+/* --- Filtering, search and sort -------------------------------------------- */
 
 type StatusFilter = "all" | "published" | "hidden" | "removed";
 
@@ -37,22 +37,66 @@ const STATUS_FILTERS: { id: StatusFilter; label: string }[] = [
 // Published first, because a takedown is only ever aimed at a live entry and
 // the removed rows are here as a record.
 const statusFilter = ref<StatusFilter>("published");
-const query = ref("");
 
-const filtered = computed(() => {
-  const q = query.value.trim().toLowerCase();
-  return (entries.value ?? []).filter((e) => {
-    if (statusFilter.value !== "all" && e.status !== statusFilter.value)
-      return false;
-    if (!q) return true;
-    // Name, place and submitter are the three things an admin has to go on when
-    // they arrive here from a report or an email about one specific entry.
-    return (
-      e.name.toLowerCase().includes(q) ||
-      e.location.toLowerCase().includes(q) ||
-      (e.submitter?.username.toLowerCase().includes(q) ?? false)
-    );
-  });
+type SortKey = "name" | "location" | "isoDate" | "createdAt" | "submitter";
+
+const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: "name", label: "Name" },
+  { key: "location", label: "Location" },
+  { key: "isoDate", label: "Scan date" },
+  { key: "createdAt", label: "Date added" },
+  { key: "submitter", label: "Submitter" },
+];
+
+function submitterName(e: ArchiveEntry) {
+  return (
+    e.submitter?.displayName ||
+    e.submitter?.username ||
+    ""
+  ).toLowerCase();
+}
+
+// The status filter is applied before search and sort rather than inside them,
+// so the pill counts describe the whole archive while the list below describes
+// what the search has left of the selected pill.
+const byStatus = computed(() =>
+  (entries.value ?? []).filter(
+    (e) => statusFilter.value === "all" || e.status === statusFilter.value,
+  ),
+);
+
+const { query, sortKey, sortDir, visible, isEmptyFromSearch } = useListControls<
+  ArchiveEntry,
+  SortKey
+>({
+  source: byStatus,
+  // Name, place and submitter are the three things an admin has to go on when
+  // they arrive here from a report or an email about one specific entry.
+  searchFields: (e) => [
+    e.name,
+    e.location,
+    e.submitter?.username,
+    e.submitter?.displayName,
+  ],
+  defaultKey: "name",
+  defaultDir: "asc",
+  compare: (a, b, key) => {
+    switch (key) {
+      case "location":
+        return a.location.localeCompare(b.location);
+      case "isoDate":
+        return a.isoDate.localeCompare(b.isoDate) || a.id - b.id;
+      case "createdAt":
+        return compareStamped(a, b, a.createdAt, b.createdAt);
+      case "submitter":
+        return (
+          submitterName(a).localeCompare(submitterName(b)) ||
+          a.name.localeCompare(b.name)
+        );
+      default:
+        return a.name.localeCompare(b.name) || a.id - b.id;
+    }
+  },
 });
 
 function countFor(id: StatusFilter) {
@@ -105,37 +149,43 @@ function removalNote(e: ArchiveEntry) {
       {{ action.error }}
     </p>
 
-    <div class="archive-filters">
-      <input
-        v-model="query"
-        type="search"
-        class="field-input archive-search"
-        placeholder="Search name, location or submitter"
-        aria-label="Search the archive"
-      />
-      <div class="filter-row" role="group" aria-label="Filter by status">
-        <button
-          v-for="f in STATUS_FILTERS"
-          :key="f.id"
-          type="button"
-          class="btn btn-sm"
-          :class="{ active: statusFilter === f.id }"
-          @click="statusFilter = f.id"
-        >
-          {{ f.label }}
-          <span class="filter-count">{{ countFor(f.id) }}</span>
-        </button>
-      </div>
-    </div>
+    <AdminListControls
+      v-if="entries?.length"
+      v-model:query="query"
+      v-model:sort-key="sortKey"
+      v-model:sort-dir="sortDir"
+      :sort-options="SORT_OPTIONS"
+      search-label="Search the archive"
+      id-prefix="archive"
+    >
+      <template #below>
+        <div class="filter-row" role="group" aria-label="Filter by status">
+          <button
+            v-for="f in STATUS_FILTERS"
+            :key="f.id"
+            type="button"
+            class="btn btn-sm"
+            :class="{ active: statusFilter === f.id }"
+            @click="statusFilter = f.id"
+          >
+            {{ f.label }}
+            <span class="filter-count">{{ countFor(f.id) }}</span>
+          </button>
+        </div>
+      </template>
+    </AdminListControls>
 
     <div v-if="!entries?.length" class="empty">Nothing in the archive yet.</div>
-    <div v-else-if="!filtered.length" class="empty">
+    <div v-else-if="isEmptyFromSearch" class="empty">
+      No entries match “{{ query }}”.
+    </div>
+    <div v-else-if="!visible.length" class="empty">
       No entries match that filter.
     </div>
 
     <ul v-else class="simple-list">
       <li
-        v-for="e in filtered"
+        v-for="e in visible"
         :key="e.id"
         class="simple-row"
         :class="{ 'is-hidden': e.status !== 'published' }"
@@ -193,21 +243,11 @@ function removalNote(e: ArchiveEntry) {
 </template>
 
 <style scoped>
-.archive-filters {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 12px;
-  margin-bottom: 12px;
-}
-
-.archive-search {
-  flex: 1 1 220px;
-  max-width: 320px;
-}
-
+/* Sits in the control strip's `below` slot, where the accounts tally sits: a
+   qualifier on the search field above it rather than a second toolbar. */
 .filter-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
 }
 

@@ -55,11 +55,10 @@ function toggleOptions(id: number) {
  * The section's control bar, in the catalog's idiom: a search field and a sort
  * with a direction caret, sitting above the list rather than on it.
  *
- * Unlike the catalog, searching does not replace the sort. A fuzzy search that
- * reorders by relevance is right for browsing an archive; an admin looking up an
- * account is usually narrowing a list they still want ordered by whatever they
- * chose, so this is a plain substring match over the three ways an account is
- * named and the sort stays in force.
+ * The pattern started here and now lives in `useListControls` and
+ * `AdminListControls`, which every admin section uses. The parts that stay are
+ * the two this list does differently from the others: what a search matches,
+ * and how two accounts compare.
  */
 type SortKey =
   | "createdAt"
@@ -80,54 +79,44 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: "annotationCount", label: "Annotations" },
 ];
 
-const query = ref("");
-const sortKey = ref<SortKey>("createdAt");
-const sortDir = ref<"asc" | "desc">("asc");
-
 /** An account with no display name is listed under the handle it does have. */
 function sortName(a: AccountRow) {
   return (a.displayName || a.username).toLowerCase();
 }
 
-function compare(a: AccountRow, b: AccountRow) {
-  switch (sortKey.value) {
-    case "name":
-      return sortName(a).localeCompare(sortName(b));
-    case "username":
-      return a.username.localeCompare(b.username);
-    case "email":
-      return a.email.localeCompare(b.email);
-    case "type":
-      // Ties broken by name, because a type sort on its own leaves every
-      // account of one type in whatever order they happened to arrive in.
-      return (
-        typeRank(a) - typeRank(b) || sortName(a).localeCompare(sortName(b))
-      );
-    case "submissionCount":
-      return a.submissionCount - b.submissionCount;
-    case "annotationCount":
-      return a.annotationCount - b.annotationCount;
-    default:
-      // Sqlite datetimes sort correctly as strings. Ties broken by id so the
-      // order is stable: accounts created in the same second otherwise shuffle
-      // between refreshes.
-      return a.createdAt.localeCompare(b.createdAt) || a.id - b.id;
-  }
-}
-
-const visibleAccounts = computed(() => {
-  const q = query.value.trim().toLowerCase();
-  const list = (accounts.value ?? []).filter((a) => {
-    if (!q) return true;
-    return (
-      a.username.toLowerCase().includes(q) ||
-      a.email.toLowerCase().includes(q) ||
-      (a.displayName ?? "").toLowerCase().includes(q)
-    );
-  });
-
-  const dir = sortDir.value === "asc" ? 1 : -1;
-  return [...list].sort((a, b) => compare(a, b) * dir);
+const {
+  query,
+  sortKey,
+  sortDir,
+  visible: visibleAccounts,
+  isEmptyFromSearch,
+} = useListControls<AccountRow, SortKey>({
+  source: accounts,
+  searchFields: (a) => [a.username, a.email, a.displayName],
+  defaultKey: "createdAt",
+  defaultDir: "asc",
+  compare: (a, b, key) => {
+    switch (key) {
+      case "name":
+        return sortName(a).localeCompare(sortName(b));
+      case "username":
+        return a.username.localeCompare(b.username);
+      case "email":
+        return a.email.localeCompare(b.email);
+      case "type":
+        // Ties broken by name, because a type sort on its own leaves every
+        // account of one type in whatever order they happened to arrive in.
+        return (
+          typeRank(a) - typeRank(b) || sortName(a).localeCompare(sortName(b))
+        );
+      case "submissionCount":
+        return a.submissionCount - b.submissionCount;
+      case "annotationCount":
+        return a.annotationCount - b.annotationCount;
+      default:
+        return compareStamped(a, b, a.createdAt, b.createdAt);
+    }
+  },
 });
 
 /**
@@ -518,85 +507,25 @@ async function submitRename(a: AccountRow) {
       {{ annotationsError }}
     </p>
 
-    <div v-if="accounts?.length" class="account-controls">
-      <div class="controls-left">
-        <label class="search">
-          <button
-            v-if="query"
-            type="button"
-            class="search-icon clear"
-            aria-label="Clear search"
-            @click="query = ''"
-          >
-            <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true">
-              <path
-                d="M2 2 L10 10 M10 2 L2 10"
-                stroke="currentColor"
-                stroke-width="1.25"
-                fill="none"
-                stroke-linecap="round"
-              />
-            </svg>
-          </button>
-
-          <span v-else class="search-icon" aria-hidden="true">
-            <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true">
-              <circle
-                cx="5"
-                cy="5"
-                r="3.25"
-                stroke="currentColor"
-                stroke-width="1.25"
-                fill="none"
-              />
-              <path
-                d="M7.5 7.5 L10.5 10.5"
-                stroke="currentColor"
-                stroke-width="1.25"
-                stroke-linecap="round"
-              />
-            </svg>
-          </span>
-
-          <input
-            v-model="query"
-            type="search"
-            placeholder="Search accounts"
-            aria-label="Search accounts"
-          />
-        </label>
-
+    <AdminListControls
+      v-if="accounts?.length"
+      v-model:query="query"
+      v-model:sort-key="sortKey"
+      v-model:sort-dir="sortDir"
+      :sort-options="SORT_OPTIONS"
+      search-label="Search accounts"
+      id-prefix="accounts"
+    >
+      <template #below>
         <p class="account-tally">
           Annotators: {{ tally.Annotator }} · Archivists:
           {{ tally.Archivist }} · Admins: {{ tally.Admin }}
         </p>
-      </div>
-
-      <div class="sort-control">
-        <label class="sort-label" for="account-sort">Sort by</label>
-        <select id="account-sort" v-model="sortKey" class="sort-select">
-          <option v-for="opt in SORT_OPTIONS" :key="opt.key" :value="opt.key">
-            {{ opt.label }}
-          </option>
-        </select>
-        <button
-          type="button"
-          class="sort-dir"
-          :aria-label="
-            sortDir === 'asc' ? 'Sorted ascending' : 'Sorted descending'
-          "
-          :title="sortDir === 'asc' ? 'Ascending' : 'Descending'"
-          @click="sortDir = sortDir === 'asc' ? 'desc' : 'asc'"
-        >
-          <span class="sort-arrow" :class="{ desc: sortDir === 'desc' }">
-            ▲
-          </span>
-        </button>
-      </div>
-    </div>
+      </template>
+    </AdminListControls>
 
     <div v-if="!accounts?.length" class="empty">No accounts.</div>
-    <div v-else-if="!visibleAccounts.length" class="empty">
+    <div v-else-if="isEmptyFromSearch" class="empty">
       No accounts match “{{ query }}”.
     </div>
 
@@ -1027,126 +956,15 @@ async function submitRename(a: AccountRow) {
 
 <style scoped>
 /* --- Control bar ----------------------------------------------------------- */
-/* The catalog's controls strip, brought down to the account area's type scale:
-   an underlined search field and plain text controls with no boxes, so the row
-   reads as a set of labels rather than a toolbar competing with the sub-tabs
-   directly above it. 12px is the support step the sub-tabs use, which is what
-   keeps the two rows reading as one band. */
+/* The strip itself is AdminListControls. Only the tally is this section's, and
+   it sits in that component's `below` slot: a read-out, not a control, so the
+   micro step and the muted colour keep it from reading as another thing to
+   click. */
 
-.account-controls {
-  display: flex;
-  /* Top-aligned rather than centred: the tally hangs below the search field, and
-     centring would push the sort control down to straddle both lines instead of
-     sitting on the search's own line. */
-  align-items: flex-start;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 8px 20px;
-  padding-bottom: 12px;
-}
-
-.controls-left {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-/* A read-out, not a control: the micro step and the muted colour keep it from
-   reading as another thing to click. */
 .account-tally {
   margin: 0;
   font-size: 11px;
   color: #999;
-}
-
-.search {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  border-bottom: 1px solid #000;
-}
-
-.search input {
-  border: 0;
-  padding: 2px 0;
-  font: inherit;
-  font-size: 12px;
-  width: 150px;
-  background: transparent;
-  outline: none;
-}
-
-.search-icon {
-  display: inline-flex;
-  align-items: center;
-  color: #000;
-}
-
-.search-icon.clear {
-  background: transparent;
-  border: 0;
-  padding: 0;
-  cursor: pointer;
-}
-
-.sort-control {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-}
-
-.sort-label {
-  color: #666;
-}
-
-/* Stripped of the native chrome for the same reason the buttons are: this strip
-   is text, and a platform select box would be the only raised object on the
-   page. The menu it drops is still the native one. */
-.sort-select {
-  appearance: none;
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid #000;
-  border-radius: 0;
-  padding: 2px 0;
-  font: inherit;
-  font-size: 12px;
-  color: #000;
-  cursor: pointer;
-}
-
-.sort-dir {
-  display: inline-flex;
-  align-items: center;
-  background: none;
-  border: 0;
-  padding: 2px;
-  font: inherit;
-  color: #000;
-  cursor: pointer;
-}
-
-/* One caret that turns over, as in the catalog's grid sort: the direction is
-   the same fact either way, so it is one control rather than two arrows of
-   which one is always inert. */
-.sort-arrow {
-  display: inline-block;
-  font-size: 9px;
-  line-height: 1;
-  transition: transform 0.15s;
-}
-
-.sort-arrow.desc {
-  transform: rotate(180deg);
-}
-
-@media (hover: hover) {
-  .search-icon.clear:hover,
-  .sort-dir:hover,
-  .sort-select:hover {
-    color: #555;
-  }
 }
 
 /* --- Account rows ---------------------------------------------------------- */

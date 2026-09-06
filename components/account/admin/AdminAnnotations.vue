@@ -9,6 +9,8 @@
  * position it was written from, which the viewer uses to fly back to that exact
  * view, so destroying one loses more than its text.
  */
+import type { AdminAnnotation } from "~/types/account";
+
 const { data: annotations, refresh } = useAdminAnnotations();
 
 // This component mounts only when its section is selected, so mounting is
@@ -16,6 +18,49 @@ const { data: annotations, refresh } = useAdminAnnotations();
 onMounted(() => refresh());
 const { refresh: refreshReports } = useAnnotationReports();
 const action = useAdminAction();
+
+type SortKey = "createdAt" | "restroom" | "author" | "reports";
+
+const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: "createdAt", label: "Date written" },
+  { key: "restroom", label: "Restroom" },
+  { key: "author", label: "Author" },
+  { key: "reports", label: "Open reports" },
+];
+
+function authorName(a: AdminAnnotation) {
+  return (a.author?.displayName || a.author?.username || "").toLowerCase();
+}
+
+const { query, sortKey, sortDir, visible, isEmptyFromSearch } = useListControls<
+  AdminAnnotation,
+  SortKey
+>({
+  source: annotations,
+  searchFields: (a) => [
+    a.body,
+    a.restroom.name,
+    a.restroom.location,
+    a.author?.username,
+    a.author?.displayName,
+  ],
+  // Newest first: the whole list is a browse, and recent annotations are the
+  // ones an admin is most likely to have been told about.
+  defaultKey: "createdAt",
+  defaultDir: "desc",
+  compare: (a, b, key) => {
+    switch (key) {
+      case "restroom":
+        return a.restroom.name.localeCompare(b.restroom.name) || a.id - b.id;
+      case "author":
+        return authorName(a).localeCompare(authorName(b)) || a.id - b.id;
+      case "reports":
+        return a.openReportCount - b.openReportCount || a.id - b.id;
+      default:
+        return compareStamped(a, b, a.createdAt, b.createdAt);
+    }
+  },
+});
 
 function hide(id: number) {
   return action.run(`ann-hide-${id}`, `/api/admin/annotations/${id}/hide`, {
@@ -40,11 +85,24 @@ function unhide(id: number) {
       {{ action.error }}
     </p>
 
+    <AdminListControls
+      v-if="annotations?.length"
+      v-model:query="query"
+      v-model:sort-key="sortKey"
+      v-model:sort-dir="sortDir"
+      :sort-options="SORT_OPTIONS"
+      search-label="Search annotations"
+      id-prefix="annotations"
+    />
+
     <div v-if="!annotations?.length" class="empty">No annotations yet.</div>
+    <div v-else-if="isEmptyFromSearch" class="empty">
+      No annotations match “{{ query }}”.
+    </div>
 
     <ul v-else class="simple-list">
       <li
-        v-for="a in annotations"
+        v-for="a in visible"
         :key="a.id"
         class="simple-row"
         :class="{ 'is-hidden': a.hiddenAt }"

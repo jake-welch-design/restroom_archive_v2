@@ -1,7 +1,16 @@
 <script setup lang="ts">
-// Segmented control used as the second (and last) navigation level on the
-// account page. Sits under the underlined main tabs; `gapBefore` opens a wider
-// space before an item so a long row still reads as grouped.
+// Navigation levels two and three on the account page. `gapBefore` opens a
+// wider space before an item so a long row still reads as grouped.
+//
+// Two looks, because the Admin tab stacks two of these: a group row and the
+// sections inside the chosen group. Rendering both as the same segmented block
+// would leave nothing but position to say which one contains the other.
+//
+// - `segmented` (the default) is the bordered block that sits under the
+//   underlined main tabs.
+// - `plain` is the third level: text with an underline on the active item,
+//   which is the main tabs' own idiom one step quieter. It reads as subordinate
+//   to the segmented row above it rather than as a rival to it.
 export type SubTab = {
   id: string;
   label: string;
@@ -9,12 +18,20 @@ export type SubTab = {
   gapBefore?: boolean;
 };
 
-defineProps<{ tabs: SubTab[]; modelValue: string }>();
+withDefaults(
+  defineProps<{
+    tabs: SubTab[];
+    modelValue: string;
+    variant?: "segmented" | "plain";
+  }>(),
+  { variant: "segmented" },
+);
+
 defineEmits<{ (e: "update:modelValue", id: string): void }>();
 </script>
 
 <template>
-  <nav class="subtabs" role="tablist">
+  <nav class="subtabs" :class="`is-${variant}`" role="tablist">
     <template v-for="t in tabs" :key="t.id">
       <!-- Full-width zero-height flex item: the standard way to force a wrap at
            a chosen point. Only on narrow screens, where it turns `gapBefore`
@@ -89,10 +106,56 @@ defineEmits<{ (e: "update:modelValue", id: string): void }>();
   color: #000;
 }
 
+/* --- The plain variant ----------------------------------------------------- */
+/* Third level: no borders, no fill, an underline on the active item. Sits
+   directly under the segmented row it belongs to — the tighter top margin is
+   what makes the pair read as one nested control rather than two rows of
+   equals. */
+.subtabs.is-plain {
+  gap: 2px;
+  margin-top: -8px;
+  margin-bottom: 14px;
+}
+
+.is-plain .subtab-btn {
+  border: 0;
+  margin: 0;
+  padding: 4px 10px 3px;
+  border-bottom: 1px solid transparent;
+}
+
+.is-plain .subtab-btn:hover:not(.active) {
+  background: transparent;
+  color: #000;
+}
+
+.is-plain .subtab-btn.active {
+  background: transparent;
+  color: #000;
+  border-bottom-color: #000;
+}
+
+.is-plain .subtab-btn.active .count {
+  background: #000;
+  color: #fff;
+}
+
+/* The first item lines up with the list below rather than sitting a pad-width
+   in, since there is no longer a border to hold the row's left edge. */
+.is-plain .subtab-btn:first-of-type {
+  padding-left: 0;
+}
+
 /* Same panel-width step as the account page these sit in. */
 @container panel (max-width: 560px) {
   .subtab-btn {
     padding: 5px 10px;
+  }
+  .is-plain .subtab-btn {
+    padding: 4px 8px 3px;
+  }
+  .is-plain .subtab-btn:first-of-type {
+    padding-left: 0;
   }
 }
 
