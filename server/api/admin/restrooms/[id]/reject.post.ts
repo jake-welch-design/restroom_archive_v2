@@ -4,7 +4,6 @@ import { useDb, schema } from "~~/server/utils/db";
 import { requireRole } from "~~/server/utils/requireRole";
 import { recordAdminAction } from "~~/server/utils/auditLog";
 import { getRouterId } from "~~/server/utils/routeParams";
-import { deleteRestroomBlobs } from "~~/server/utils/r2";
 import { now } from "~~/server/utils/sqlTime";
 import { readOptionalBody } from "~~/server/utils/validation";
 
@@ -12,6 +11,18 @@ const Body = z.object({
   message: z.string().trim().max(500).optional(),
 });
 
+/**
+ * Turns a submission down, reversibly for a while.
+ *
+ * The scan is kept rather than deleted here, and `rejected_at` starts the clock
+ * the sweep in `server/utils/purgeRejections.ts` reads. Rejection used to take
+ * the blobs on the spot, which made a misclick unrecoverable: the row survived
+ * but pointed at nothing, so there was no honest way to put the entry back.
+ *
+ * `scan_purged_at` is deliberately not reset. It is only ever set on an entry
+ * whose scan has already been deleted, and clearing it would advertise a
+ * restore that would produce an entry with no model behind it.
+ */
 export default defineEventHandler(async (event) => {
   requireRole(event, "admin");
 
@@ -27,22 +38,15 @@ export default defineEventHandler(async (event) => {
     .set({
       status: "rejected",
       rejectionMessage: message || null,
+      rejectedAt: now(),
       updatedAt: now(),
     })
     .where(eq(schema.restrooms.id, id))
-    .returning({
-      id: schema.restrooms.id,
-      file: schema.restrooms.file,
-      thumbKey: schema.restrooms.thumbKey,
-    })
+    .returning({ id: schema.restrooms.id })
     .get();
 
   if (!row)
     throw createError({ statusCode: 404, statusMessage: "Restroom not found" });
-
-  // A rejected submission is not coming back, so its blobs would otherwise
-  // sit in R2 unreferenced forever.
-  await deleteRestroomBlobs(event, row);
 
   await recordAdminAction(
     event,

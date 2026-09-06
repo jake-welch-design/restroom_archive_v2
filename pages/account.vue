@@ -194,6 +194,7 @@ type AdminSection =
   | "removals"
   | "accounts"
   | "archive"
+  | "rejected"
   | "annotations"
   | "audit";
 type SubmissionsSection = "new" | "published" | "pending";
@@ -219,6 +220,7 @@ const ADMIN_SECTIONS: AdminSection[] = [
   "removals",
   "accounts",
   "archive",
+  "rejected",
   "annotations",
   "audit",
 ];
@@ -250,6 +252,10 @@ const adminSubTabs = computed<SubTab[]>(() => [
   },
   { id: "accounts", label: "Accounts", gapBefore: true },
   { id: "archive", label: "Archive" },
+  // No count, despite the time limit on restoring one. A badge means "these are
+  // waiting on you", and a rejection expiring is the normal outcome rather than
+  // a backlog item; the countdown lives inside the section instead.
+  { id: "rejected", label: "Rejected" },
   { id: "annotations", label: "Annotations" },
   { id: "audit", label: "Audit" },
 ]);
@@ -447,6 +453,7 @@ applySectionFromQuery();
         />
         <AdminAccounts v-else-if="adminSection === 'accounts'" />
         <AdminArchive v-else-if="adminSection === 'archive'" />
+        <AdminRejected v-else-if="adminSection === 'rejected'" />
         <AdminAnnotations v-else-if="adminSection === 'annotations'" />
         <AdminAuditLog v-else-if="adminSection === 'audit'" />
       </div>

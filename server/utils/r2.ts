@@ -33,13 +33,27 @@ export function useR2(event: H3Event, binding: R2BindingName): R2Bucket {
 }
 
 /**
+ * Whether both blob buckets are actually bound.
+ *
+ * For callers that record having deleted something: a local run without the
+ * Cloudflare bindings turns {@link deleteRestroomBlobs} into a silent no-op, so
+ * anything that writes "purged" to the database afterwards has to check first
+ * rather than mark blobs gone that are still sitting in R2.
+ */
+export function hasBlobBindings(event: H3Event): boolean {
+  const { MODELS, THUMBS } = buckets(event);
+  return Boolean(MODELS && THUMBS);
+}
+
+/**
  * Removes a restroom's stored scan and thumbnail, best effort.
  *
- * Called on the three paths that retire an entry: an admin rejecting a pending
- * submission, an admin honouring a removal request, and a submitter dismissing
- * their own. All three want the blobs gone so storage does not accumulate
- * orphans, and none of them should fail because a blob was already missing or
- * because the binding is absent in a local run.
+ * Called on the paths that retire an entry: an admin honouring a removal
+ * request, a submitter dismissing their own, and the sweep in
+ * `purgeRejections.ts` clearing out rejections whose grace period has run out.
+ * All of them want the blobs gone so storage does not accumulate orphans, and
+ * none of them should fail because a blob was already missing or because the
+ * binding is absent in a local run.
  *
  * Resolves once every deletion has settled, successfully or otherwise. It never
  * rejects, so callers can await it without a guard.

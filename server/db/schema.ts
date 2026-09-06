@@ -68,6 +68,17 @@ export const restrooms = sqliteTable(
     // entry down. Only ever set on an admin-initiated takedown.
     removalMessage: text("removal_message"),
     rejectionMessage: text("rejection_message"),
+    // When the entry was rejected, and the clock both the admin countdown and
+    // the purge sweep read. Kept separate from `updated_at` because a ban, an
+    // unban, or any other write to the row moves that column and would drag the
+    // grace period with it. Cleared when a rejection is reversed.
+    rejectedAt: text("rejected_at"),
+    // When the sweep deleted this entry's blobs. This, rather than the clock,
+    // is what makes a rejection final: while it is NULL the scan is still in
+    // R2 and the rejection can be undone. NULL alongside a NULL `rejected_at`
+    // means an entry rejected before the grace period existed, whose scan went
+    // at rejection time.
+    scanPurgedAt: text("scan_purged_at"),
     createdAt: text("created_at")
       .notNull()
       .default(sql`(datetime('now'))`),
@@ -79,6 +90,7 @@ export const restrooms = sqliteTable(
     slugIdx: uniqueIndex("restrooms_slug_unique").on(t.slug),
     isoDateIdx: index("idx_restrooms_iso_date").on(t.isoDate),
     statusIdx: index("idx_restrooms_status").on(t.status),
+    rejectedAtIdx: index("idx_restrooms_rejected_at").on(t.rejectedAt),
   }),
 );
 

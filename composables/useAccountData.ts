@@ -8,6 +8,7 @@ import type {
   MySubmission,
   PendingRestroom,
   PendingUser,
+  RejectedSubmission,
   RemovalRequest,
 } from "~/types/account";
 
@@ -92,6 +93,13 @@ export function useAdminArchive() {
   return privateList<ArchiveEntry>(
     "admin-archive",
     "/api/admin/restrooms/archive",
+  );
+}
+
+export function useAdminRejected() {
+  return privateList<RejectedSubmission>(
+    "admin-rejected",
+    "/api/admin/restrooms/rejected",
   );
 }
 

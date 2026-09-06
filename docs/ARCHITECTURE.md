@@ -328,8 +328,8 @@ Six tables in `server/db/schema.ts`.
       ┌───────────┴───────────┐
       │ (admin)               │ (archivist)
       ▼                       ▼
-  published ◄───publish─── pending
-      │                       │
+  published ◄───publish─── pending ◄──unreject──┐
+      │                       │                 │
       │                       └──reject──► rejected
       │
       ├──ban submitter──► hidden ──lift ban──► back to the previous status
@@ -357,9 +357,42 @@ unreviewed entry into the archive, and a `removed` one back as a listing whose
 blobs are gone. Only the ban writes `pre_ban_status`, so an entry an admin
 rejected or removed on its own terms is left where the admin put it.
 
-`rejected` and `removed` both delete the R2 blobs, through
-`deleteRestroomBlobs`. The database row survives so the submitter can still see
-what happened to it.
+`removed` deletes the R2 blobs immediately, through `deleteRestroomBlobs`, as
+does a submitter dismissing their own entry. The database row survives so the
+submitter can still see what happened to it.
+
+### The rejection grace period
+
+`rejected` does **not** delete the blobs. Rejection sets `restrooms.rejected_at`
+and leaves the scan in R2 for `REJECTION_GRACE_DAYS` (30, in
+`shared/utils/rejection.ts`), during which an admin can undo it from the Admin
+tab's Rejected section. `unreject` returns the entry to `pending` rather than to
+`published`: the pending queue is the only thing that previews a scan, so the
+re-review happens on the path that already exists.
+
+Two columns rather than one, and neither is `updated_at`:
+
+- **`rejected_at`** is the clock. `updated_at` could not be it, because a ban, an
+  unban, or any other write to the row moves that column and would drag the
+  deadline with it.
+- **`scan_purged_at`** is what actually makes a rejection final. The elapsed
+  time is advisory — it drives the countdown in the interface — but the guard on
+  `unreject` reads `scan_purged_at`, so the interface can never offer a restore
+  that would produce an entry pointing at a deleted model.
+
+Both NULL means an entry rejected before this existed, whose scan went at
+rejection time. That reads correctly as "not restorable" with no backfill.
+
+The purge is a sweep in `server/utils/purgeRejections.ts`, hung off
+`GET /api/admin/restrooms` and `GET /api/admin/restrooms/rejected` rather than a
+schedule, because the application is deployed to Cloudflare Pages and Pages has
+no cron triggers. Same idea as the rate limiter's cleanup — expiry rides along
+on traffic — but deterministic rather than probabilistic, and attached to the
+endpoint that backs a tab badge, so it runs whenever an admin opens their
+account page. It is bounded per request, it never deletes the row, and it keys
+on `rejected_at` across every status rather than on `status = 'rejected'`:
+a banned submitter's entries all sit at `hidden`, and a status filter would let
+those keep their blobs for as long as the ban lasted.
 
 ### Annotation moderation
 

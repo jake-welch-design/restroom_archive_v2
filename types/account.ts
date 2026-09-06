@@ -132,6 +132,28 @@ export interface ArchiveEntry {
   submitter: AdminUserRef | null;
 }
 
+/** GET /api/admin/restrooms/rejected: submissions that were turned down. */
+export interface RejectedSubmission {
+  id: number;
+  slug: string;
+  name: string;
+  location: string;
+  date: string;
+  isoDate: string;
+  rejectionMessage: string | null;
+  /**
+   * When the rejection happened, and what the countdown reads. Null on entries
+   * rejected before the grace period existed, whose scans went immediately.
+   */
+  rejectedAt: string | null;
+  /** When the sweep deleted the scan. Null while it is still there. */
+  scanPurgedAt: string | null;
+  /** Whether the scan is still in R2, so the rejection can be undone. */
+  restorable: boolean;
+  createdAt: string;
+  submitter: AdminUserRef | null;
+}
+
 /** GET /api/admin/users: every account, for moderation. */
 export interface AccountRow {
   id: number;

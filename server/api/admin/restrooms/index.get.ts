@@ -2,9 +2,17 @@ import { eq, asc } from "drizzle-orm";
 import { useDb, schema } from "~~/server/utils/db";
 import { requireRole } from "~~/server/utils/requireRole";
 import { parseDescriptors } from "~~/server/utils/descriptors";
+import { purgeExpiredRejectionsQuietly } from "~~/server/utils/purgeRejections";
 
 export default defineEventHandler(async (event) => {
   requireRole(event, "admin");
+
+  // Rides along here as well as on the rejected list, because Pages has no cron
+  // and this is the endpoint an admin hits most: it backs a tab badge, so it
+  // loads whenever an admin opens their account page. Expiry therefore happens
+  // on ordinary traffic instead of waiting for someone to open the rejected
+  // section, which may be never.
+  await purgeExpiredRejectionsQuietly(event);
 
   const db = useDb(event);
 
