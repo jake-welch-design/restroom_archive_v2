@@ -30,6 +30,25 @@ const NTFY_URL = "https://ntfy.sh";
 const TIMEOUT_MS = 5000;
 
 /**
+ * Optional ntfy access token, sent as a bearer credential when set.
+ *
+ * Not about permission -- a public topic needs none -- but about which bucket
+ * the rate limit is counted against. ntfy identifies a "visitor" by source IP,
+ * and a Cloudflare Worker's outbound requests leave from Cloudflare's shared
+ * egress pool, so an anonymous publish from production is metered against an IP
+ * shared with every other tenant in that colo. That quota is routinely already
+ * spent by strangers, which is a 429 on the first message of the day with no
+ * way to earn it back. Authenticating attaches the publish to an account, whose
+ * tier limits apply instead of the shared IP's.
+ *
+ * Left empty in local dev, where the request comes from the machine's own IP
+ * and has its own quota.
+ */
+function ntfyToken(): string {
+  return useRuntimeConfig().ntfyToken || "";
+}
+
+/**
  * ntfy's own topic rule. Enforced here rather than only at the edge of the API
  * so a malformed topic cannot be stored and then quietly fail on every send.
  */
@@ -88,9 +107,13 @@ export async function publishToNtfy(
   }
 
   try {
+    const token = ntfyToken();
     const res = await fetch(NTFY_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify({
         topic,
         title: msg.title,
@@ -106,6 +129,20 @@ export async function publishToNtfy(
       // and is never logged.
       const detail = (await res.text().catch(() => "")).slice(0, 200);
       console.error("ntfy publish failed", res.status, detail);
+      // 429 is worth naming, because the obvious reading of it is wrong: it
+      // rarely means this archive sent too much. Anonymous publishes are
+      // metered per source IP, and in production that IP belongs to
+      // Cloudflare's shared egress pool, so the quota is usually spent by
+      // other tenants before the first message of the day.
+      if (res.status === 429 && !ntfyToken()) {
+        return {
+          ok: false,
+          reason:
+            "ntfy rejected the message: the daily quota for this server's " +
+            "shared outbound IP is used up. Set an ntfy access token " +
+            "(NUXT_NTFY_TOKEN) so sends count against an account instead.",
+        };
+      }
       return { ok: false, reason: `ntfy returned ${res.status}. ${detail}` };
     }
     return { ok: true };

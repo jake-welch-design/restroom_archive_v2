@@ -16,7 +16,30 @@ import { publishToNtfy } from "~~/server/utils/notify";
  */
 export default defineEventHandler(async (event) => {
   const user = requireRole(event, "admin");
-  await rateLimitByUser(event, "notify-test", { max: 10, windowSec: 3600 });
+
+  // Deliberately loose for a button whose whole purpose is to be pressed
+  // repeatedly while getting the setup right. It still bounds outbound sends,
+  // but the first attempt at configuring notifications should not run out of
+  // budget halfway through -- especially since a failed send counts too, so
+  // the attempts that deliver nothing are exactly the ones being metered.
+  //
+  // The window is a fixed clock hour rather than a rolling one, so spacing
+  // presses out does not earn budget back. The message says so, because
+  // "Too many requests" invites the reasonable but wrong conclusion that
+  // waiting a minute between presses would have helped.
+  try {
+    await rateLimitByUser(event, "notify-test", { max: 30, windowSec: 3600 });
+  } catch {
+    throw createError({
+      statusCode: 429,
+      statusMessage: "Too many test notifications",
+      data: {
+        message:
+          "Test sends are capped at 30 an hour, and failed attempts count. " +
+          "The cap clears at the top of the hour.",
+      },
+    });
+  }
 
   const db = useDb(event);
   const row = await db
