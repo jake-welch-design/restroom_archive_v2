@@ -6,8 +6,15 @@ import { serializeDescriptors } from "~~/server/utils/descriptors";
 import { rateLimitByUser } from "~~/server/utils/rateLimit";
 import { useR2 } from "~~/server/utils/r2";
 import { notifyAdmins } from "~~/server/utils/notify";
+import { publicUrls } from "~~/server/utils/urls";
 
 const MAX_GLB_BYTES = 50 * 1024 * 1024; // 50 MB
+
+// Where a notification about a new submission sends the admin who taps it.
+// The account page reads tab, group and section off the query string, so this
+// opens straight onto the pending queue rather than the remembered position.
+const PENDING_QUEUE_PATH =
+  "/account?tab=admin&group=submissions&section=pending";
 
 // GLB binary format starts with "glTF" magic (0x46546C67 little-endian).
 function isGlb(buf: Buffer): boolean {
@@ -166,14 +173,19 @@ export default defineEventHandler(async (event) => {
   // failures, so a notification that does not send cannot lose a submission
   // that did.
   if (row.status === "pending") {
-    const site = useRuntimeConfig().public.siteUrl || "";
+    // `publicUrls` falls back to the request origin, so the tap target is a
+    // usable absolute URL in dev as well as production -- the previous
+    // `siteUrl || ""` dropped the link entirely whenever the var was unset.
+    const { site } = publicUrls(event);
+    // `click` is the only link a push notification has: it makes the whole
+    // notification the tap target, so the queue link cannot be attached to
+    // just the name and location. The username goes in the title, which is
+    // the line a phone shows in bold and never truncates first.
     await notifyAdmins(event, {
-      title: "New submission",
-      message: `${name} — ${location}\nfrom @${user.username}`,
+      title: `New submission from @${user.username}`,
+      message: `${name}\n${location}`,
       tags: ["toilet"],
-      click: site
-        ? `${site}/account?tab=admin&group=submissions&section=pending`
-        : undefined,
+      click: `${site}${PENDING_QUEUE_PATH}`,
     });
   }
 
