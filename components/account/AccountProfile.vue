@@ -133,6 +133,114 @@ async function savePassword() {
   passwordSaved.value = true;
 }
 
+/* --- Admin notifications -------------------------------------------------- */
+
+/**
+ * Admin-only, and opt-in per account: promoting someone to admin subscribes
+ * them to nothing. The server checks the same thing on every send, so this row
+ * is the control, not the enforcement.
+ *
+ * Delivery is ntfy: the admin picks a topic name, subscribes to it in the ntfy
+ * app, and puts the same name here. Fetched through `$fetch` in a watcher
+ * rather than `useFetch`, because the route 403s for non-admins and the
+ * component mounts for everyone -- there is nothing to request until the
+ * session resolves and says otherwise.
+ */
+interface NotifySettings {
+  enabled: boolean;
+  hasTopic: boolean;
+  topicHint: string | null;
+}
+
+const notify = ref<NotifySettings | null>(null);
+const editingNotify = ref(false);
+const notifyEnabledDraft = ref(false);
+const notifyTopicDraft = ref("");
+const notifyTested = ref("");
+const notifyAction = useAsyncAction("Could not save notification settings.");
+const notifyTestAction = useAsyncAction("Could not send a test notification.");
+
+watch(
+  isAdmin,
+  async (admin) => {
+    if (!admin) return;
+    try {
+      notify.value = await $fetch<NotifySettings>("/api/me/notifications");
+    } catch {
+      // A settings row that cannot load its own state is not worth an error
+      // banner on the Profile tab; it simply stays closed.
+    }
+  },
+  { immediate: true },
+);
+
+const notifyStatus = computed(() => {
+  if (!notify.value) return "";
+  if (notify.value.enabled) return `On · ${notify.value.topicHint}`;
+  return notify.value.hasTopic ? "Off" : "Not set up";
+});
+
+function startEditNotify() {
+  notifyEnabledDraft.value = notify.value?.enabled ?? false;
+  // Never seeded with the stored topic: the server returns it masked, because
+  // knowing a topic is all it takes to publish to one.
+  notifyTopicDraft.value = "";
+  notifyTested.value = "";
+  notifyAction.reset();
+  notifyTestAction.reset();
+  editingNotify.value = true;
+}
+
+async function saveNotify() {
+  const typed = notifyTopicDraft.value.trim();
+  if (notifyEnabledDraft.value && !typed && !notify.value?.hasTopic) {
+    notifyAction.fail("Enter an ntfy topic first.");
+    return;
+  }
+
+  const ok = await notifyAction.run(async () => {
+    await $fetch("/api/me/notifications", {
+      method: "PATCH",
+      // Omitted when blank, which keeps the stored topic rather than clearing
+      // it — the field is empty on open, so blank means "unchanged".
+      body: {
+        enabled: notifyEnabledDraft.value,
+        ...(typed ? { topic: typed } : {}),
+      },
+    });
+    notify.value = await $fetch<NotifySettings>("/api/me/notifications");
+  });
+  if (ok) editingNotify.value = false;
+}
+
+async function clearNotifyTopic() {
+  const ok = await notifyAction.run(async () => {
+    await $fetch("/api/me/notifications", {
+      method: "PATCH",
+      body: { enabled: false, topic: "" },
+    });
+    notify.value = await $fetch<NotifySettings>("/api/me/notifications");
+  });
+  if (ok) {
+    notifyEnabledDraft.value = false;
+    notifyTopicDraft.value = "";
+    notifyTested.value = "";
+  }
+}
+
+/**
+ * A mistyped topic fails exactly like a working one: nothing arrives. So the
+ * form can send a real notification through the stored topic and say whether
+ * ntfy took it.
+ */
+async function sendTestNotify() {
+  notifyTested.value = "";
+  const ok = await notifyTestAction.run(() =>
+    $fetch("/api/me/notifications/test", { method: "POST" }),
+  );
+  if (ok) notifyTested.value = "Sent — check your phone.";
+}
+
 /* --- Delete account ------------------------------------------------------ */
 
 const deleting = ref(false);
@@ -363,6 +471,105 @@ async function confirmDelete() {
       </form>
     </div>
 
+    <!-- Admin-only, and off until the box below is checked. Nobody is enrolled
+         by being promoted. -->
+    <div v-if="isAdmin" class="settings-row">
+      <span class="settings-label">Alerts</span>
+
+      <template v-if="!editingNotify">
+        <span class="settings-value">
+          <template v-if="notify">{{ notifyStatus }}</template>
+          <span v-else class="dim">…</span>
+        </span>
+        <button
+          type="button"
+          class="btn settings-change"
+          @click="startEditNotify"
+        >
+          Change
+        </button>
+      </template>
+
+      <form v-else class="settings-edit" @submit.prevent="saveNotify">
+        <label class="notify-check">
+          <input v-model="notifyEnabledDraft" type="checkbox" />
+          <span>Receive Admin Notifications</span>
+        </label>
+        <p class="notify-hint">
+          A push notification when a new submission reaches the pending queue.
+          Delivered through
+          <a href="https://ntfy.sh" target="_blank" rel="noopener">ntfy</a>:
+          install the app, subscribe to a topic name only you know, then enter
+          the same name here.
+        </p>
+
+        <label class="field">
+          <span class="field-label">ntfy topic</span>
+          <input
+            v-model="notifyTopicDraft"
+            type="text"
+            autocomplete="off"
+            spellcheck="false"
+            maxlength="64"
+            class="field-input"
+            :placeholder="
+              notify?.hasTopic
+                ? 'Leave blank to keep current'
+                : 'my-secret-topic'
+            "
+          />
+          <span class="field-hint">
+            Letters, numbers, dashes and underscores. Anyone who knows the topic
+            can send to it, so pick something unguessable.
+          </span>
+        </label>
+
+        <p v-if="notifyAction.error" class="form-error">
+          {{ notifyAction.error }}
+        </p>
+        <p v-if="notifyTestAction.error" class="form-error">
+          {{ notifyTestAction.error }}
+        </p>
+        <p v-if="notifyTested" class="settings-saved">{{ notifyTested }}</p>
+
+        <div class="settings-edit-actions">
+          <button
+            type="submit"
+            class="primary-btn btn-sm"
+            :disabled="notifyAction.loading"
+          >
+            {{ notifyAction.loading ? "Saving…" : "Save" }}
+          </button>
+          <button
+            v-if="notify?.hasTopic"
+            type="button"
+            class="link-btn"
+            :disabled="notifyTestAction.loading"
+            @click="sendTestNotify"
+          >
+            {{ notifyTestAction.loading ? "Sending…" : "Send test" }}
+          </button>
+          <button
+            v-if="notify?.hasTopic"
+            type="button"
+            class="link-btn"
+            :disabled="notifyAction.loading"
+            @click="clearNotifyTopic"
+          >
+            Clear topic
+          </button>
+          <button
+            type="button"
+            class="link-btn"
+            :disabled="notifyAction.loading"
+            @click="editingNotify = false"
+          >
+            Cancel
+          </button>
+        </div>
+      </form>
+    </div>
+
     <!-- Self-service and immediate: no admin approval step sits behind this,
          so the label must not imply one. Hidden from admins, whose accounts
          the API refuses to delete through this route anyway. -->
@@ -442,6 +649,30 @@ async function confirmDelete() {
 .settings-saved {
   font-size: 11px;
   color: #666;
+}
+
+.notify-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #000;
+  cursor: pointer;
+}
+
+.notify-check input {
+  margin: 0;
+}
+
+.notify-hint {
+  margin: 0 0 4px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #666;
+}
+
+.notify-hint a {
+  color: #000;
 }
 
 .danger-warning {

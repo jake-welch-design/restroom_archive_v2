@@ -5,6 +5,7 @@ import { requireApproved } from "~~/server/utils/requireApproved";
 import { serializeDescriptors } from "~~/server/utils/descriptors";
 import { rateLimitByUser } from "~~/server/utils/rateLimit";
 import { useR2 } from "~~/server/utils/r2";
+import { notifyAdmins } from "~~/server/utils/notify";
 
 const MAX_GLB_BYTES = 50 * 1024 * 1024; // 50 MB
 
@@ -158,6 +159,23 @@ export default defineEventHandler(async (event) => {
     })
     .returning()
     .get();
+
+  // Only entries that actually land in the queue are worth a notification. An
+  // admin's own submission publishes straight away, so there is nothing to go
+  // and review. Best-effort by design: `notifyAdmins` swallows its own
+  // failures, so a notification that does not send cannot lose a submission
+  // that did.
+  if (row.status === "pending") {
+    const site = useRuntimeConfig().public.siteUrl || "";
+    await notifyAdmins(event, {
+      title: "New submission",
+      message: `${name} — ${location}\nfrom @${user.username}`,
+      tags: ["toilet"],
+      click: site
+        ? `${site}/account?tab=admin&group=submissions&section=pending`
+        : undefined,
+    });
+  }
 
   return { ok: true, slug: row.slug };
 });

@@ -24,6 +24,14 @@ export const users = sqliteTable(
     adminMessage: text("admin_message"),
     adminMessageAt: text("admin_message_at"),
     emailVerifiedAt: text("email_verified_at"),
+    // Where this admin's queue notifications go, and whether they want them.
+    // Deliberately two columns: the topic is the destination the admin set up
+    // on their phone, `admin_notify_at` is the opt-in. Turning notifications
+    // off clears only the latter, so switching them back on does not mean
+    // re-entering the topic. Both NULL on every account by default -- no admin
+    // is enrolled without checking the box themselves.
+    ntfyTopic: text("ntfy_topic"),
+    adminNotifyAt: text("admin_notify_at"),
     createdAt: text("created_at")
       .notNull()
       .default(sql`(datetime('now'))`),
