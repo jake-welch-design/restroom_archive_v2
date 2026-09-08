@@ -149,6 +149,20 @@ export function useThreeScene(
     fov: 80,
   };
 
+  // POV is a first-person look-around: yaw, then pitch, never any roll. Orbit
+  // leaves the camera on a lookAt orientation whose Euler carries a non-zero z,
+  // so writing only x and y on the way into POV keeps that roll and tilts the
+  // horizon until setMode resets the whole Euler. Every POV orientation write
+  // goes through here instead, which rewrites all three angles and pins z to 0.
+  function applyPovRotation() {
+    if (!camera) return;
+    povState.rotationX = Math.max(
+      -Math.PI / 2,
+      Math.min(Math.PI / 2, povState.rotationX),
+    );
+    camera.rotation.set(povState.rotationX, povState.rotationY, 0, "YXZ");
+  }
+
   // Track pointer movement to distinguish click from drag
   let pointerDownX = 0;
   let pointerDownY = 0;
@@ -178,6 +192,10 @@ export function useThreeScene(
     scene = new THREE.Scene();
 
     camera = new THREE.PerspectiveCamera(70, 1, 0.01, 1000);
+    // Yaw-then-pitch order, matching how POV drives the camera. Fixed once here
+    // so orbit's lookAt() decomposes into the same convention and POV never has
+    // to reinterpret an XYZ Euler as YXZ.
+    camera.rotation.order = "YXZ";
     camera.position.set(0, 0, 4);
 
     controls = new OrbitControls(camera, canvas);
@@ -323,7 +341,7 @@ export function useThreeScene(
           camera.position.set(0, 0.2, 0);
           povState.rotationX = 0;
           povState.rotationY = 0;
-          camera.rotation.set(0, 0, 0);
+          applyPovRotation();
         } else {
           camera.position.set(distance * 0.7, distance * 0.5, distance * 0.8);
           controls.target.set(0, 0, 0);
@@ -361,7 +379,7 @@ export function useThreeScene(
       camera.position.set(0, 0.2, 0);
       povState.rotationX = 0;
       povState.rotationY = 0;
-      camera.rotation.set(0, 0, 0);
+      applyPovRotation();
     }
     camera.updateProjectionMatrix();
   }
@@ -476,6 +494,9 @@ export function useThreeScene(
         camera.position.set(0, 0.2, 0);
         povState.rotationX = snapshot.rotationX ?? 0;
         povState.rotationY = snapshot.rotationY ?? 0;
+        // Drop orbit's orientation now rather than carrying its roll into the
+        // tween's first frame.
+        applyPovRotation();
       }
     }
 
@@ -537,9 +558,7 @@ export function useThreeScene(
       if (snapshot.cameraMode === "pov") {
         povState.rotationX = startRotX + (targetRotX - startRotX) * e;
         povState.rotationY = startRotY + (targetRotY - startRotY) * e;
-        camera.rotation.order = "YXZ";
-        camera.rotation.y = povState.rotationY;
-        camera.rotation.x = povState.rotationX;
+        applyPovRotation();
       } else if (controls) {
         controls.target.lerpVectors(startTarget, targetTarget, e);
         camera.lookAt(controls.target);
@@ -671,13 +690,7 @@ export function useThreeScene(
     const dy = e.clientY - povState.lastY;
     povState.rotationY += dx * 0.005;
     povState.rotationX += dy * 0.005;
-    povState.rotationX = Math.max(
-      -Math.PI / 2,
-      Math.min(Math.PI / 2, povState.rotationX),
-    );
-    camera.rotation.order = "YXZ";
-    camera.rotation.y = povState.rotationY;
-    camera.rotation.x = povState.rotationX;
+    applyPovRotation();
     povState.lastX = e.clientX;
     povState.lastY = e.clientY;
   }
