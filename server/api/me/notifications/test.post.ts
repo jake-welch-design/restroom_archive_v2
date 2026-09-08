@@ -55,7 +55,7 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const sent = await publishToNtfy(row.ntfyTopic, {
+  const sent = await publishToNtfy(event, row.ntfyTopic, {
     title: "Restroom Archive",
     message: "Notifications are working. This is a test.",
     tags: ["white_check_mark"],

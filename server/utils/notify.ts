@@ -43,9 +43,16 @@ const TIMEOUT_MS = 5000;
  *
  * Left empty in local dev, where the request comes from the machine's own IP
  * and has its own quota.
+ *
+ * The event is required, not optional. On Cloudflare the environment is bound
+ * per request rather than living in a process-wide `process.env`, so
+ * `useRuntimeConfig()` with no event can resolve to the build-time defaults --
+ * where this is the empty string. That failure is invisible: the publish still
+ * goes out, just anonymously, and is then metered against the shared egress IP
+ * exactly as if no token had ever been configured.
  */
-function ntfyToken(): string {
-  return useRuntimeConfig().ntfyToken || "";
+function ntfyToken(event: H3Event): string {
+  return useRuntimeConfig(event).ntfyToken || "";
 }
 
 /**
@@ -93,6 +100,7 @@ export type PublishResult = { ok: true } | { ok: false; reason: string };
 
 /** Publishes one message to one topic. Never throws. */
 export async function publishToNtfy(
+  event: H3Event,
   topic: string,
   msg: NtfyMessage,
 ): Promise<PublishResult> {
@@ -107,7 +115,7 @@ export async function publishToNtfy(
   }
 
   try {
-    const token = ntfyToken();
+    const token = ntfyToken(event);
     const res = await fetch(NTFY_URL, {
       method: "POST",
       headers: {
@@ -128,13 +136,22 @@ export async function publishToNtfy(
       // ntfy's own error text are safe to surface. The topic itself is not,
       // and is never logged.
       const detail = (await res.text().catch(() => "")).slice(0, 200);
-      console.error("ntfy publish failed", res.status, detail);
+      // Whether a token was actually attached is the one thing a 429 cannot be
+      // read without: the same "daily quota reached" body comes back for a
+      // quota spent by this account and for one spent by strangers sharing
+      // Cloudflare's egress IP. Logged as a boolean -- never the token.
+      console.error(
+        "ntfy publish failed",
+        res.status,
+        `authenticated=${token ? "yes" : "no"}`,
+        detail,
+      );
       // 429 is worth naming, because the obvious reading of it is wrong: it
       // rarely means this archive sent too much. Anonymous publishes are
       // metered per source IP, and in production that IP belongs to
       // Cloudflare's shared egress pool, so the quota is usually spent by
       // other tenants before the first message of the day.
-      if (res.status === 429 && !ntfyToken()) {
+      if (res.status === 429 && !token) {
         return {
           ok: false,
           reason:
@@ -207,7 +224,7 @@ export async function notifyAdmins(event: H3Event, msg: NtfyMessage) {
     await runInBackground(
       event,
       Promise.all(
-        recipients.map((r) => publishToNtfy(r.topic as string, msg)),
+        recipients.map((r) => publishToNtfy(event, r.topic as string, msg)),
       ).then((results) => {
         // A real notification has no one to report a failure to, so the log is
         // the only trace. Counted rather than listed, to keep topics out of it.
