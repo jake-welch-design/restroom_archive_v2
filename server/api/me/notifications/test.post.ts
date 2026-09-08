@@ -75,5 +75,18 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  return { ok: true };
+  // A send that went out unauthenticated is reported as a success with a
+  // warning rather than a plain success. It did arrive, so calling it a failure
+  // would be wrong -- but it only arrived because the shared egress IP still
+  // had quota, and the same test run hours later will silently stop working.
+  // That distinction is exactly what a bare "Sent." hid for two days.
+  return {
+    ok: true,
+    authenticated: sent.authenticated,
+    warning: sent.authenticated
+      ? null
+      : "Delivered, but unauthenticated: the server has no ntfy token, so " +
+        "sends are metered against a shared IP and will fail unpredictably. " +
+        "Set NUXT_NTFY_TOKEN and redeploy.",
+  };
 });

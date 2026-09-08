@@ -95,8 +95,17 @@ export interface NtfyMessage {
  * distinguish them, so the reason has to survive the return.
  *
  * `reason` is safe to show a signed-in admin: it never carries the topic.
+ *
+ * Success carries `authenticated` because an unauthenticated send is not
+ * really a success -- it is a send that happened to land inside whatever is
+ * left of the shared egress IP's daily quota. It works just after the quota
+ * resets at UTC midnight and stops working later the same day, which reads as
+ * a setup that works until it mysteriously doesn't. Reporting it turns that
+ * into something visible instead of something inferred from missing
+ * notifications days later.
  */
-export type PublishResult = { ok: true } | { ok: false; reason: string };
+export type PublishResult =
+  { ok: true; authenticated: boolean } | { ok: false; reason: string };
 
 /** Publishes one message to one topic. Never throws. */
 export async function publishToNtfy(
@@ -162,7 +171,7 @@ export async function publishToNtfy(
       }
       return { ok: false, reason: `ntfy returned ${res.status}. ${detail}` };
     }
-    return { ok: true };
+    return { ok: true, authenticated: Boolean(token) };
   } catch (err) {
     console.error("ntfy publish threw", err);
     const name = err instanceof Error ? err.name : "";

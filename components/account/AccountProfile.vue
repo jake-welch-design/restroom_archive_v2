@@ -150,6 +150,14 @@ interface NotifySettings {
   enabled: boolean;
   hasTopic: boolean;
   topicHint: string | null;
+  /**
+   * Whether the server holds an ntfy token. False means every send goes out
+   * anonymous and is metered against a shared IP, which delivers for a few
+   * hours after the quota resets at UTC midnight and then silently stops --
+   * so this is surfaced rather than left to be discovered through missing
+   * notifications.
+   */
+  serverAuthenticated: boolean;
 }
 
 const notify = ref<NotifySettings | null>(null);
@@ -157,6 +165,9 @@ const editingNotify = ref(false);
 const notifyEnabledDraft = ref(false);
 const notifyTopicDraft = ref("");
 const notifyTested = ref("");
+// Separate from `notifyTested` because the two coexist: the send succeeded and
+// is worth confirming, while the warning explains why that success is fragile.
+const notifyTestWarning = ref("");
 const notifyAction = useAsyncAction("Could not save notification settings.");
 const notifyTestAction = useAsyncAction("Could not send a test notification.");
 
@@ -186,6 +197,7 @@ function startEditNotify() {
   // knowing a topic is all it takes to publish to one.
   notifyTopicDraft.value = "";
   notifyTested.value = "";
+  notifyTestWarning.value = "";
   notifyAction.reset();
   notifyTestAction.reset();
   editingNotify.value = true;
@@ -235,10 +247,20 @@ async function clearNotifyTopic() {
  */
 async function sendTestNotify() {
   notifyTested.value = "";
-  const ok = await notifyTestAction.run(() =>
-    $fetch("/api/me/notifications/test", { method: "POST" }),
-  );
-  if (ok) notifyTested.value = "Sent — check your phone.";
+  notifyTestWarning.value = "";
+  let warning = "";
+  const ok = await notifyTestAction.run(async () => {
+    const res = await $fetch<{
+      authenticated: boolean;
+      warning: string | null;
+    }>("/api/me/notifications/test", { method: "POST" });
+    warning = res.warning ?? "";
+  });
+  if (!ok) return;
+  notifyTested.value = "Sent — check your phone.";
+  // An unauthenticated send still arrives, so it is not an error -- but saying
+  // only "Sent." is what let a fundamentally broken setup pass a green test.
+  notifyTestWarning.value = warning;
 }
 
 /* --- Delete account ------------------------------------------------------ */
@@ -503,6 +525,15 @@ async function confirmDelete() {
           the same name here.
         </p>
 
+        <!-- A server with no ntfy token still delivers for a few hours after
+             the shared IP's quota resets at UTC midnight, then stops for the
+             rest of the day. Stated up front rather than left to be inferred
+             from notifications that never arrive. -->
+        <p v-if="notify && !notify.serverAuthenticated" class="notify-warning">
+          The server has no ntfy token, so notifications will arrive
+          unpredictably — set <code>NUXT_NTFY_TOKEN</code> and redeploy.
+        </p>
+
         <label class="field">
           <span class="field-label">ntfy topic</span>
           <input
@@ -531,6 +562,9 @@ async function confirmDelete() {
           {{ notifyTestAction.error }}
         </p>
         <p v-if="notifyTested" class="settings-saved">{{ notifyTested }}</p>
+        <p v-if="notifyTestWarning" class="notify-warning">
+          {{ notifyTestWarning }}
+        </p>
 
         <div class="settings-edit-actions">
           <button
@@ -673,6 +707,21 @@ async function confirmDelete() {
 
 .notify-hint a {
   color: #000;
+}
+
+/* Not `.form-error`: the send did succeed, so this must not read as a failed
+   action. It is a caution about a success that will not hold. */
+.notify-warning {
+  margin: 0 0 4px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #a60;
+}
+
+.notify-warning code {
+  font-family: inherit;
+  background: #f0f0f0;
+  padding: 0 3px;
 }
 
 .danger-warning {

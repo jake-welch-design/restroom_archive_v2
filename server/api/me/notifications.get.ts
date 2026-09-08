@@ -37,5 +37,12 @@ export default defineEventHandler(async (event) => {
     enabled: Boolean(row?.adminNotifyAt),
     hasTopic: Boolean(row?.ntfyTopic),
     topicHint: row?.ntfyTopic ? maskTopic(row.ntfyTopic) : null,
+    // Whether the *server* can authenticate to ntfy, as opposed to whether
+    // this admin has a topic. Without it every send is metered against
+    // Cloudflare's shared egress IP, which works for a few hours after the
+    // quota resets at UTC midnight and then fails for the rest of the day --
+    // so the setting looks correct while quietly not working. A boolean only;
+    // the token itself never leaves the server.
+    serverAuthenticated: Boolean(useRuntimeConfig(event).ntfyToken),
   };
 });
