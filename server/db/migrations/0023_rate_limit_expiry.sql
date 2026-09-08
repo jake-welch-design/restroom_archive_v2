@@ -1,0 +1,21 @@
+-- `rate_limits.window` is a bucket number scaled by that action's own
+-- `windowSec` -- an hourly action and a daily action produce numbers on
+-- completely different scales (roughly 496000 vs 20700, at time of writing).
+-- The cleanup sweep in server/utils/rateLimit.ts compared `window` values
+-- across the whole table regardless of which action wrote them, which meant
+-- any hourly action's cleanup pass deleted every daily-window row: a bucket
+-- number of ~20700 always reads as "ancient" next to an hourly bucket of
+-- ~496000. That silently reset the daily caps on `submit`, `req-submission`
+-- and `req-removal` almost as fast as they were hit.
+--
+-- `expires_at` is an absolute Unix timestamp -- the moment this row's own
+-- window ends -- so cleanup can compare against the wall clock instead of
+-- against another action's bucket scale.
+ALTER TABLE rate_limits ADD COLUMN expires_at INTEGER;
+
+-- Existing rows predate this column and are NULL. They are exactly the rows
+-- the old sweep should have been able to expire but, because of the bug
+-- above, could not reliably distinguish from a live window. Nothing here
+-- depends on their count being accurate, so they are left for the first
+-- cleanup sweep to collect (see the `expires_at IS NULL` clause in
+-- rateLimit.ts) rather than backfilled.

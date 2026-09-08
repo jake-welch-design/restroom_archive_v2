@@ -49,12 +49,16 @@ async function check(
   if (!db) return; // not in a Cloudflare environment (local dev fallback)
 
   const win = currentWindow(windowSec);
+  // The moment this specific window ends, in wall-clock time. Comparable
+  // across actions with different `windowSec` in a way the raw `window`
+  // bucket number is not -- see migration 0023.
+  const expiresAt = (win + 1) * windowSec;
 
   await db
     .prepare(
-      "INSERT INTO rate_limits (key, window, count) VALUES (?, ?, 1) ON CONFLICT(key, window) DO UPDATE SET count = count + 1",
+      "INSERT INTO rate_limits (key, window, count, expires_at) VALUES (?, ?, 1, ?) ON CONFLICT(key, window) DO UPDATE SET count = count + 1",
     )
-    .bind(key, win)
+    .bind(key, win, expiresAt)
     .run();
 
   const row = await db
@@ -63,19 +67,23 @@ async function check(
     .first<{ count: number }>();
 
   if ((row?.count ?? 0) > max) {
-    const retryAfter = Math.max(
-      1,
-      (win + 1) * windowSec - Math.floor(Date.now() / 1000),
-    );
+    const retryAfter = Math.max(1, expiresAt - Math.floor(Date.now() / 1000));
     setHeader(event, "Retry-After", retryAfter);
     throw createError({ statusCode: 429, statusMessage: "Too many requests" });
   }
 
-  // Probabilistic cleanup (~1 % of calls) so the table doesn't grow unboundedly.
+  // Probabilistic cleanup (~1 % of calls) so the table doesn't grow
+  // unboundedly. Bounded by wall-clock expiry rather than by comparing
+  // `window` numbers, which are only meaningful within one action's own
+  // `windowSec` -- see migration 0023. Rows written before that migration
+  // have a NULL `expires_at` and are swept on sight rather than kept forever.
   if (Math.random() < 0.01) {
+    const now = Math.floor(Date.now() / 1000);
     await db
-      .prepare("DELETE FROM rate_limits WHERE window < ?")
-      .bind(win - 10)
+      .prepare(
+        "DELETE FROM rate_limits WHERE expires_at IS NULL OR expires_at < ?",
+      )
+      .bind(now)
       .run();
   }
 }
