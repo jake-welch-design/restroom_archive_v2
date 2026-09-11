@@ -177,15 +177,12 @@ export default defineEventHandler(async (event) => {
     // usable absolute URL in dev as well as production -- the previous
     // `siteUrl || ""` dropped the link entirely whenever the var was unset.
     const { site } = publicUrls(event);
-    // `click` is the only link a push notification has: it makes the whole
-    // notification the tap target, so the queue link cannot be attached to
-    // just the name and location. The username goes in the title, which is
-    // the line a phone shows in bold and never truncates first.
+    // The title names the submitter; the restroom's name and location are the
+    // link into the queue.
     await notifyAdmins(event, {
       title: `New submission from @${user.username}`,
-      message: `${name}\n${location}`,
-      tags: ["toilet"],
-      click: `${site}${PENDING_QUEUE_PATH}`,
+      body: `${name}\n${location}`,
+      link: `${site}${PENDING_QUEUE_PATH}`,
     });
   }
 

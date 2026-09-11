@@ -1,32 +1,28 @@
 import { eq } from "drizzle-orm";
 import { useDb, schema } from "~~/server/utils/db";
 import { requireRole } from "~~/server/utils/requireRole";
+import { telegramToken } from "~~/server/utils/telegram";
 
 /**
  * The signed-in admin's own notification settings.
  *
- * A separate route rather than two more fields on the session cookie: this is
+ * A separate route rather than more fields on the session cookie: this is
  * admin-only data that one settings row reads once, so putting it in the
- * session would ship two columns to every archivist's browser on every request
- * for a surface they can never open.
+ * session would ship it to every archivist's browser on every request for a
+ * surface they can never open.
  *
- * The topic is the only thing protecting a topic from being published to, so
- * it comes back masked. The setting row needs to show that a topic is
- * configured, not what it is -- and an admin who has forgotten theirs can look
- * it up in the ntfy app, or set a new one.
+ * The chat id itself is not returned. On its own it cannot send anything, but
+ * the settings row has no use for it -- only for whether a chat is linked and
+ * which account it is.
  */
-function maskTopic(topic: string) {
-  if (topic.length <= 4) return "•".repeat(topic.length);
-  return `${topic.slice(0, 2)}${"•".repeat(Math.min(topic.length - 4, 12))}${topic.slice(-2)}`;
-}
-
 export default defineEventHandler(async (event) => {
   const user = requireRole(event, "admin");
 
   const db = useDb(event);
   const row = await db
     .select({
-      ntfyTopic: schema.users.ntfyTopic,
+      telegramChatId: schema.users.telegramChatId,
+      telegramName: schema.users.telegramName,
       adminNotifyAt: schema.users.adminNotifyAt,
     })
     .from(schema.users)
@@ -35,14 +31,12 @@ export default defineEventHandler(async (event) => {
 
   return {
     enabled: Boolean(row?.adminNotifyAt),
-    hasTopic: Boolean(row?.ntfyTopic),
-    topicHint: row?.ntfyTopic ? maskTopic(row.ntfyTopic) : null,
-    // Whether the *server* can authenticate to ntfy, as opposed to whether
-    // this admin has a topic. Without it every send is metered against
-    // Cloudflare's shared egress IP, which works for a few hours after the
-    // quota resets at UTC midnight and then fails for the rest of the day --
-    // so the setting looks correct while quietly not working. A boolean only;
-    // the token itself never leaves the server.
-    serverAuthenticated: Boolean(useRuntimeConfig(event).ntfyToken),
+    connected: Boolean(row?.telegramChatId),
+    telegramName: row?.telegramName ?? null,
+    // Whether the *server* can talk to Telegram at all, as opposed to whether
+    // this admin has linked a chat. Surfaced so a missing secret shows up in
+    // the settings row, not as notifications that simply never arrive. A
+    // boolean only; the token never leaves the server.
+    serverConfigured: Boolean(telegramToken(event)),
   };
 });

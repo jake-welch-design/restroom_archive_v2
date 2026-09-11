@@ -26,11 +26,10 @@ NUXT_PUBLIC_THUMBS_BASE_URL = ""
 # Secrets (set via `wrangler pages secret put <NAME>`):
 #   NUXT_SESSION_PASSWORD        -- 32+ char random string for nuxt-auth-utils session sealing
 #   NUXT_TURNSTILE_SECRET_KEY    -- Cloudflare Turnstile secret key
-#   NUXT_NTFY_TOKEN              -- ntfy access token (tk_...) for admin push
-#     notifications. Optional, but effectively required in production: without
-#     it ntfy meters publishes against this Worker's outbound IP, which is
-#     Cloudflare's shared egress pool, and that daily quota is normally already
-#     spent by other tenants -- every send 429s.
+#   NUXT_TELEGRAM_BOT_TOKEN      -- Telegram bot token (from @BotFather) for admin
+#     notifications. Unset disables them; admins link their own chat from
+#     Profile -> Alerts. Do not set a webhook on this bot: linking reads
+#     messages with getUpdates, which Telegram refuses while a webhook exists.
 #   NUXT_PUBLIC_CARTO_API_KEY    -- CARTO basemap tile key (carto.com/basemaps/apikey).
 #     Not secret -- it ships to the browser in the SSR payload -- but kept out of
 #     [vars] so it isn't committed to this public repo for scrapers to harvest.

@@ -2,15 +2,16 @@ import { eq } from "drizzle-orm";
 import { useDb, schema } from "~~/server/utils/db";
 import { requireRole } from "~~/server/utils/requireRole";
 import { rateLimitByUser } from "~~/server/utils/rateLimit";
-import { publishToNtfy } from "~~/server/utils/notify";
+import { sendAdminNotification } from "~~/server/utils/notify";
 
 /**
- * Sends one notification to the caller's own topic.
+ * Sends one notification to the caller's own linked chat.
  *
- * Worth a route of its own because a mistyped topic fails silently and
- * identically to a working one -- nothing arrives, and nothing says why. This
- * turns "did I set this up right?" into a button, and it is the only path here
- * that reports a delivery failure to the caller rather than swallowing it.
+ * Worth a route of its own because a broken setup fails silently -- nothing
+ * arrives, and nothing says why. This turns "is this working?" into a button,
+ * and it is the only path here that reports a delivery failure to the caller
+ * rather than swallowing it. It goes through the same renderer as a real
+ * notification, so a message that renders here renders there.
  *
  * Deliberately awaited rather than backgrounded: the answer is the point.
  */
@@ -18,15 +19,10 @@ export default defineEventHandler(async (event) => {
   const user = requireRole(event, "admin");
 
   // Deliberately loose for a button whose whole purpose is to be pressed
-  // repeatedly while getting the setup right. It still bounds outbound sends,
-  // but the first attempt at configuring notifications should not run out of
-  // budget halfway through -- especially since a failed send counts too, so
-  // the attempts that deliver nothing are exactly the ones being metered.
-  //
-  // The window is a fixed clock hour rather than a rolling one, so spacing
-  // presses out does not earn budget back. The message says so, because
-  // "Too many requests" invites the reasonable but wrong conclusion that
-  // waiting a minute between presses would have helped.
+  // repeatedly while getting the setup right. Failed attempts count too, and
+  // the window is a fixed clock hour rather than a rolling one, so the message
+  // says so -- "Too many requests" alone invites the wrong conclusion that
+  // spacing presses out would have helped.
   try {
     await rateLimitByUser(event, "notify-test", { max: 30, windowSec: 3600 });
   } catch {
@@ -43,30 +39,26 @@ export default defineEventHandler(async (event) => {
 
   const db = useDb(event);
   const row = await db
-    .select({ ntfyTopic: schema.users.ntfyTopic })
+    .select({ chatId: schema.users.telegramChatId })
     .from(schema.users)
     .where(eq(schema.users.id, user.id))
     .get();
 
-  if (!row?.ntfyTopic) {
+  if (!row?.chatId) {
     throw createError({
       statusCode: 422,
-      statusMessage: "No ntfy topic set.",
+      statusMessage: "Telegram is not connected.",
     });
   }
 
-  const sent = await publishToNtfy(event, row.ntfyTopic, {
-    title: "Restroom Archive",
-    message: "Notifications are working. This is a test.",
-    tags: ["white_check_mark"],
+  const sent = await sendAdminNotification(event, row.chatId, {
+    title: "Test from The Restroom Archive",
+    body: "Notifications are working.",
   });
 
   if (!sent.ok) {
-    // Reports what actually went wrong rather than a single generic message.
-    // This route exists to diagnose a setup that fails silently, so collapsing
-    // every cause into one string defeats the point of having it.
     // The detail rides in `data`, not `statusMessage`: h3 sanitizes status
-    // messages, which would strip the punctuation out of ntfy's own error
+    // messages, which would strip the punctuation out of Telegram's own error
     // text. `apiErrorMessage` reads `data` first, so the form shows this one.
     throw createError({
       statusCode: 502,
@@ -75,18 +67,5 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  // A send that went out unauthenticated is reported as a success with a
-  // warning rather than a plain success. It did arrive, so calling it a failure
-  // would be wrong -- but it only arrived because the shared egress IP still
-  // had quota, and the same test run hours later will silently stop working.
-  // That distinction is exactly what a bare "Sent." hid for two days.
-  return {
-    ok: true,
-    authenticated: sent.authenticated,
-    warning: sent.authenticated
-      ? null
-      : "Delivered, but unauthenticated: the server has no ntfy token, so " +
-        "sends are metered against a shared IP and will fail unpredictably. " +
-        "Set NUXT_NTFY_TOKEN and redeploy.",
-  };
+  return { ok: true };
 });

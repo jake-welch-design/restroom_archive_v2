@@ -140,43 +140,51 @@ async function savePassword() {
  * them to nothing. The server checks the same thing on every send, so this row
  * is the control, not the enforcement.
  *
- * Delivery is ntfy: the admin picks a topic name, subscribes to it in the ntfy
- * app, and puts the same name here. Fetched through `$fetch` in a watcher
- * rather than `useFetch`, because the route 403s for non-admins and the
- * component mounts for everyone -- there is nothing to request until the
- * session resolves and says otherwise.
+ * Delivery is a Telegram message from the archive's bot. The admin links
+ * their chat by sending the bot a one-time code, then ticks the box. Fetched
+ * through `$fetch` in a watcher rather than `useFetch`, because the route 403s
+ * for non-admins and the component mounts for everyone -- there is nothing to
+ * request until the session resolves and says otherwise.
  */
 interface NotifySettings {
   enabled: boolean;
-  hasTopic: boolean;
-  topicHint: string | null;
+  connected: boolean;
+  telegramName: string | null;
   /**
-   * Whether the server holds an ntfy token. False means every send goes out
-   * anonymous and is metered against a shared IP, which delivers for a few
-   * hours after the quota resets at UTC midnight and then silently stops --
-   * so this is surfaced rather than left to be discovered through missing
-   * notifications.
+   * Whether the server holds a bot token. False means nothing can be sent at
+   * all, so it is stated in the row rather than left to be discovered through
+   * notifications that never arrive.
    */
-  serverAuthenticated: boolean;
+  serverConfigured: boolean;
+}
+
+interface TelegramLink {
+  code: string;
+  botUsername: string;
+  url: string;
+  expiresInMinutes: number;
 }
 
 const notify = ref<NotifySettings | null>(null);
 const editingNotify = ref(false);
 const notifyEnabledDraft = ref(false);
-const notifyTopicDraft = ref("");
 const notifyTested = ref("");
-// Separate from `notifyTested` because the two coexist: the send succeeded and
-// is worth confirming, while the warning explains why that success is fragile.
-const notifyTestWarning = ref("");
+// The pending code and deep link while a chat is being linked; null otherwise.
+const telegramLink = ref<TelegramLink | null>(null);
 const notifyAction = useAsyncAction("Could not save notification settings.");
 const notifyTestAction = useAsyncAction("Could not send a test notification.");
+const linkAction = useAsyncAction("Could not connect Telegram.");
+
+async function loadNotify() {
+  notify.value = await $fetch<NotifySettings>("/api/me/notifications");
+}
 
 watch(
   isAdmin,
   async (admin) => {
     if (!admin) return;
     try {
-      notify.value = await $fetch<NotifySettings>("/api/me/notifications");
+      await loadNotify();
     } catch {
       // A settings row that cannot load its own state is not worth an error
       // banner on the Profile tab; it simply stays closed.
@@ -187,80 +195,76 @@ watch(
 
 const notifyStatus = computed(() => {
   if (!notify.value) return "";
-  if (notify.value.enabled) return `On · ${notify.value.topicHint}`;
-  return notify.value.hasTopic ? "Off" : "Not set up";
+  if (!notify.value.connected) return "Not set up";
+  return notify.value.enabled
+    ? `On · Telegram ${notify.value.telegramName ?? ""}`.trim()
+    : "Off";
 });
 
 function startEditNotify() {
   notifyEnabledDraft.value = notify.value?.enabled ?? false;
-  // Never seeded with the stored topic: the server returns it masked, because
-  // knowing a topic is all it takes to publish to one.
-  notifyTopicDraft.value = "";
   notifyTested.value = "";
-  notifyTestWarning.value = "";
+  telegramLink.value = null;
   notifyAction.reset();
   notifyTestAction.reset();
+  linkAction.reset();
   editingNotify.value = true;
 }
 
 async function saveNotify() {
-  const typed = notifyTopicDraft.value.trim();
-  if (notifyEnabledDraft.value && !typed && !notify.value?.hasTopic) {
-    notifyAction.fail("Enter an ntfy topic first.");
-    return;
-  }
-
   const ok = await notifyAction.run(async () => {
     await $fetch("/api/me/notifications", {
       method: "PATCH",
-      // Omitted when blank, which keeps the stored topic rather than clearing
-      // it — the field is empty on open, so blank means "unchanged".
-      body: {
-        enabled: notifyEnabledDraft.value,
-        ...(typed ? { topic: typed } : {}),
-      },
+      body: { enabled: notifyEnabledDraft.value },
     });
-    notify.value = await $fetch<NotifySettings>("/api/me/notifications");
+    await loadNotify();
   });
   if (ok) editingNotify.value = false;
 }
 
-async function clearNotifyTopic() {
+/** Step one of linking: get a code and the deep link that sends it. */
+async function startTelegramLink() {
+  await linkAction.run(async () => {
+    telegramLink.value = await $fetch<TelegramLink>(
+      "/api/me/notifications/telegram/link",
+      { method: "POST" },
+    );
+  });
+}
+
+/**
+ * Step two: ask the server whether the bot has received the code. Pressing
+ * this before Telegram delivers the message is expected, and just says so.
+ */
+async function verifyTelegramLink() {
+  const ok = await linkAction.run(async () => {
+    await $fetch("/api/me/notifications/telegram/verify", { method: "POST" });
+    await loadNotify();
+  });
+  if (ok) telegramLink.value = null;
+}
+
+async function disconnectTelegram() {
   const ok = await notifyAction.run(async () => {
-    await $fetch("/api/me/notifications", {
-      method: "PATCH",
-      body: { enabled: false, topic: "" },
-    });
-    notify.value = await $fetch<NotifySettings>("/api/me/notifications");
+    await $fetch("/api/me/notifications/telegram", { method: "DELETE" });
+    await loadNotify();
   });
   if (ok) {
     notifyEnabledDraft.value = false;
-    notifyTopicDraft.value = "";
     notifyTested.value = "";
   }
 }
 
 /**
- * A mistyped topic fails exactly like a working one: nothing arrives. So the
- * form can send a real notification through the stored topic and say whether
- * ntfy took it.
+ * A broken setup fails silently: nothing arrives. So the form can send a real
+ * message to the linked chat and say whether Telegram took it.
  */
 async function sendTestNotify() {
   notifyTested.value = "";
-  notifyTestWarning.value = "";
-  let warning = "";
-  const ok = await notifyTestAction.run(async () => {
-    const res = await $fetch<{
-      authenticated: boolean;
-      warning: string | null;
-    }>("/api/me/notifications/test", { method: "POST" });
-    warning = res.warning ?? "";
-  });
-  if (!ok) return;
-  notifyTested.value = "Sent — check your phone.";
-  // An unauthenticated send still arrives, so it is not an error -- but saying
-  // only "Sent." is what let a fundamentally broken setup pass a green test.
-  notifyTestWarning.value = warning;
+  const ok = await notifyTestAction.run(() =>
+    $fetch("/api/me/notifications/test", { method: "POST" }),
+  );
+  if (ok) notifyTested.value = "Sent — check Telegram.";
 }
 
 /* --- Delete account ------------------------------------------------------ */
@@ -513,48 +517,80 @@ async function confirmDelete() {
       </template>
 
       <form v-else class="settings-edit" @submit.prevent="saveNotify">
-        <label class="notify-check">
-          <input v-model="notifyEnabledDraft" type="checkbox" />
+        <!-- Disabled until a chat is linked: the server refuses to turn
+             notifications on with nowhere to send them. -->
+        <label
+          class="notify-check"
+          :class="{ 'notify-check-disabled': !notify?.connected }"
+        >
+          <input
+            v-model="notifyEnabledDraft"
+            type="checkbox"
+            :disabled="!notify?.connected"
+          />
           <span>Receive Admin Notifications</span>
         </label>
         <p class="notify-hint">
-          A push notification when a new submission reaches the pending queue.
-          Delivered through
-          <a href="https://ntfy.sh" target="_blank" rel="noopener">ntfy</a>:
-          install the app, subscribe to a topic name only you know, then enter
-          the same name here.
+          A Telegram message from the archive's bot when a new submission
+          reaches the pending queue.
         </p>
 
-        <!-- A server with no ntfy token still delivers for a few hours after
-             the shared IP's quota resets at UTC midnight, then stops for the
-             rest of the day. Stated up front rather than left to be inferred
-             from notifications that never arrive. -->
-        <p v-if="notify && !notify.serverAuthenticated" class="notify-warning">
-          The server has no ntfy token, so notifications will arrive
-          unpredictably — set <code>NUXT_NTFY_TOKEN</code> and redeploy.
+        <p v-if="notify && !notify.serverConfigured" class="notify-warning">
+          The server has no Telegram bot token — set
+          <code>NUXT_TELEGRAM_BOT_TOKEN</code> and redeploy.
         </p>
 
-        <label class="field">
-          <span class="field-label">ntfy topic</span>
-          <input
-            v-model="notifyTopicDraft"
-            type="text"
-            autocomplete="off"
-            spellcheck="false"
-            maxlength="64"
-            class="field-input"
-            :placeholder="
-              notify?.hasTopic
-                ? 'Leave blank to keep current'
-                : 'my-secret-topic'
-            "
-          />
-          <span class="field-hint">
-            Letters, numbers, dashes and underscores. Anyone who knows the topic
-            can send to it, so pick something unguessable.
-          </span>
-        </label>
+        <p v-if="notify?.connected" class="notify-hint">
+          Connected to Telegram as
+          <strong class="notify-name">{{ notify.telegramName }}</strong
+          >.
+        </p>
 
+        <template v-else-if="notify?.serverConfigured">
+          <template v-if="telegramLink">
+            <ol class="notify-steps">
+              <li>
+                <a :href="telegramLink.url" target="_blank" rel="noopener">
+                  Open @{{ telegramLink.botUsername }} in Telegram
+                </a>
+                and press <strong>Start</strong>.
+              </li>
+              <li>Come back here and press <strong>Verify</strong>.</li>
+            </ol>
+            <p class="notify-hint">
+              Telegram on a different device? Send
+              <code>/start {{ telegramLink.code }}</code> to @{{
+                telegramLink.botUsername
+              }}
+              from there instead. The code lasts
+              {{ telegramLink.expiresInMinutes }} minutes.
+            </p>
+          </template>
+          <div>
+            <button
+              v-if="!telegramLink"
+              type="button"
+              class="btn btn-sm"
+              :disabled="linkAction.loading"
+              @click="startTelegramLink"
+            >
+              {{ linkAction.loading ? "…" : "Connect Telegram" }}
+            </button>
+            <button
+              v-else
+              type="button"
+              class="btn btn-sm"
+              :disabled="linkAction.loading"
+              @click="verifyTelegramLink"
+            >
+              {{ linkAction.loading ? "Checking…" : "Verify" }}
+            </button>
+          </div>
+        </template>
+
+        <p v-if="linkAction.error" class="form-error">
+          {{ linkAction.error }}
+        </p>
         <p v-if="notifyAction.error" class="form-error">
           {{ notifyAction.error }}
         </p>
@@ -562,9 +598,6 @@ async function confirmDelete() {
           {{ notifyTestAction.error }}
         </p>
         <p v-if="notifyTested" class="settings-saved">{{ notifyTested }}</p>
-        <p v-if="notifyTestWarning" class="notify-warning">
-          {{ notifyTestWarning }}
-        </p>
 
         <div class="settings-edit-actions">
           <button
@@ -575,7 +608,7 @@ async function confirmDelete() {
             {{ notifyAction.loading ? "Saving…" : "Save" }}
           </button>
           <button
-            v-if="notify?.hasTopic"
+            v-if="notify?.connected"
             type="button"
             class="link-btn"
             :disabled="notifyTestAction.loading"
@@ -584,13 +617,13 @@ async function confirmDelete() {
             {{ notifyTestAction.loading ? "Sending…" : "Send test" }}
           </button>
           <button
-            v-if="notify?.hasTopic"
+            v-if="notify?.connected"
             type="button"
             class="link-btn"
             :disabled="notifyAction.loading"
-            @click="clearNotifyTopic"
+            @click="disconnectTelegram"
           >
-            Clear topic
+            Disconnect
           </button>
           <button
             type="button"
@@ -705,23 +738,43 @@ async function confirmDelete() {
   color: #666;
 }
 
-.notify-hint a {
+.notify-hint a,
+.notify-steps a {
   color: #000;
 }
 
-/* Not `.form-error`: the send did succeed, so this must not read as a failed
-   action. It is a caution about a success that will not hold. */
+.notify-hint code,
+.notify-warning code {
+  font-family: inherit;
+  background: #f0f0f0;
+  padding: 0 3px;
+}
+
+.notify-check-disabled {
+  color: #999;
+  cursor: default;
+}
+
+.notify-name {
+  font-weight: 600;
+  color: #000;
+}
+
+.notify-steps {
+  margin: 0 0 4px;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #000;
+}
+
+/* Not `.form-error`: nothing the admin did failed. It is a caution about the
+   server's configuration, which no action in this form can fix. */
 .notify-warning {
   margin: 0 0 4px;
   font-size: 11px;
   line-height: 1.5;
   color: #a60;
-}
-
-.notify-warning code {
-  font-family: inherit;
-  background: #f0f0f0;
-  padding: 0 3px;
 }
 
 .danger-warning {

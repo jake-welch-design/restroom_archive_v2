@@ -24,10 +24,19 @@ export type SubmissionsSection = "new" | "published" | "pending";
  * `audit` is deliberately empty: it is one list, so a second row holding a
  * single button would be navigation that never navigates anywhere. Groups with
  * no sections render the first row only.
+ *
+ * The first section in each group is also the one the group opens on — see
+ * `DEFAULT_ADMIN_SECTIONS`, which derives from this. So the order is not
+ * cosmetic: putting a section first makes it the landing view.
+ *
+ * `accounts` leads with `upgrades` rather than `directory` for the same reason
+ * `submissions` leads with `pending`: it is the group's queue, the thing with a
+ * badge and a backlog waiting on the admin, while the directory is a browse
+ * list consulted on purpose.
  */
 export const ADMIN_GROUP_SECTIONS = {
   submissions: ["pending", "archived", "rejected", "removals"],
-  accounts: ["directory", "upgrades"],
+  accounts: ["upgrades", "directory"],
   annotations: ["all", "reports"],
   audit: [],
 } as const satisfies Record<AdminGroup, readonly string[]>;
@@ -55,6 +64,20 @@ export function sectionsFor(group: AdminGroup): readonly string[] {
   return ADMIN_GROUP_SECTIONS[group];
 }
 
+/**
+ * The section each group opens on: the first one it lists.
+ *
+ * Derived rather than restated, because the two were previously written out
+ * twice and nothing tied them together — reordering a group's sections left its
+ * default pointing at whatever used to be first, which is a silent mismatch
+ * between the tab that looks selected and the list that renders. `audit` has no
+ * sections and resolves to the empty string, which is what its single-row
+ * layout expects.
+ */
+export const DEFAULT_ADMIN_SECTIONS = Object.fromEntries(
+  ADMIN_GROUPS.map((group) => [group, sectionsFor(group)[0] ?? ""]),
+) as Record<AdminGroup, string>;
+
 export function useAccountNav() {
   const tab = useState<AccountTab>("account-nav-tab", () => "profile");
 
@@ -66,12 +89,10 @@ export function useAccountNav() {
   /** The chosen section per group, so switching away and back returns to it. */
   const adminSectionByGroup = useState<Record<AdminGroup, string>>(
     "account-nav-admin-sections",
-    () => ({
-      submissions: "pending",
-      accounts: "directory",
-      annotations: "all",
-      audit: "",
-    }),
+    // Spread, not the shared object: this is mutated as the admin navigates,
+    // and handing out the module-level constant would let one visit's position
+    // leak into the next by rewriting the defaults themselves.
+    () => ({ ...DEFAULT_ADMIN_SECTIONS }),
   );
 
   const submissionsSection = useState<SubmissionsSection>(

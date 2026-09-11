@@ -25,12 +25,17 @@ export const users = sqliteTable(
     adminMessageAt: text("admin_message_at"),
     emailVerifiedAt: text("email_verified_at"),
     // Where this admin's queue notifications go, and whether they want them.
-    // Deliberately two columns: the topic is the destination the admin set up
-    // on their phone, `admin_notify_at` is the opt-in. Turning notifications
-    // off clears only the latter, so switching them back on does not mean
-    // re-entering the topic. Both NULL on every account by default -- no admin
-    // is enrolled without checking the box themselves.
-    ntfyTopic: text("ntfy_topic"),
+    // The chat is the destination, linked by proving control of it through the
+    // bot; `admin_notify_at` is the opt-in. Turning notifications off clears
+    // only the opt-in, so switching them back on does not mean linking again.
+    // All NULL on every account by default -- no admin is enrolled without
+    // linking a chat and checking the box themselves.
+    telegramChatId: text("telegram_chat_id"),
+    // Shown in the settings row so the admin can see which account is linked.
+    telegramName: text("telegram_name"),
+    // The pending one-time link code and when it was issued; cleared on link.
+    telegramLinkCode: text("telegram_link_code"),
+    telegramLinkCodeAt: text("telegram_link_code_at"),
     adminNotifyAt: text("admin_notify_at"),
     createdAt: text("created_at")
       .notNull()

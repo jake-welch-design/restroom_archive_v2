@@ -54,10 +54,9 @@ export default defineNuxtConfig({
   runtimeConfig: {
     turnstileSecretKey: "",
     plunkApiKey: "", // overridden by NUXT_PLUNK_API_KEY env var
-    // Optional. Empty means anonymous publishes, which are rate-limited by
-    // source IP -- fine locally, but in production that IP is Cloudflare's
-    // shared egress. Overridden by NUXT_NTFY_TOKEN.
-    ntfyToken: "",
+    // Telegram bot token for admin notifications. Empty disables them.
+    // Overridden by NUXT_TELEGRAM_BOT_TOKEN; read with useRuntimeConfig(event).
+    telegramBotToken: "",
     session: {
       password: "", // overridden by NUXT_SESSION_PASSWORD env var
       maxAge: 60 * 60 * 24 * 30, // 30 days
