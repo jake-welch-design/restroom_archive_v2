@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { apiErrorMessage } from "~~/shared/utils/apiError";
 import { SUBMISSION_AGREEMENTS } from "~~/shared/utils/agreements";
+import {
+  MAX_GLB_BYTES,
+  MAX_GLB_MB,
+  formatFileSize,
+} from "~~/shared/utils/uploadLimits";
 const emit = defineEmits<{ submitted: [] }>();
 
 const { isAdmin } = useAuth();
@@ -25,6 +30,15 @@ const uploadDescription = ref("");
 const uploadDescriptors = ref<string[]>([]);
 const uploadFile = ref<File | null>(null);
 const uploadError = ref("");
+/**
+ * A problem with the chosen scan itself, shown on step 1.
+ *
+ * Separate from `uploadError`, which renders on the review step and carries
+ * what the endpoint said about a submit attempt. Keeping them apart means a
+ * rejected file explains itself where the file input is, and a stale submit
+ * error cannot reappear next to a fresh selection.
+ */
+const fileError = ref("");
 const uploadLoading = ref(false);
 const uploadSuccess = ref(false);
 
@@ -41,9 +55,33 @@ const AGREEMENTS = SUBMISSION_AGREEMENTS;
 const compliesWithAgreements = ref(false);
 const agreementsOpen = ref(false);
 
+/**
+ * Takes the chosen scan, or refuses it for being too large.
+ *
+ * The size check belongs here and not only on the server. A scan well over the
+ * limit exhausts the Worker's memory before the endpoint's own check can
+ * answer, so the submitter waits out the entire upload and is then handed a
+ * bare 503 -- which is how this was first reported. Refusing before a byte
+ * leaves the browser is both immediate and explicable. The limit it enforces is
+ * the same constant the endpoint uses; see shared/utils/uploadLimits.ts.
+ */
 function onFileChange(e: Event) {
   const input = e.target as HTMLInputElement;
   const file = input.files?.[0] ?? null;
+
+  if (file && file.size > MAX_GLB_BYTES) {
+    fileError.value = `This scan is ${formatFileSize(file.size)}, over the ${MAX_GLB_MB} MB limit. Re-exporting with Draco compression, or decimating the mesh, will usually bring a room scan under it.`;
+    // Cleared so picking the same path again after a re-export still fires
+    // `change`, and so nothing downstream treats the file as selected.
+    input.value = "";
+    uploadFile.value = null;
+    if (previewModelUrl.value) URL.revokeObjectURL(previewModelUrl.value);
+    previewModelUrl.value = null;
+    hasUnsavedSubmission.value = false;
+    return;
+  }
+
+  fileError.value = "";
   uploadFile.value = file;
   if (previewModelUrl.value) URL.revokeObjectURL(previewModelUrl.value);
   previewModelUrl.value = file ? URL.createObjectURL(file) : null;
@@ -196,6 +234,7 @@ function resetUpload() {
   previewModelUrl.value = null;
   hasUnsavedSubmission.value = false;
   uploadError.value = "";
+  fileError.value = "";
   uploadSuccess.value = false;
   // Reset rather than carry over: the next scan is a new attestation, and an
   // admin submitting a run of scans should not tick this once for all of them.
@@ -242,9 +281,12 @@ function resetUpload() {
             @change="onFileChange"
           />
         </label>
-        <p v-if="uploadFile" class="field-hint">
-          {{ uploadFile?.name }} selected. See the preview on the right.
+        <p v-if="fileError" class="form-error">{{ fileError }}</p>
+        <p v-else-if="uploadFile" class="field-hint">
+          {{ uploadFile.name }} ({{ formatFileSize(uploadFile.size) }})
+          selected. See the preview on the right.
         </p>
+        <p v-else class="field-hint">Up to {{ MAX_GLB_MB }} MB.</p>
 
         <div class="step-actions">
           <button
