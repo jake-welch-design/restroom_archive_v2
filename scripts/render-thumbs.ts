@@ -103,6 +103,7 @@ const VIEWER_HTML = `<!DOCTYPE html>
 <script type="module">
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
 
 const canvas = document.getElementById('c')
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
@@ -135,7 +136,19 @@ function toUnlit(src) {
   return flat
 }
 
-new GLTFLoader().load('/model.glb', (gltf) => {
+// Draco-compressed scans need a decoder here too, or this page renders an empty
+// scene and publishes a blank thumbnail -- a quieter failure than the viewer's,
+// which at least says "No DRACOLoader instance provided." The decoder comes from
+// the same pinned jsDelivr copy of three as the importmap above, rather than the
+// site's own public/draco/, because this page is served by a throwaway local
+// server that knows only about "/" and "/model.glb".
+const dracoLoader = new DRACOLoader()
+dracoLoader.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/libs/draco/gltf/')
+
+const loader = new GLTFLoader()
+loader.setDRACOLoader(dracoLoader)
+
+loader.load('/model.glb', (gltf) => {
   const model = gltf.scene
   model.traverse((child) => {
     if (!child.isMesh || !child.material) return

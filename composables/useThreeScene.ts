@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { Ref } from "vue";
 import type { CameraMode } from "~/types/annotation";
@@ -101,6 +102,37 @@ function createLoadProfiler(url: string) {
   };
 }
 /* eslint-enable no-console */
+
+/**
+ * The shared Draco decoder, created once and reused by every model load.
+ *
+ * Scans submitted with Draco compression carry `KHR_draco_mesh_compression`,
+ * and `GLTFLoader` refuses to read one without a decoder attached -- the
+ * failure is the flat "No DRACOLoader instance provided." with no model. An
+ * uncompressed scan never touches this, so attaching it costs nothing for the
+ * archive's existing entries; the decoder itself is only fetched the first time
+ * a compressed one is actually opened.
+ *
+ * Shared rather than per-load because `DRACOLoader` spins up a Web Worker and
+ * caches the compiled decoder on the instance. `loadModel` builds a fresh
+ * `GLTFLoader` for every model, so a decoder built alongside it would start a
+ * new worker per scan viewed and leave the old ones running.
+ *
+ * Built lazily rather than at module scope: this module is imported during SSR
+ * even though the scene itself is client-only, and construction should not
+ * happen on the server.
+ */
+let dracoLoader: DRACOLoader | null = null;
+
+function getDracoLoader(): DRACOLoader {
+  if (!dracoLoader) {
+    dracoLoader = new DRACOLoader();
+    // Served from public/draco/ -- same-origin, so it satisfies
+    // `connect-src 'self'` without a CSP exception. See public/draco/README.md.
+    dracoLoader.setDecoderPath("/draco/");
+  }
+  return dracoLoader;
+}
 
 export function useThreeScene(
   canvasRef: Ref<HTMLCanvasElement | null>,
@@ -308,6 +340,7 @@ export function useThreeScene(
 
     try {
       const loader = new GLTFLoader();
+      loader.setDRACOLoader(getDracoLoader());
       const gltf = await loader.loadAsync(url);
       if (myId !== loadId) return;
       profile?.phase("fetch+parse");

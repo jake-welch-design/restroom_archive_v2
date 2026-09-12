@@ -32,7 +32,14 @@ export default defineNuxtConfig({
           "max-age=63072000; includeSubDomains; preload",
         "Content-Security-Policy": [
           "default-src 'self'",
-          "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com",
+          // 'wasm-unsafe-eval' is what lets the Draco decoder run. DRACOLoader
+          // fetches the decoder, then compiles it as WebAssembly inside a
+          // blob: Worker, and a blob: Worker inherits this document's policy --
+          // so without it Chrome blocks the compile and a Draco-compressed scan
+          // fails to open even though the loader is wired up correctly. It
+          // permits compiling WebAssembly and nothing else; it does not bring
+          // back 'unsafe-eval' for JavaScript.
+          "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://challenges.cloudflare.com",
           "style-src 'self' 'unsafe-inline'",
           "img-src 'self' data: blob: https:",
           "font-src 'self' data:",
