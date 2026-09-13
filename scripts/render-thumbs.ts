@@ -34,7 +34,46 @@ if (!allFlag && !targetSlug) {
 // ---------------------------------------------------------------------------
 // Wrangler helpers
 // ---------------------------------------------------------------------------
-type DbRow = { id: number; slug: string; file: string };
+// D1 returns the columns as they are named in SQL, so these stay snake_case
+// rather than going through shared/utils/crop.ts's camelCase reader.
+type DbRow = {
+  id: number;
+  slug: string;
+  file: string;
+  crop_min_x: number | null;
+  crop_min_y: number | null;
+  crop_min_z: number | null;
+  crop_max_x: number | null;
+  crop_max_y: number | null;
+  crop_max_z: number | null;
+};
+
+type Crop = { min: [number, number, number]; max: [number, number, number] };
+
+/**
+ * The row's crop box, or null when it has none.
+ *
+ * Without this the script would re-render every cropped entry at its full
+ * bounds and quietly undo the framing an admin had corrected in the viewer.
+ */
+function cropOf(row: DbRow): Crop | null {
+  if (
+    row.crop_min_x == null ||
+    row.crop_min_y == null ||
+    row.crop_min_z == null ||
+    row.crop_max_x == null ||
+    row.crop_max_y == null ||
+    row.crop_max_z == null
+  )
+    return null;
+  return {
+    min: [row.crop_min_x, row.crop_min_y, row.crop_min_z],
+    max: [row.crop_max_x, row.crop_max_y, row.crop_max_z],
+  };
+}
+
+const CROP_COLUMNS =
+  "crop_min_x, crop_min_y, crop_min_z, crop_max_x, crop_max_y, crop_max_z";
 
 function d1Query(sql: string): DbRow[] {
   const out = execSync(
@@ -47,11 +86,11 @@ function d1Query(sql: string): DbRow[] {
 function fetchRows(): DbRow[] {
   if (targetSlug) {
     return d1Query(
-      `SELECT id, slug, file FROM restrooms WHERE slug='${targetSlug}'`,
+      `SELECT id, slug, file, ${CROP_COLUMNS} FROM restrooms WHERE slug='${targetSlug}'`,
     );
   }
   return d1Query(
-    `SELECT id, slug, file FROM restrooms WHERE status='published' ORDER BY iso_date ASC`,
+    `SELECT id, slug, file, ${CROP_COLUMNS} FROM restrooms WHERE status='published' ORDER BY iso_date ASC`,
   );
 }
 
@@ -86,7 +125,7 @@ function getFreePort(): Promise<number> {
   });
 }
 
-const VIEWER_HTML = `<!DOCTYPE html>
+const viewerHtml = (crop: Crop | null) => `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
@@ -112,9 +151,25 @@ renderer.setSize(800, 800)
 renderer.setClearColor(0x000000)
 renderer.toneMapping = THREE.NoToneMapping
 renderer.outputColorSpace = THREE.SRGBColorSpace
+renderer.localClippingEnabled = true
 
 const scene = new THREE.Scene()
 const camera = new THREE.PerspectiveCamera(70, 1, 0.01, 1000)
+
+// The admin's crop box for this entry, in the GLB's own local space, or null.
+// The model is never rotated here, so the planes are built once from it rather
+// than refreshed per frame the way the live viewer has to.
+const CROP = ${crop ? JSON.stringify(crop) : "null"}
+const clipPlanes = CROP
+  ? [
+      new THREE.Plane(new THREE.Vector3(1, 0, 0), -CROP.min[0]),
+      new THREE.Plane(new THREE.Vector3(-1, 0, 0), CROP.max[0]),
+      new THREE.Plane(new THREE.Vector3(0, 1, 0), -CROP.min[1]),
+      new THREE.Plane(new THREE.Vector3(0, -1, 0), CROP.max[1]),
+      new THREE.Plane(new THREE.Vector3(0, 0, 1), -CROP.min[2]),
+      new THREE.Plane(new THREE.Vector3(0, 0, -1), CROP.max[2]),
+    ]
+  : null
 
 // Unlit, matching the site viewer (composables/useThreeScene.ts): scans have
 // their lighting baked into the base color texture, so no lights or environment.
@@ -131,6 +186,7 @@ function toUnlit(src) {
     side: src.side,
     depthWrite: src.depthWrite,
     toneMapped: false,
+    clippingPlanes: clipPlanes ?? undefined,
   })
   src.dispose()
   return flat
@@ -158,10 +214,26 @@ loader.load('/model.glb', (gltf) => {
   })
   scene.add(model)
 
-  const box = new THREE.Box3().setFromObject(model)
+  // The crop box stands in for the measured one, exactly as the live viewer
+  // does (composables/useThreeScene.ts): the centre, the camera distance and
+  // the near/far planes all come off whichever box is in force.
+  const box = CROP
+    ? new THREE.Box3(
+        new THREE.Vector3(...CROP.min),
+        new THREE.Vector3(...CROP.max),
+      )
+    : new THREE.Box3().setFromObject(model)
   const center = box.getCenter(new THREE.Vector3())
   const size = box.getSize(new THREE.Vector3())
   model.position.sub(center)
+
+  // Clipping planes are world-space while the crop is defined against the
+  // geometry, so they have to follow the model's offset. Applied once because
+  // nothing moves the model after this point.
+  if (clipPlanes) {
+    model.updateMatrixWorld(true)
+    for (const plane of clipPlanes) plane.applyMatrix4(model.matrixWorld)
+  }
 
   const maxDim = Math.max(size.x, size.y, size.z) || 1
   const fovRad = (70 * Math.PI) / 180
@@ -182,11 +254,15 @@ loader.load('/model.glb', (gltf) => {
 </body>
 </html>`;
 
-function startServer(glbPath: string, port: number): http.Server {
+function startServer(
+  glbPath: string,
+  port: number,
+  crop: Crop | null,
+): http.Server {
   const server = http.createServer((req, res) => {
     if (req.url === "/" || req.url === "/index.html") {
       res.writeHead(200, { "Content-Type": "text/html" });
-      res.end(VIEWER_HTML);
+      res.end(viewerHtml(crop));
     } else if (req.url === "/model.glb") {
       const data = readFileSync(glbPath);
       res.writeHead(200, {
@@ -218,7 +294,7 @@ async function renderThumb(row: DbRow) {
     console.log("done");
 
     const port = await getFreePort();
-    const server = startServer(glbPath, port);
+    const server = startServer(glbPath, port, cropOf(row));
 
     process.stdout.write(`  [${row.slug}] rendering… `);
     const browser = await puppeteer.launch({

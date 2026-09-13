@@ -4,8 +4,18 @@ import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { Ref } from "vue";
 import type { CameraMode } from "~/types/annotation";
+import type { CropBox, CropDelta } from "~~/shared/utils/crop";
+import { createCropGizmo, type CropGizmo } from "~/composables/cropGizmo";
 
 export type ViewMode = "orbit" | "pov";
+
+/** What a finished crop edit hands back for saving. */
+export interface CropResult {
+  /** The new box, or null when the crop was cleared back to the scan's bounds. */
+  crop: CropBox | null;
+  /** How far the model's centre moved, which world-space records must follow. */
+  recenterDelta: CropDelta;
+}
 
 export interface CameraSnapshot {
   cameraMode: CameraMode;
@@ -137,6 +147,7 @@ function getDracoLoader(): DRACOLoader {
 export function useThreeScene(
   canvasRef: Ref<HTMLCanvasElement | null>,
   modelUrl: Ref<string | null | undefined>,
+  storedCrop: Ref<CropBox | null | undefined>,
   onPickPoint?: (point: THREE.Vector3, snapshot: CameraSnapshot) => void,
 ) {
   const loading = ref(false);
@@ -144,6 +155,16 @@ export function useThreeScene(
   const mode = ref<ViewMode>("orbit");
   const createMode = ref(false);
   const markersVisible = ref(true);
+  /** Whether the admin crop gizmo is open. */
+  const cropMode = ref(false);
+  /**
+   * The box the gizmo is currently drawing, mirrored out as plain numbers.
+   *
+   * The gizmo itself is imperative, so this is what lets the panel react to a
+   * drag, which it needs in order to count the annotations that would fall
+   * outside the box as the admin moves a face.
+   */
+  const cropDraft = ref<CropBox | null>(null);
 
   let renderer: THREE.WebGLRenderer | null = null;
   let scene: THREE.Scene | null = null;
@@ -155,6 +176,54 @@ export function useThreeScene(
   let userInteracted = false;
   let orbitDistance = 4;
   let loadId = 0;
+
+  /* --- Crop ---------------------------------------------------------------
+   * Three boxes, all in the model's own local space, all distinct:
+   *
+   * - `originalBounds` is what the scan measures, captured once at load. It is
+   *   the ceiling on any crop and what Reset goes back to. It cannot be
+   *   re-measured later, because `setFromObject` reports world space and the
+   *   model has been moved by then.
+   * - `appliedBox` is what the viewer is framed and centred on right now.
+   * - `clipBox` is what the clipping planes are cutting to, which during a drag
+   *   is the draft rather than the applied box.
+   */
+  const originalBounds = new THREE.Box3();
+  const appliedBox = new THREE.Box3();
+  const appliedCentre = new THREE.Vector3();
+  const clipBox = new THREE.Box3();
+  let clippingActive = false;
+  /**
+   * The crop actually in force, or null for none.
+   *
+   * Distinct from `clipBox`, which follows the draft during an edit. This is
+   * what Cancel restores to, and it is tracked here rather than re-read from
+   * `storedCrop` so that a second edit in the same session starts from the
+   * crop just saved rather than from whatever the props have got round to.
+   */
+  let committedCrop: THREE.Box3 | null = null;
+
+  /** The camera as it was when the crop tool opened, for Cancel to restore. */
+  let viewBeforeCrop: {
+    mode: ViewMode;
+    fov: number;
+    position: THREE.Vector3;
+    target: THREE.Vector3;
+    rotationX: number;
+    rotationY: number;
+  } | null = null;
+
+  /** Breathing room around the box when the crop tool frames it. */
+  const CROP_FRAME_MARGIN = 1.08;
+
+  let gizmo: CropGizmo | null = null;
+
+  // Six planes held in local space, and the world-space array the materials
+  // actually read, refreshed from the model's matrix every frame. Two arrays
+  // rather than one because clipping planes are world-space while the crop is
+  // defined against the geometry, and the model rotates.
+  const cropLocalPlanes = Array.from({ length: 6 }, () => new THREE.Plane());
+  const cropWorldPlanes = Array.from({ length: 6 }, () => new THREE.Plane());
 
   // Orbit pivot re-anchoring (see reanchorOrbitTarget)
   let modelRadius = 2;
@@ -220,6 +289,9 @@ export function useThreeScene(
     // it would remap those baked values and wash the scan out.
     renderer.toneMapping = THREE.NoToneMapping;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
+    // Per-material rather than the renderer-wide `clippingPlanes`, so the crop
+    // cuts the scan without also cutting the gizmo drawing the box.
+    renderer.localClippingEnabled = true;
 
     scene = new THREE.Scene();
 
@@ -236,6 +308,21 @@ export function useThreeScene(
 
     controls.addEventListener("start", () => {
       userInteracted = true;
+    });
+
+    gizmo = createCropGizmo({
+      scene,
+      camera,
+      renderer,
+      controls,
+      getModel: () => currentModel,
+      onChange: (box) => {
+        // Clip to the draft as the face moves, but leave the model where it is.
+        // Re-centring on every drag frame would slide the scan out from under
+        // the handle being dragged.
+        setClipBox(box);
+        cropDraft.value = cropFromBox(box);
+      },
     });
 
     sizeToContainer(canvas);
@@ -275,13 +362,19 @@ export function useThreeScene(
       sizeToContainer(canvas);
     }
     if (mode.value === "orbit" && controls) {
-      if (!userInteracted && currentModel) {
+      // Auto-rotate is suppressed while cropping: a turning model makes the
+      // handles impossible to aim, and the box would appear to drift.
+      if (!userInteracted && !cropMode.value && currentModel) {
         currentModel.rotation.y += 0.001;
       }
       // Skip controls.update() during flyTo. OrbitControls recomputes camera.position
       // from its internal spherical state each update, which overwrites tween values.
       if (!tweenActive) controls.update();
     }
+    // After the model's transform has settled for this frame and before the
+    // render that reads them.
+    updateCropPlanes();
+    gizmo?.update();
     if (renderer && scene && camera) renderer.render(scene, camera);
   }
 
@@ -305,6 +398,11 @@ export function useThreeScene(
       side: src.side,
       depthWrite: src.depthWrite,
       toneMapped: false,
+      // Left unset rather than given six inert planes on an uncropped scan.
+      // The number of clipping planes is part of the shader's cache key, so
+      // handing every model a full set would cost a per-fragment test on scans
+      // that have nothing to clip.
+      clippingPlanes: clippingActive ? cropWorldPlanes : undefined,
     });
     // Textures are handed to the new material, so only the material shell is
     // released here, since disposeMaterial() would take the maps down with it.
@@ -320,6 +418,188 @@ export function useThreeScene(
         ? mesh.material.map(toUnlitMaterial)
         : toUnlitMaterial(mesh.material);
     });
+  }
+
+  /* --- Crop ---------------------------------------------------------------- */
+
+  function boxFromCrop(crop: CropBox): THREE.Box3 {
+    return new THREE.Box3(
+      new THREE.Vector3(crop.minX, crop.minY, crop.minZ),
+      new THREE.Vector3(crop.maxX, crop.maxY, crop.maxZ),
+    );
+  }
+
+  function cropFromBox(box: THREE.Box3): CropBox {
+    return {
+      minX: box.min.x,
+      minY: box.min.y,
+      minZ: box.min.z,
+      maxX: box.max.x,
+      maxY: box.max.y,
+      maxZ: box.max.z,
+    };
+  }
+
+  /**
+   * Whether a box is the scan's own bounds, to within a millimetre an admin
+   * could not have aimed for. That case is stored as no crop at all rather than
+   * as a box that happens to match, so Reset genuinely clears the columns.
+   */
+  function isFullBounds(box: THREE.Box3): boolean {
+    const epsilon = 1e-3;
+    return (
+      box.min.distanceTo(originalBounds.min) < epsilon &&
+      box.max.distanceTo(originalBounds.max) < epsilon
+    );
+  }
+
+  /**
+   * Brings the model's world matrix up to date without walking its children.
+   *
+   * The clipping planes and the gizmo both need it before the renderer would
+   * otherwise compute it, and `updateMatrixWorld()` recurses through every mesh
+   * in the scan to do it. The model is parented straight to the scene, whose
+   * transform is the identity, so its local matrix is already its world matrix
+   * and the recursion buys nothing.
+   */
+  function syncModelMatrix() {
+    if (!currentModel) return;
+    currentModel.updateMatrix();
+    currentModel.matrixWorld.copy(currentModel.matrix);
+  }
+
+  function applyClippingToMaterials() {
+    if (!currentModel) return;
+    // Null, not undefined: three's typings take `undefined` on the constructor
+    // options and `null` on the property, and they are not interchangeable.
+    const planes = clippingActive ? cropWorldPlanes : null;
+    currentModel.traverse((child) => {
+      const mesh = child as THREE.Mesh;
+      if (!mesh.isMesh || !mesh.material) return;
+      const materials = Array.isArray(mesh.material)
+        ? mesh.material
+        : [mesh.material];
+      for (const material of materials) {
+        material.clippingPlanes = planes;
+        // Going between no planes and six changes the shader, not just a
+        // uniform, so the program has to be rebuilt. Moving a plane does not,
+        // which is why this only runs when clipping is switched on or off.
+        material.needsUpdate = true;
+      }
+    });
+  }
+
+  /**
+   * Points the clipping planes at `box`, or turns clipping off when it is null.
+   *
+   * The planes are written in the model's local space here and transformed to
+   * world space per frame (see `updateCropPlanes`). Three clips where the
+   * signed distance to a plane is negative, so each pair keeps the inside.
+   */
+  function setClipBox(box: THREE.Box3 | null) {
+    const wasActive = clippingActive;
+    clippingActive = box !== null;
+
+    if (box) {
+      clipBox.copy(box);
+      cropLocalPlanes[0].set(new THREE.Vector3(1, 0, 0), -box.min.x);
+      cropLocalPlanes[1].set(new THREE.Vector3(-1, 0, 0), box.max.x);
+      cropLocalPlanes[2].set(new THREE.Vector3(0, 1, 0), -box.min.y);
+      cropLocalPlanes[3].set(new THREE.Vector3(0, -1, 0), box.max.y);
+      cropLocalPlanes[4].set(new THREE.Vector3(0, 0, 1), -box.min.z);
+      cropLocalPlanes[5].set(new THREE.Vector3(0, 0, -1), box.max.z);
+      updateCropPlanes();
+    }
+
+    if (wasActive !== clippingActive) applyClippingToMaterials();
+  }
+
+  /**
+   * Re-derives the world-space clipping planes from the model's transform.
+   *
+   * Runs every frame because clipping planes are world-space while the crop is
+   * defined against the geometry, and the model turns: `animate` auto-rotates
+   * it, and `flyTo` tweens it to an annotation's stored rotation. Planes fixed
+   * in world space would stay put and slice through a turning scan.
+   */
+  function updateCropPlanes() {
+    if (!clippingActive || !currentModel) return;
+    syncModelMatrix();
+    for (let i = 0; i < 6; i++) {
+      cropWorldPlanes[i]
+        .copy(cropLocalPlanes[i])
+        .applyMatrix4(currentModel.matrixWorld);
+    }
+  }
+
+  /**
+   * The first intersection that is not on cropped-away geometry.
+   *
+   * Clipping is a fragment-stage operation, so the triangles it hides are still
+   * there as far as the raycaster is concerned. Without this an annotation
+   * could be placed on invisible geometry, and the orbit pivot could anchor
+   * itself to a fragment the admin cropped out precisely because it was
+   * nowhere near the room. Hits arrive sorted by distance, so the first one
+   * inside the box is the nearest visible surface.
+   */
+  function firstVisibleHit(
+    hits: THREE.Intersection[],
+  ): THREE.Intersection | undefined {
+    if (!clippingActive || !currentModel) return hits[0];
+    const local = new THREE.Vector3();
+    return hits.find((hit) => {
+      local.copy(hit.point);
+      currentModel!.worldToLocal(local);
+      return clipBox.containsPoint(local);
+    });
+  }
+
+  /**
+   * Centres the model on `box` and frames the camera to fit it.
+   *
+   * Everything the viewer knows about scale comes from here, which is why a
+   * crop corrects so much at once: the centre the model is offset by, the orbit
+   * distance, the near and far planes, the floor under the dolly step, and the
+   * radius the pivot probe falls back to.
+   */
+  function frameOn(box: THREE.Box3) {
+    if (!currentModel) return;
+    const centre = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+
+    appliedBox.copy(box);
+    appliedCentre.copy(centre);
+    currentModel.position.copy(centre).negate();
+    modelRadius = (Math.max(size.x, size.y, size.z) || 1) / 2;
+
+    if (!camera || !controls) return;
+
+    const maxDim = Math.max(size.x, size.y, size.z) || 1;
+    const fovRad = (camera.fov * Math.PI) / 180;
+    const distance = (maxDim / 2 / Math.tan(fovRad / 2)) * 1.4;
+    orbitDistance = distance;
+
+    camera.near = Math.max(distance / 1000, 0.01);
+    camera.far = distance * 100;
+    // Backstop for the degenerate case the pivot probe can't catch (zooming
+    // into empty space): a radius of exactly 0 leaves OrbitControls with no
+    // step size at all and the viewer permanently stuck.
+    controls.minDistance = distance * 0.005;
+
+    if (mode.value === "pov") {
+      controls.enabled = false;
+      camera.fov = povState.fov;
+      camera.position.set(0, 0.2, 0);
+      povState.rotationX = 0;
+      povState.rotationY = 0;
+      applyPovRotation();
+    } else {
+      controls.enabled = true;
+      camera.position.set(distance * 0.7, distance * 0.5, distance * 0.8);
+      controls.target.set(0, 0, 0);
+      controls.update();
+    }
+    camera.updateProjectionMatrix();
   }
 
   async function loadModel(url: string) {
@@ -346,42 +626,24 @@ export function useThreeScene(
       profile?.phase("fetch+parse");
 
       currentModel = gltf.scene;
-      applyFlatMaterials(currentModel);
       scene.add(currentModel);
 
-      const box = new THREE.Box3().setFromObject(currentModel);
-      const center = box.getCenter(new THREE.Vector3());
-      const size = box.getSize(new THREE.Vector3());
-      currentModel.position.sub(center);
-      modelRadius = (Math.max(size.x, size.y, size.z) || 1) / 2;
+      // Measured before anything moves the model. `setFromObject` reports world
+      // space, and the model's transform is still the identity at this point,
+      // so this is the scan's own local bounds. It cannot be taken again later:
+      // once `frameOn` offsets the model the same call would report something
+      // else entirely, which is why the crop's ceiling is captured here and
+      // kept for the life of the load.
+      originalBounds.copy(new THREE.Box3().setFromObject(currentModel));
 
-      if (camera && controls) {
-        const maxDim = Math.max(size.x, size.y, size.z) || 1;
-        const fovRad = (camera.fov * Math.PI) / 180;
-        const distance = (maxDim / 2 / Math.tan(fovRad / 2)) * 1.4;
-        orbitDistance = distance;
+      const stored = storedCrop.value ? boxFromCrop(storedCrop.value) : null;
+      committedCrop = stored;
+      // Before the materials are built, so they are created with the right
+      // number of clipping planes instead of being rebuilt a moment later.
+      setClipBox(stored);
+      applyFlatMaterials(currentModel);
+      frameOn(stored ?? originalBounds);
 
-        camera.near = Math.max(distance / 1000, 0.01);
-        camera.far = distance * 100;
-        // Backstop for the degenerate case the pivot probe can't catch (zooming
-        // into empty space): a radius of exactly 0 leaves OrbitControls with no
-        // step size at all and the viewer permanently stuck.
-        controls.minDistance = distance * 0.005;
-
-        if (mode.value === "pov") {
-          controls.enabled = false;
-          camera.fov = povState.fov;
-          camera.position.set(0, 0.2, 0);
-          povState.rotationX = 0;
-          povState.rotationY = 0;
-          applyPovRotation();
-        } else {
-          camera.position.set(distance * 0.7, distance * 0.5, distance * 0.8);
-          controls.target.set(0, 0, 0);
-          controls.update();
-        }
-        camera.updateProjectionMatrix();
-      }
       profile?.phase("scene add+frame");
       profile?.total();
       profile?.census(currentModel, renderer);
@@ -391,6 +653,163 @@ export function useThreeScene(
     } finally {
       if (myId === loadId) loading.value = false;
     }
+  }
+
+  /**
+   * Opens the crop gizmo on whatever is currently in force.
+   *
+   * Clipping is switched on even when there is no crop yet, with the planes at
+   * the scan's own bounds where they cut nothing. That way the first drag
+   * trims immediately rather than having to turn clipping on mid-gesture and
+   * rebuild every shader in the middle of the drag.
+   */
+  function startCrop() {
+    if (!gizmo || !currentModel || !camera || !controls) return;
+    // Mutually exclusive with placing an annotation: both want the pointer, and
+    // a click meant for a handle must not leave a marker behind it.
+    createMode.value = false;
+    cropMode.value = true;
+    userInteracted = true;
+
+    viewBeforeCrop = {
+      mode: mode.value,
+      fov: camera.fov,
+      position: camera.position.clone(),
+      target: controls.target.clone(),
+      rotationX: povState.rotationX,
+      rotationY: povState.rotationY,
+    };
+    // The box is dragged from outside it. From POV's vantage point inside the
+    // scan the faces surround the camera and most handles are behind it.
+    if (mode.value === "pov") setMode("orbit");
+
+    const initial = committedCrop?.clone() ?? originalBounds.clone();
+    setClipBox(initial);
+    gizmo.show(initial, originalBounds);
+    frameWholeBox(initial);
+    cropDraft.value = cropFromBox(initial);
+  }
+
+  /**
+   * Pulls the orbit camera back until every corner of `box` is in view.
+   *
+   * The ordinary framing in `frameOn` sizes the camera distance off the box's
+   * longest side and the vertical field of view alone, which suits looking at a
+   * scan but not editing one: the box's corners stick out past that fit, and in
+   * a viewer narrower than it is tall they fall off the sides as well, taking
+   * their handles with them. This fits the box's bounding sphere against the
+   * narrower of the two fields of view instead, keeping the current viewing
+   * direction so the admin is not spun round to a different side of the scan.
+   */
+  function frameWholeBox(box: THREE.Box3) {
+    if (!camera || !controls || !currentModel) return;
+    syncModelMatrix();
+
+    const sphere = box.getBoundingSphere(new THREE.Sphere());
+    sphere.center.applyMatrix4(currentModel.matrixWorld);
+
+    const vertical = (camera.fov * Math.PI) / 180;
+    const horizontal = 2 * Math.atan(Math.tan(vertical / 2) * camera.aspect);
+    const distance =
+      (sphere.radius / Math.sin(Math.min(vertical, horizontal) / 2)) *
+      CROP_FRAME_MARGIN;
+
+    const direction = camera.position.clone().sub(controls.target);
+    if (direction.lengthSq() < 1e-8) direction.set(0.7, 0.5, 0.8);
+    direction.normalize();
+
+    controls.target.copy(sphere.center);
+    camera.position.copy(sphere.center).addScaledVector(direction, distance);
+    camera.far = Math.max(camera.far, distance * 10);
+    camera.updateProjectionMatrix();
+    controls.update();
+  }
+
+  /** Abandons the edit. The model was never re-centred, so only clipping moves. */
+  function cancelCrop() {
+    if (!gizmo) return;
+    cropMode.value = false;
+    gizmo.hide();
+    cropDraft.value = null;
+    setClipBox(committedCrop);
+    restoreViewBeforeCrop();
+  }
+
+  /**
+   * Puts the camera back where it was before the crop tool framed the box.
+   *
+   * Only Cancel does this. Saving re-frames on the new crop instead, because
+   * the view from before no longer points at the centre of anything.
+   */
+  function restoreViewBeforeCrop() {
+    const view = viewBeforeCrop;
+    viewBeforeCrop = null;
+    if (!view || !camera || !controls) return;
+
+    if (view.mode === "pov") {
+      setMode("pov");
+      povState.fov = view.fov;
+      camera.fov = view.fov;
+      povState.rotationX = view.rotationX;
+      povState.rotationY = view.rotationY;
+      applyPovRotation();
+    } else {
+      camera.fov = view.fov;
+      camera.position.copy(view.position);
+      controls.target.copy(view.target);
+      controls.update();
+    }
+    camera.updateProjectionMatrix();
+  }
+
+  /** Pushes every face back out to the scan's bounds, which saves as no crop. */
+  function resetCropBox() {
+    gizmo?.setBox(originalBounds.clone());
+  }
+
+  /**
+   * What the drawn box would save as, computed without changing anything.
+   *
+   * Separate from applying it so the caller can put the request first and only
+   * move the viewer once the save has landed. Re-framing optimistically and
+   * then having the POST fail would leave the admin looking at a crop that was
+   * not stored.
+   *
+   * The re-centre is the part with consequences beyond this session. World
+   * space in the viewer is the model's local space minus the centre of
+   * whichever box is applied, so moving that centre moves every world-space
+   * coordinate recorded against this entry. Annotation points are model-local
+   * and ride along untouched; annotation cameras are not, which is what the
+   * delta is for.
+   */
+  function pendingCrop(): CropResult | null {
+    if (!gizmo || !currentModel) return null;
+
+    const next = gizmo.getBox();
+    const centre = next.getCenter(new THREE.Vector3());
+    const delta = appliedCentre.clone().sub(centre);
+
+    return {
+      crop: isFullBounds(next) ? null : cropFromBox(next),
+      recenterDelta: { x: delta.x, y: delta.y, z: delta.z },
+    };
+  }
+
+  /** Applies the drawn box and closes the editor. For use once it is saved. */
+  function applyPendingCrop() {
+    if (!gizmo || !currentModel) return;
+
+    const next = gizmo.getBox();
+    const full = isFullBounds(next);
+
+    committedCrop = full ? null : next.clone();
+    setClipBox(committedCrop);
+    viewBeforeCrop = null;
+    frameOn(full ? originalBounds : next);
+
+    cropMode.value = false;
+    gizmo.hide();
+    cropDraft.value = null;
   }
 
   function setMode(next: ViewMode) {
@@ -425,10 +844,10 @@ export function useThreeScene(
     const ndcY = -((clientY - rect.top) / rect.height) * 2 + 1;
     const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera);
-    const hits = raycaster.intersectObject(currentModel, true);
-    if (hits.length === 0) return null;
+    const hit = firstVisibleHit(raycaster.intersectObject(currentModel, true));
+    if (!hit) return null;
     // Store in model-local space so the point tracks the model as it auto-rotates
-    return currentModel.worldToLocal(hits[0].point.clone());
+    return currentModel.worldToLocal(hit.point.clone());
   }
 
   // OrbitControls sizes both the dolly step and the pan step from the distance
@@ -447,6 +866,9 @@ export function useThreeScene(
   function reanchorOrbitTarget(force = false) {
     if (!camera || !controls || !currentModel) return;
     if (mode.value !== "orbit" || tweenActive) return;
+    // The pivot must not move under a crop drag: OrbitControls sizes its steps
+    // from it, and the gizmo's drag plane is built once at pointerdown.
+    if (cropMode.value) return;
 
     const radius = camera.position.distanceTo(controls.target);
     // Cap it so a long ray across the scan can't fling the pivot somewhere that
@@ -466,7 +888,9 @@ export function useThreeScene(
     probeRaycaster.set(camera.position, probeDir);
     probeRaycaster.near = 0;
     probeRaycaster.far = orbitDistance * 4;
-    const hit = probeRaycaster.intersectObject(currentModel, true)[0];
+    const hit = firstVisibleHit(
+      probeRaycaster.intersectObject(currentModel, true),
+    );
 
     // A miss means the camera is looking into empty space (out a doorway, off the edge of
     // the scan), so fall back to the model's own scale rather than leaving the
@@ -639,10 +1063,16 @@ export function useThreeScene(
       offRenderer.setClearColor(0x000000);
       offRenderer.toneMapping = THREE.NoToneMapping;
       offRenderer.outputColorSpace = THREE.SRGBColorSpace;
+      // Its own renderer, so it needs its own permission to clip. Without this
+      // the thumbnail captured right after a crop would show the geometry the
+      // crop had just removed.
+      offRenderer.localClippingEnabled = true;
 
       const thumbCam = new THREE.PerspectiveCamera(70, 1, 0.01, 1000);
-      const box = new THREE.Box3().setFromObject(currentModel);
-      const size = box.getSize(new THREE.Vector3());
+      // The applied box rather than a fresh measurement: `setFromObject` would
+      // report the whole scan including the cropped-away parts, and frame the
+      // thumbnail for geometry that is not in the picture.
+      const size = appliedBox.getSize(new THREE.Vector3());
       const maxDim = Math.max(size.x, size.y, size.z) || 1;
       const fovRad = (70 * Math.PI) / 180;
       const dist = (maxDim / 2 / Math.tan(fovRad / 2)) * 1.4;
@@ -654,9 +1084,14 @@ export function useThreeScene(
 
       const savedRotY = currentModel.rotation.y;
       currentModel.rotation.y = 0;
+      // The planes are refreshed once per animation frame from the model's
+      // matrix, so straightening the model here leaves them a rotation behind.
+      // Rendering against those would cut the thumbnail on the diagonal.
+      updateCropPlanes();
       offRenderer.render(scene, thumbCam);
       const dataUrl = offCanvas.toDataURL("image/jpeg", 0.85);
       currentModel.rotation.y = savedRotY;
+      updateCropPlanes();
       return dataUrl;
     } finally {
       offRenderer?.dispose();
@@ -684,6 +1119,10 @@ export function useThreeScene(
     activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     pointerDownX = e.clientX;
     pointerDownY = e.clientY;
+    // The gizmo gets first refusal: a press that lands on a handle is a crop
+    // drag and nothing else. It declines anything that misses, so pressing
+    // elsewhere still orbits the scan while the box is open.
+    if (gizmo?.onPointerDown(e)) return;
     if (mode.value === "orbit") {
       // Drag start is discrete and rare, so skip the throttle here.
       reanchorOrbitTarget(true);
@@ -704,6 +1143,7 @@ export function useThreeScene(
 
   function onPointerMove(e: PointerEvent) {
     activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (gizmo?.onPointerMove(e)) return;
     if (mode.value !== "pov" || !camera || tweenActive) return;
     if (activePointers.size >= 2) {
       // Pinching adjusts the field of view.
@@ -730,9 +1170,12 @@ export function useThreeScene(
 
   function onPointerUp(e: PointerEvent) {
     activePointers.delete(e.pointerId);
+    const wasCropDrag = gizmo?.onPointerUp() ?? false;
     const dx = Math.abs(e.clientX - pointerDownX);
     const dy = Math.abs(e.clientY - pointerDownY);
     const isClick = dx < 5 && dy < 5;
+
+    if (wasCropDrag) return;
 
     if (createMode.value && isClick && !tweenActive) {
       const pt = pickPoint(e.clientX, e.clientY);
@@ -795,6 +1238,7 @@ export function useThreeScene(
     cancelAnimationFrame(raf);
     cancelAnimationFrame(tweenRaf);
     if (currentModel) disposeObject(currentModel);
+    gizmo?.dispose();
     controls?.dispose();
     renderer?.dispose();
     renderer = null;
@@ -802,6 +1246,7 @@ export function useThreeScene(
     camera = null;
     controls = null;
     currentModel = null;
+    gizmo = null;
   }
 
   watch(
@@ -815,6 +1260,9 @@ export function useThreeScene(
   );
 
   watch(modelUrl, (url) => {
+    // A different scan means any crop edit in progress is about the previous
+    // one, so it goes rather than being carried across.
+    if (cropMode.value) cancelCrop();
     if (url && scene) loadModel(url);
   });
 
@@ -826,6 +1274,8 @@ export function useThreeScene(
     mode,
     createMode,
     markersVisible,
+    cropMode,
+    cropDraft,
     loadModel,
     setMode,
     pickPoint,
@@ -833,5 +1283,10 @@ export function useThreeScene(
     flyTo,
     project,
     captureThumb,
+    startCrop,
+    cancelCrop,
+    resetCropBox,
+    pendingCrop,
+    applyPendingCrop,
   };
 }

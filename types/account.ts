@@ -5,6 +5,7 @@
  * and its children read the same lists: the page counts them for its sub-tab
  * badges while the children display them.
  */
+import type { CropBox } from "~~/shared/utils/crop";
 
 /** A public reference to a user, as returned beside content they created. */
 export interface AdminUserRef {
@@ -60,6 +61,8 @@ export interface PendingRestroom {
   lng: number | null;
   description: string | null;
   descriptors: string[];
+  /** A crop an admin applied while reviewing, before publishing. */
+  crop: CropBox | null;
   modelUrl: string;
   createdAt: string;
   submitter: AdminUserContact | null;

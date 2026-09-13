@@ -2,6 +2,8 @@ import { eq } from "drizzle-orm";
 import { useDb, schema } from "~~/server/utils/db";
 import { parseDescriptors } from "~~/server/utils/descriptors";
 import { getRouterString } from "~~/server/utils/routeParams";
+import { versionedThumbUrl } from "~~/server/utils/urls";
+import { cropFromColumns } from "~~/shared/utils/crop";
 
 export default defineEventHandler(async (event) => {
   const slug = getRouterString(event, "slug");
@@ -23,6 +25,13 @@ export default defineEventHandler(async (event) => {
       file: schema.restrooms.file,
       thumbKey: schema.restrooms.thumbKey,
       status: schema.restrooms.status,
+      updatedAt: schema.restrooms.updatedAt,
+      cropMinX: schema.restrooms.cropMinX,
+      cropMinY: schema.restrooms.cropMinY,
+      cropMinZ: schema.restrooms.cropMinZ,
+      cropMaxX: schema.restrooms.cropMaxX,
+      cropMaxY: schema.restrooms.cropMaxY,
+      cropMaxZ: schema.restrooms.cropMaxZ,
       submitterUsername: schema.users.username,
       submitterDisplayName: schema.users.displayName,
     })
@@ -52,7 +61,8 @@ export default defineEventHandler(async (event) => {
         }
       : null,
     status: row.status,
+    crop: cropFromColumns(row),
     modelUrl: `/api/r2/models/${row.file}`,
-    thumbUrl: row.thumbKey ? `/api/r2/thumbs/${row.thumbKey}` : null,
+    thumbUrl: versionedThumbUrl(row.thumbKey, row.updatedAt),
   };
 });

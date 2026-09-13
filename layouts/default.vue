@@ -6,7 +6,7 @@ const panelOpen = ref(true);
 
 // While the submission wizard has a scan loaded, it takes over this panel:
 // shown in place of the normal catalog selection, forced open, toggle hidden.
-const { previewModelUrl } = useSubmissionPreview();
+const { previewModelUrl, previewEntry } = useSubmissionPreview();
 const inProgress = computed(() => !!previewModelUrl.value);
 
 // Measured by Catalog.vue so the tab lines up with the header strip exactly,
@@ -251,7 +251,19 @@ function goPrev() {
       </p>
       <Viewer
         :model-url="previewModelUrl ?? selected?.modelUrl ?? null"
-        :slug="previewModelUrl ? null : (selected?.slug ?? null)"
+        :slug="
+          previewModelUrl
+            ? (previewEntry?.slug ?? null)
+            : (selected?.slug ?? null)
+        "
+        :restroom-id="
+          previewModelUrl ? (previewEntry?.id ?? null) : (selected?.id ?? null)
+        "
+        :crop="
+          previewModelUrl
+            ? (previewEntry?.crop ?? null)
+            : (selected?.crop ?? null)
+        "
         :thumb-url="previewModelUrl ? null : (selected?.thumbUrl ?? null)"
       />
 

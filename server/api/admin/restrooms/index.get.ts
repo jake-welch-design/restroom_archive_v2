@@ -3,6 +3,7 @@ import { useDb, schema } from "~~/server/utils/db";
 import { requireRole } from "~~/server/utils/requireRole";
 import { parseDescriptors } from "~~/server/utils/descriptors";
 import { purgeExpiredRejectionsQuietly } from "~~/server/utils/purgeRejections";
+import { cropFromColumns } from "~~/shared/utils/crop";
 
 export default defineEventHandler(async (event) => {
   requireRole(event, "admin");
@@ -30,6 +31,12 @@ export default defineEventHandler(async (event) => {
       descriptors: schema.restrooms.descriptors,
       file: schema.restrooms.file,
       createdAt: schema.restrooms.createdAt,
+      cropMinX: schema.restrooms.cropMinX,
+      cropMinY: schema.restrooms.cropMinY,
+      cropMinZ: schema.restrooms.cropMinZ,
+      cropMaxX: schema.restrooms.cropMaxX,
+      cropMaxY: schema.restrooms.cropMaxY,
+      cropMaxZ: schema.restrooms.cropMaxZ,
       submitterEmail: schema.users.email,
       submitterUsername: schema.users.username,
       submitterName: schema.users.displayName,
@@ -43,6 +50,9 @@ export default defineEventHandler(async (event) => {
   return rows.map((r) => ({
     ...r,
     descriptors: parseDescriptors(r.descriptors),
+    // A pending entry can already carry a crop: an admin reviewing one can trim
+    // it before publishing rather than noticing the stray geometry afterwards.
+    crop: cropFromColumns(r),
     modelUrl: `/api/r2/models/${r.file}`,
     submitter: r.submitterEmail
       ? {

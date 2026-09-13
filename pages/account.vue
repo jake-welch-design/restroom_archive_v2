@@ -12,7 +12,8 @@ const {
   adminMessage,
   signout,
 } = useAuth();
-const { previewModelUrl, hasUnsavedSubmission } = useSubmissionPreview();
+const { previewModelUrl, previewEntry, hasUnsavedSubmission } =
+  useSubmissionPreview();
 
 // This page has no controls strip of its own, so instead of the layout's expand
 // tab measuring itself against one, the page's first bordered row grows to meet
@@ -235,6 +236,11 @@ watch(expandedPendingId, (id) => {
   const r =
     id == null ? null : pendingRestrooms.value?.find((p) => p.id === id);
   previewModelUrl.value = r?.modelUrl ?? null;
+  // The row this preview is of, which is what lets the viewer offer the crop
+  // tool here. Unlike the wizard's preview, a pending row is a real entry.
+  previewEntry.value = r
+    ? { id: r.id, slug: r.slug, crop: r.crop ?? null }
+    : null;
 });
 
 // Navigating away from the pending queue should collapse any expanded preview

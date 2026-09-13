@@ -10,7 +10,8 @@ const emit = defineEmits<{ submitted: [] }>();
 
 const { isAdmin } = useAuth();
 const { data: descriptorSuggestions } = useDescriptorSuggestions();
-const { previewModelUrl, hasUnsavedSubmission } = useSubmissionPreview();
+const { previewModelUrl, previewEntry, hasUnsavedSubmission } =
+  useSubmissionPreview();
 const { select } = useSelection();
 
 const currentStep = ref(1);
@@ -85,6 +86,11 @@ function onFileChange(e: Event) {
   uploadFile.value = file;
   if (previewModelUrl.value) URL.revokeObjectURL(previewModelUrl.value);
   previewModelUrl.value = file ? URL.createObjectURL(file) : null;
+  // An unsaved scan is not an entry, so there is nothing for the viewer's
+  // admin tools to act on. Cleared explicitly rather than relied upon to be
+  // null already, because an admin can reach the wizard straight from a
+  // pending preview that did set it.
+  previewEntry.value = null;
   hasUnsavedSubmission.value = !!file;
 }
 

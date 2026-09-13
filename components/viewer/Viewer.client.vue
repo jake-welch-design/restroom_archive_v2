@@ -2,15 +2,21 @@
 import type * as THREE from "three";
 import { useThreeScene } from "~/composables/useThreeScene";
 import type { CameraSnapshot } from "~/composables/useThreeScene";
+import { apiErrorMessage } from "~~/shared/utils/apiError";
+import type { CropBox } from "~~/shared/utils/crop";
 
 const props = defineProps<{
   modelUrl?: string | null;
   slug?: string | null;
   thumbUrl?: string | null;
+  /** Needed for the crop endpoint, which is keyed by id like every admin route. */
+  restroomId?: number | null;
+  crop?: CropBox | null;
 }>();
 const canvasRef = ref<HTMLCanvasElement | null>(null);
 const modelUrlRef = toRef(props, "modelUrl");
 const slugRef = toRef(props, "slug");
+const cropRef = toRef(props, "crop");
 
 const { loggedIn, isAdmin } = useAuth();
 const { selectedAnnotationId, selectAnnotation } = useSelection();
@@ -37,11 +43,18 @@ const {
   mode,
   createMode,
   markersVisible,
+  cropMode,
+  cropDraft,
   setMode,
   flyTo,
   project,
   captureThumb,
-} = useThreeScene(canvasRef, modelUrlRef, handlePickPoint);
+  startCrop,
+  cancelCrop,
+  resetCropBox,
+  pendingCrop,
+  applyPendingCrop,
+} = useThreeScene(canvasRef, modelUrlRef, cropRef, handlePickPoint);
 
 // Fly to annotation when selectedAnnotationId changes
 watch(selectedAnnotationId, (id) => {
@@ -132,6 +145,79 @@ async function saveAnnotation(body: string) {
   }
 }
 
+/* --- Admin crop ----------------------------------------------------------- */
+
+/**
+ * Available on any entry that exists, published or still in the review queue:
+ * the point of offering it at review time is to fix the framing before the
+ * entry reaches the archive rather than afterwards. The wizard's preview of an
+ * unsaved scan has no id, which is what rules it out there.
+ */
+const canCrop = computed(
+  () => isAdmin.value && props.restroomId != null && !!props.modelUrl,
+);
+
+const cropSaving = ref(false);
+const cropError = ref("");
+
+function toggleCropMode() {
+  cropError.value = "";
+  if (cropMode.value) {
+    cancelCrop();
+    showToast("Crop canceled");
+  } else {
+    startCrop();
+  }
+}
+
+async function saveCrop() {
+  const id = props.restroomId;
+  const pending = pendingCrop();
+  if (id == null || !pending) return;
+
+  cropSaving.value = true;
+  cropError.value = "";
+  try {
+    await $fetch(`/api/admin/restrooms/${id}/crop`, {
+      method: "POST",
+      body: pending,
+    });
+    // Only now, so a failed save leaves the editor open on the box the admin
+    // drew rather than re-framing on a crop that was never stored.
+    applyPendingCrop();
+
+    // The crop changed the framing, so the catalog's thumbnail is of the old
+    // one. Re-rendered here rather than left to the offline script, because
+    // the corrected picture is the whole point of the correction.
+    const dataUrl = captureThumb();
+    if (dataUrl && props.slug) {
+      await $fetch(`/api/restrooms/${props.slug}/thumbnail`, {
+        method: "POST",
+        body: { imageData: dataUrl },
+      });
+    }
+
+    // The catalog for the new crop and thumbnail, the pending queue for the
+    // same reason when the entry is still in review, and the annotations
+    // because the save shifted every stored camera by the re-centre.
+    await Promise.all([
+      refreshNuxtData(["restrooms", "admin-restrooms"]),
+      refreshAnnotations(),
+    ]);
+    showToast(pending.crop ? "Crop saved" : "Crop cleared");
+  } catch (e) {
+    cropError.value = apiErrorMessage(e, "Could not save the crop.");
+  } finally {
+    cropSaving.value = false;
+  }
+}
+
+// Leaving the entry abandons an open edit rather than carrying it to whatever
+// is selected next.
+watch(modelUrlRef, () => {
+  cropError.value = "";
+});
+
 // Transient toast describing the last viewport-button action
 const toastMessage = ref("");
 let toastTimer: ReturnType<typeof setTimeout> | null = null;
@@ -167,7 +253,9 @@ function toggleCreateMode() {
 // Esc to cancel create mode / close active bubble
 function onKeydown(e: KeyboardEvent) {
   if (e.key === "Escape") {
-    if (pendingPoint.value) {
+    if (cropMode.value) {
+      if (!cropSaving.value) toggleCropMode();
+    } else if (pendingPoint.value) {
       pendingPoint.value = null;
       pendingSnapshot.value = null;
     } else if (createMode.value) {
@@ -241,10 +329,42 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
           </button>
         </div>
 
+        <!-- Crop: admins only, and only on an entry that exists. Sits with the
+        view-mode control rather than the annotation group because it is about
+        the scan itself, not about what has been written on it. -->
+        <div v-if="canCrop" class="ctrl-group">
+          <button
+            class="ctrl-btn ctrl-crop"
+            :class="{ active: cropMode }"
+            :title="cropMode ? 'Close crop tool' : 'Crop and re-centre scan'"
+            :aria-label="
+              cropMode ? 'Close crop tool' : 'Crop and re-centre scan'
+            "
+            :aria-pressed="cropMode"
+            @click="toggleCropMode"
+          >
+            <!-- Crop marks: two overlapping right angles. -->
+            <svg
+              viewBox="0 0 16 16"
+              width="18"
+              height="18"
+              fill="none"
+              stroke="#ffffff"
+              stroke-width="1.3"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M4.5 1v10.5H15" />
+              <path d="M1 4.5h10.5V15" />
+            </svg>
+          </button>
+        </div>
+
         <!-- Annotation controls: hidden without a slug (e.g. an in-progress
         submission preview, which has nothing to annotate yet). Otherwise
         toggle always visible; add button signed-in users only. -->
-        <div v-if="props.slug" class="ctrl-group annotation-group">
+        <div v-if="props.slug && !cropMode" class="ctrl-group annotation-group">
           <button
             class="ctrl-toggle"
             :class="{ active: markersVisible }"
@@ -292,6 +412,17 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
         </div>
       </div>
     </div>
+
+    <CropPanel
+      v-if="cropMode"
+      :draft="cropDraft"
+      :saving="cropSaving"
+      :annotations="annotations ?? null"
+      :error="cropError"
+      @reset="resetCropBox"
+      @cancel="toggleCropMode"
+      @save="saveCrop"
+    />
 
     <div
       v-if="createMode && !pendingPoint && !toastMessage"
@@ -414,7 +545,8 @@ canvas {
 .ctrl-add:hover {
   background: rgba(255, 255, 255, 0.15);
 }
-.ctrl-add.active {
+.ctrl-add.active,
+.ctrl-crop.active {
   background: #ff0000;
   color: #ffffff;
 }

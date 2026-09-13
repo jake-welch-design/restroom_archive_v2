@@ -175,6 +175,10 @@ array. `useAnnotations` works around it by setting `watch: false` and driving
 - `hasUnsavedSubmission` is narrower: true only while the wizard has unsaved form
   progress. It gates the "leaving loses your submission" confirmation, which must
   not fire for the admin's read-only preview.
+- `previewEntry` says whether the preview is of a real entry. The admin queue
+  sets it to the expanded row's id, slug and crop, which is what lets the viewer
+  offer the crop tool during review (§4). The wizard clears it: an unsaved scan
+  has no id to crop against.
 
 ### The admin tab's two nav rows
 
@@ -319,6 +323,65 @@ screen coordinates.
 This is why hiding an annotation is reversible and deleting is not: the camera
 snapshot is part of the content.
 
+### Cropping
+
+Admins can trim stray geometry off a scan and re-centre it, from the viewer on
+any entry or from the pending queue during review. The crop is a box stored on
+the restroom row; the GLB in R2 is never modified.
+
+**Why a box fixes so much.** `frameOn` derives everything about framing from
+one bounding box: the offset that centres the model, the orbit distance, the
+near and far planes, `controls.minDistance`, the pivot probe's fallback radius
+and where POV starts. Without a crop that box is measured from the whole scan,
+so a single floating fragment inflates it and drags all of them off. A stored
+crop simply replaces the measured box.
+
+**The box is in the GLB's local space**, not the viewer's centred world space.
+World space is local space minus the centre of whichever box is applied, so a
+crop stored in world space would compose with the previous crop's offset on
+every re-edit.
+
+**Hiding the rest is clipping, not geometry surgery.** Six planes on each
+material cut away everything outside the box. Two consequences:
+
+- Clipping planes are world-space and the model turns (auto-rotate, and `flyTo`
+  restoring an annotation's model rotation), so the planes are held in local
+  space and re-derived from the model's matrix every frame.
+- Clipping happens at the fragment stage, so the raycaster still hits the hidden
+  triangles. `pickPoint` and the pivot probe both go through `firstVisibleHit`,
+  which skips hits outside the box; otherwise an annotation could land on
+  geometry nobody can see.
+
+**Re-centring moves stored cameras.** Annotation points are model-local and
+unaffected, but `orbit_pos_*` and `orbit_target_*` are world-space. Moving the
+centre from `C_old` to `C_new` shifts every one of them by `C_old − C_new`. Only
+the client knows both centres, so it sends that delta with the crop, and
+`POST /api/admin/restrooms/[id]/crop` applies it to the entry's annotations in
+the same request. Skipping this leaves every saved annotation view pointing past
+its subject by exactly the distance the centre moved. POV annotations store no
+position and need nothing.
+
+**Thumbnails are re-rendered on save**, and `thumbUrl` carries `?v=` from
+`updated_at`. The thumbnail key is stable and served `immutable`, so without
+the version the corrected image would sit behind a year-long cache.
+`scripts/render-thumbs.ts` honours the crop too, or a later `npm run thumbs`
+would quietly regenerate uncropped thumbnails.
+
+**The gizmo** lives in `composables/cropGizmo.ts`: a wireframe box with thick
+corner brackets and six face handles, dragged in the scene. Details that look
+arbitrary and are not:
+
+- Handles are camera-facing sprites. Handles drawn flat on their faces shrink to
+  an unclickable sliver when the camera looks along the face.
+- Brackets use `LineSegments2`, because WebGL ignores `linewidth` on ordinary
+  lines and a one-pixel bracket is barely distinguishable from an edge.
+- The group follows the model's matrix instead of being parented to the model,
+  which would put the handles inside the object annotations raycast against.
+- Hovering a handle disables `OrbitControls` before the press, so dragging a
+  handle never also spins the camera; dragging anywhere else still orbits.
+- Opening the tool frames the whole box (the ordinary framing lets corners fall
+  off a narrow viewer) and Cancel restores the previous view.
+
 ---
 
 ## 5. Authentication and roles
@@ -427,6 +490,11 @@ restore is not simply "publish everything they submitted": that would put an
 unreviewed entry into the archive, and a `removed` one back as a listing whose
 blobs are gone. Only the ban writes `pre_ban_status`, so an entry an admin
 rejected or removed on its own terms is left where the admin put it.
+
+A restroom may also carry a crop: six nullable `crop_min_*` / `crop_max_*`
+columns (migration `0025`), all set or all NULL, read through
+`cropFromColumns` in `shared/utils/crop.ts`. They are not a status and do not
+interact with any of the above; §4 covers what they do.
 
 `removed` deletes the R2 blobs immediately, through `deleteRestroomBlobs`, as
 does a submitter dismissing their own entry. The database row survives so the
