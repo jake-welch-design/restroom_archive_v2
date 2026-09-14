@@ -81,18 +81,11 @@ export const restrooms = sqliteTable(
     // entry down. Only ever set on an admin-initiated takedown.
     removalMessage: text("removal_message"),
     rejectionMessage: text("rejection_message"),
-    // The admin-drawn crop box, in the GLB's own local space. The viewer frames
-    // and centres off this box instead of the one it measures, so a scan that
-    // arrived with stray geometry can be trimmed without touching the file.
-    // Local rather than the viewer's centred world space, so re-editing a crop
-    // composes with the previous one instead of drifting by its offset. All
-    // NULL means no crop.
-    cropMinX: real("crop_min_x"),
-    cropMinY: real("crop_min_y"),
-    cropMinZ: real("crop_min_z"),
-    cropMaxX: real("crop_max_x"),
-    cropMaxY: real("crop_max_y"),
-    cropMaxZ: real("crop_max_z"),
+    // The admin-drawn crop, as JSON: a mode, the box that was drawn, and the
+    // box the viewer frames and centres on. See shared/utils/crop.ts for the
+    // shape and why it is one column rather than thirteen. NULL means no crop,
+    // and the scan is shown at its own measured bounds.
+    crop: text("crop"),
     // When the entry was rejected, and the clock both the admin countdown and
     // the purge sweep read. Kept separate from `updated_at` because a ban, an
     // unban, or any other write to the row moves that column and would drag the

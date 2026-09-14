@@ -326,15 +326,30 @@ snapshot is part of the content.
 ### Cropping
 
 Admins can trim stray geometry off a scan and re-centre it, from the viewer on
-any entry or from the pending queue during review. The crop is a box stored on
-the restroom row; the GLB in R2 is never modified.
+any entry or from the pending queue during review. The crop is stored on the
+restroom row; the GLB in R2 is never modified.
+
+**Two modes, and therefore two boxes.** `keep` trims everything outside the
+box. `remove` deletes what is inside it, which is the mode the job usually
+wants: an artefact floating metres from the room, boxed and dropped. That is
+why a crop stores two boxes rather than one:
+
+- `box` is what the admin drew and what the clipping planes cut against.
+- `frame` is what the viewer centres and frames on. In `keep` mode it is the
+  box. In `remove` mode it cannot be, because the box is the part being thrown
+  away and centring on the hole would be exactly wrong. There it is the
+  bounding box of the geometry that survives, measured by walking every vertex
+  once, in the admin's browser, at save time. Measuring it is the whole point:
+  the artefact inflated the scan's measured bounds, and only re-measuring
+  without it pulls the framing in. Storing the result is what keeps that cost
+  off every visitor.
 
 **Why a box fixes so much.** `frameOn` derives everything about framing from
 one bounding box: the offset that centres the model, the orbit distance, the
 near and far planes, `controls.minDistance`, the pivot probe's fallback radius
 and where POV starts. Without a crop that box is measured from the whole scan,
 so a single floating fragment inflates it and drags all of them off. A stored
-crop simply replaces the measured box.
+crop simply replaces the measured box with `frame`.
 
 **The box is in the GLB's local space**, not the viewer's centred world space.
 World space is local space minus the centre of whichever box is applied, so a
@@ -342,20 +357,27 @@ crop stored in world space would compose with the previous crop's offset on
 every re-edit.
 
 **Hiding the rest is clipping, not geometry surgery.** Six planes on each
-material cut away everything outside the box. Two consequences:
+material cut against the box, and `material.clipIntersection` is what makes the
+same six planes mean opposite things: left false they clip the union of their
+half-spaces, leaving the box's interior; set true they clip only the
+intersection, which is the interior itself, leaving everything around it. Three
+consequences:
 
 - Clipping planes are world-space and the model turns (auto-rotate, and `flyTo`
   restoring an annotation's model rotation), so the planes are held in local
   space and re-derived from the model's matrix every frame.
 - Clipping happens at the fragment stage, so the raycaster still hits the hidden
   triangles. `pickPoint` and the pivot probe both go through `firstVisibleHit`,
-  which skips hits outside the box; otherwise an annotation could land on
-  geometry nobody can see.
+  which skips hits on the side the crop removed; otherwise an annotation could
+  land on geometry nobody can see.
+- Both the plane count and `clipIntersection` are compiled into the shader, so
+  turning clipping on or changing mode rebuilds the program. Moving a plane does
+  not, which is why dragging a face costs nothing.
 
 **Re-centring moves stored cameras.** Annotation points are model-local and
 unaffected, but `orbit_pos_*` and `orbit_target_*` are world-space. Moving the
-centre from `C_old` to `C_new` shifts every one of them by `C_old − C_new`. Only
-the client knows both centres, so it sends that delta with the crop, and
+frame centre from `C_old` to `C_new` shifts every one of them by `C_old − C_new`.
+Only the client knows both centres, so it sends that delta with the crop, and
 `POST /api/admin/restrooms/[id]/crop` applies it to the entry's annotations in
 the same request. Skipping this leaves every saved annotation view pointing past
 its subject by exactly the distance the centre moved. POV annotations store no
@@ -380,7 +402,17 @@ arbitrary and are not:
 - Hovering a handle disables `OrbitControls` before the press, so dragging a
   handle never also spins the camera; dragging anywhere else still orbits.
 - Opening the tool frames the whole box (the ordinary framing lets corners fall
-  off a narrow viewer) and Cancel restores the previous view.
+  off a narrow viewer) and closing it without confirming restores the previous
+  view.
+- Switching to `remove` while the box still covers everything pulls it in to a
+  quarter of each axis, because the honest rendering of that state is a black
+  viewport.
+
+**The panel** carries only what the 3D surface cannot say: the mode toggle,
+Reset and Confirm. There is no Cancel, because the viewer's crop button and
+Escape both already close the tool. Reset returns the box to full bounds _and_
+the mode to `keep`, since full bounds means "no crop" one way round and "delete
+everything" the other.
 
 ---
 
@@ -491,10 +523,11 @@ unreviewed entry into the archive, and a `removed` one back as a listing whose
 blobs are gone. Only the ban writes `pre_ban_status`, so an entry an admin
 rejected or removed on its own terms is left where the admin put it.
 
-A restroom may also carry a crop: six nullable `crop_min_*` / `crop_max_*`
-columns (migration `0025`), all set or all NULL, read through
-`cropFromColumns` in `shared/utils/crop.ts`. They are not a status and do not
-interact with any of the above; §4 covers what they do.
+A restroom may also carry a crop, in the nullable `crop` column (migrations
+`0025` and `0026`): a mode and two boxes as JSON, read through `parseCrop` in
+`shared/utils/crop.ts`, the way `descriptors` is read through
+`parseDescriptors`. It is not a status and does not interact with any of the
+above; §4 covers what it does.
 
 `removed` deletes the R2 blobs immediately, through `deleteRestroomBlobs`, as
 does a submitter dismissing their own entry. The database row survives so the

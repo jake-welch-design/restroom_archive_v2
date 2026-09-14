@@ -4,15 +4,15 @@ import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { Ref } from "vue";
 import type { CameraMode } from "~/types/annotation";
-import type { CropBox, CropDelta } from "~~/shared/utils/crop";
+import type { Crop, CropBox, CropDelta, CropMode } from "~~/shared/utils/crop";
 import { createCropGizmo, type CropGizmo } from "~/composables/cropGizmo";
 
 export type ViewMode = "orbit" | "pov";
 
 /** What a finished crop edit hands back for saving. */
 export interface CropResult {
-  /** The new box, or null when the crop was cleared back to the scan's bounds. */
-  crop: CropBox | null;
+  /** The new crop, or null when it was cleared back to the scan's own bounds. */
+  crop: Crop | null;
   /** How far the model's centre moved, which world-space records must follow. */
   recenterDelta: CropDelta;
 }
@@ -147,7 +147,7 @@ function getDracoLoader(): DRACOLoader {
 export function useThreeScene(
   canvasRef: Ref<HTMLCanvasElement | null>,
   modelUrl: Ref<string | null | undefined>,
-  storedCrop: Ref<CropBox | null | undefined>,
+  storedCrop: Ref<Crop | null | undefined>,
   onPickPoint?: (point: THREE.Vector3, snapshot: CameraSnapshot) => void,
 ) {
   const loading = ref(false);
@@ -155,8 +155,15 @@ export function useThreeScene(
   const mode = ref<ViewMode>("orbit");
   const createMode = ref(false);
   const markersVisible = ref(true);
-  /** Whether the admin crop gizmo is open. */
-  const cropMode = ref(false);
+  /** Whether the admin crop tool is open. */
+  const cropEditing = ref(false);
+  /**
+   * Which side of the box survives while editing.
+   *
+   * Separate from `cropEditing`, which is only whether the tool is open. Held
+   * as its own ref so the panel's toggle reads it directly.
+   */
+  const cropMode = ref<CropMode>("keep");
   /**
    * The box the gizmo is currently drawing, mirrored out as plain numbers.
    *
@@ -165,6 +172,12 @@ export function useThreeScene(
    * outside the box as the admin moves a face.
    */
   const cropDraft = ref<CropBox | null>(null);
+  /**
+   * Whether the box as drawn would erase the whole scan, which only happens in
+   * `remove` mode. A cheap box test rather than a vertex count, so it can run on
+   * every drag frame; the exact check happens once at save.
+   */
+  const cropEmptiesScan = ref(false);
 
   let renderer: THREE.WebGLRenderer | null = null;
   let scene: THREE.Scene | null = null;
@@ -192,16 +205,18 @@ export function useThreeScene(
   const appliedBox = new THREE.Box3();
   const appliedCentre = new THREE.Vector3();
   const clipBox = new THREE.Box3();
+  let clipMode: CropMode = "keep";
   let clippingActive = false;
   /**
    * The crop actually in force, or null for none.
    *
-   * Distinct from `clipBox`, which follows the draft during an edit. This is
-   * what Cancel restores to, and it is tracked here rather than re-read from
-   * `storedCrop` so that a second edit in the same session starts from the
-   * crop just saved rather than from whatever the props have got round to.
+   * Distinct from `clipBox` and `cropMode`, which follow the draft during an
+   * edit. This is what Cancel restores to, and it is tracked here rather than
+   * re-read from `storedCrop` so that a second edit in the same session starts
+   * from the crop just saved rather than from whatever the props have got
+   * round to.
    */
-  let committedCrop: THREE.Box3 | null = null;
+  let committedCrop: Crop | null = null;
 
   /** The camera as it was when the crop tool opened, for Cancel to restore. */
   let viewBeforeCrop: {
@@ -320,8 +335,9 @@ export function useThreeScene(
         // Clip to the draft as the face moves, but leave the model where it is.
         // Re-centring on every drag frame would slide the scan out from under
         // the handle being dragged.
-        setClipBox(box);
+        setClipBox(box, cropMode.value);
         cropDraft.value = cropFromBox(box);
+        cropEmptiesScan.value = wouldEmptyScan(box, cropMode.value);
       },
     });
 
@@ -364,7 +380,7 @@ export function useThreeScene(
     if (mode.value === "orbit" && controls) {
       // Auto-rotate is suppressed while cropping: a turning model makes the
       // handles impossible to aim, and the box would appear to drift.
-      if (!userInteracted && !cropMode.value && currentModel) {
+      if (!userInteracted && !cropEditing.value && currentModel) {
         currentModel.rotation.y += 0.001;
       }
       // Skip controls.update() during flyTo. OrbitControls recomputes camera.position
@@ -403,6 +419,10 @@ export function useThreeScene(
       // handing every model a full set would cost a per-fragment test on scans
       // that have nothing to clip.
       clippingPlanes: clippingActive ? cropWorldPlanes : undefined,
+      // `keep` clips the union of the six half-spaces, leaving the box's
+      // interior. `remove` clips only their intersection, which is the interior
+      // itself, leaving everything around it.
+      clipIntersection: clipMode === "remove",
     });
     // Textures are handed to the new material, so only the material shell is
     // released here, since disposeMaterial() would take the maps down with it.
@@ -445,6 +465,70 @@ export function useThreeScene(
    * could not have aimed for. That case is stored as no crop at all rather than
    * as a box that happens to match, so Reset genuinely clears the columns.
    */
+  /**
+   * Whether this box, cropped this way, would leave nothing behind.
+   *
+   * Only `remove` can do that, and only by covering the scan's whole extent,
+   * which is exactly the state that toggling to `remove` with an untouched box
+   * would produce. A box test rather than a vertex count so it can run on every
+   * drag frame; `survivingBounds` is the exact answer, once, at save.
+   */
+  function wouldEmptyScan(box: THREE.Box3, mode: CropMode): boolean {
+    return mode === "remove" && box.containsBox(originalBounds);
+  }
+
+  /**
+   * The bounding box of the geometry a `remove` crop leaves behind.
+   *
+   * Needed because in `remove` mode the drawn box is the part being deleted, so
+   * it cannot be what the viewer centres and frames on. Walking every vertex is
+   * the only way to find the real extent of what survives, and it is the whole
+   * point of the tool: an artefact floating metres from the room inflates the
+   * measured bounds, and only re-measuring without it pulls the framing in.
+   *
+   * Runs once, in the admin's browser, when a crop is saved. The result is
+   * stored, so no visitor ever pays for it.
+   */
+  function survivingBounds(box: THREE.Box3): THREE.Box3 {
+    const result = new THREE.Box3().makeEmpty();
+    if (!currentModel) return result;
+
+    currentModel.updateMatrixWorld(true);
+    const modelInverse = new THREE.Matrix4()
+      .copy(currentModel.matrixWorld)
+      .invert();
+    const toModel = new THREE.Matrix4();
+    const vertex = new THREE.Vector3();
+    const meshBox = new THREE.Box3();
+
+    currentModel.traverse((child) => {
+      const mesh = child as THREE.Mesh;
+      if (!mesh.isMesh || !mesh.geometry) return;
+      const position = mesh.geometry.attributes.position;
+      if (!position) return;
+
+      toModel.multiplyMatrices(modelInverse, mesh.matrixWorld);
+      mesh.geometry.computeBoundingBox();
+      if (!mesh.geometry.boundingBox) return;
+
+      // A mesh the box does not reach keeps all of its geometry, so its own
+      // bounds are enough and its vertices can be skipped. Scans are usually a
+      // single mesh, in which case this never fires, but it costs one box test.
+      meshBox.copy(mesh.geometry.boundingBox).applyMatrix4(toModel);
+      if (!meshBox.intersectsBox(box)) {
+        result.union(meshBox);
+        return;
+      }
+
+      for (let i = 0; i < position.count; i++) {
+        vertex.fromBufferAttribute(position, i).applyMatrix4(toModel);
+        if (!box.containsPoint(vertex)) result.expandByPoint(vertex);
+      }
+    });
+
+    return result;
+  }
+
   function isFullBounds(box: THREE.Box3): boolean {
     const epsilon = 1e-3;
     return (
@@ -473,6 +557,7 @@ export function useThreeScene(
     // Null, not undefined: three's typings take `undefined` on the constructor
     // options and `null` on the property, and they are not interchangeable.
     const planes = clippingActive ? cropWorldPlanes : null;
+    const intersection = clipMode === "remove";
     currentModel.traverse((child) => {
       const mesh = child as THREE.Mesh;
       if (!mesh.isMesh || !mesh.material) return;
@@ -481,6 +566,7 @@ export function useThreeScene(
         : [mesh.material];
       for (const material of materials) {
         material.clippingPlanes = planes;
+        material.clipIntersection = intersection;
         // Going between no planes and six changes the shader, not just a
         // uniform, so the program has to be rebuilt. Moving a plane does not,
         // which is why this only runs when clipping is switched on or off.
@@ -496,9 +582,11 @@ export function useThreeScene(
    * world space per frame (see `updateCropPlanes`). Three clips where the
    * signed distance to a plane is negative, so each pair keeps the inside.
    */
-  function setClipBox(box: THREE.Box3 | null) {
+  function setClipBox(box: THREE.Box3 | null, mode: CropMode = "keep") {
     const wasActive = clippingActive;
+    const wasMode = clipMode;
     clippingActive = box !== null;
+    clipMode = mode;
 
     if (box) {
       clipBox.copy(box);
@@ -511,7 +599,11 @@ export function useThreeScene(
       updateCropPlanes();
     }
 
-    if (wasActive !== clippingActive) applyClippingToMaterials();
+    // Both the number of planes and `clipIntersection` are compiled into the
+    // shader, so either changing means the program has to be rebuilt. Moving a
+    // plane does not, which is why a drag does not come through here.
+    if (wasActive !== clippingActive || wasMode !== clipMode)
+      applyClippingToMaterials();
   }
 
   /**
@@ -550,7 +642,9 @@ export function useThreeScene(
     return hits.find((hit) => {
       local.copy(hit.point);
       currentModel!.worldToLocal(local);
-      return clipBox.containsPoint(local);
+      // Inside the box is what survives in `keep` mode and what is gone in
+      // `remove` mode, so the same test answers both, negated.
+      return clipBox.containsPoint(local) === (clipMode === "keep");
     });
   }
 
@@ -636,13 +730,19 @@ export function useThreeScene(
       // kept for the life of the load.
       originalBounds.copy(new THREE.Box3().setFromObject(currentModel));
 
-      const stored = storedCrop.value ? boxFromCrop(storedCrop.value) : null;
+      const stored = storedCrop.value ?? null;
       committedCrop = stored;
       // Before the materials are built, so they are created with the right
-      // number of clipping planes instead of being rebuilt a moment later.
-      setClipBox(stored);
+      // number of clipping planes, and the right clipping mode, instead of
+      // being rebuilt a moment later.
+      setClipBox(
+        stored ? boxFromCrop(stored.box) : null,
+        stored?.mode ?? "keep",
+      );
       applyFlatMaterials(currentModel);
-      frameOn(stored ?? originalBounds);
+      // The frame box, not the drawn one: in `remove` mode they are different
+      // boxes and the drawn one is the part that is gone.
+      frameOn(stored ? boxFromCrop(stored.frame) : originalBounds);
 
       profile?.phase("scene add+frame");
       profile?.total();
@@ -668,7 +768,7 @@ export function useThreeScene(
     // Mutually exclusive with placing an annotation: both want the pointer, and
     // a click meant for a handle must not leave a marker behind it.
     createMode.value = false;
-    cropMode.value = true;
+    cropEditing.value = true;
     userInteracted = true;
 
     viewBeforeCrop = {
@@ -683,11 +783,15 @@ export function useThreeScene(
     // scan the faces surround the camera and most handles are behind it.
     if (mode.value === "pov") setMode("orbit");
 
-    const initial = committedCrop?.clone() ?? originalBounds.clone();
-    setClipBox(initial);
+    const initial = committedCrop
+      ? boxFromCrop(committedCrop.box)
+      : originalBounds.clone();
+    cropMode.value = committedCrop?.mode ?? "keep";
+    setClipBox(initial, cropMode.value);
     gizmo.show(initial, originalBounds);
     frameWholeBox(initial);
     cropDraft.value = cropFromBox(initial);
+    cropEmptiesScan.value = wouldEmptyScan(initial, cropMode.value);
   }
 
   /**
@@ -728,10 +832,15 @@ export function useThreeScene(
   /** Abandons the edit. The model was never re-centred, so only clipping moves. */
   function cancelCrop() {
     if (!gizmo) return;
-    cropMode.value = false;
+    cropEditing.value = false;
     gizmo.hide();
     cropDraft.value = null;
-    setClipBox(committedCrop);
+    cropEmptiesScan.value = false;
+    cropMode.value = committedCrop?.mode ?? "keep";
+    setClipBox(
+      committedCrop ? boxFromCrop(committedCrop.box) : null,
+      committedCrop?.mode ?? "keep",
+    );
     restoreViewBeforeCrop();
   }
 
@@ -762,9 +871,42 @@ export function useThreeScene(
     camera.updateProjectionMatrix();
   }
 
-  /** Pushes every face back out to the scan's bounds, which saves as no crop. */
+  /**
+   * Back to an untouched scan: the box at full bounds, keeping what is inside.
+   *
+   * Resetting the mode as well as the box matters, because full bounds means
+   * opposite things either way round. Left on `remove` it would read as "delete
+   * everything" rather than "no crop", which is not what a reset should offer.
+   */
   function resetCropBox() {
+    cropMode.value = "keep";
     gizmo?.setBox(originalBounds.clone());
+  }
+
+  /**
+   * Switches which side of the box survives.
+   *
+   * Toggling to `remove` with the box still at full bounds would black the
+   * viewer out, since everything is inside it. Rather than let that happen the
+   * box is pulled in to a quarter of each axis around its own centre, which is
+   * a visible starting size to drag onto whatever is being deleted.
+   */
+  function setCropMode(next: CropMode) {
+    if (!gizmo || cropMode.value === next) return;
+    cropMode.value = next;
+
+    let box = gizmo.getBox();
+    if (wouldEmptyScan(box, next)) {
+      const centre = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3()).multiplyScalar(0.25);
+      box = new THREE.Box3().setFromCenterAndSize(centre, size);
+      // Redraws, re-clips and refreshes the draft through the gizmo's onChange.
+      gizmo.setBox(box);
+      return;
+    }
+
+    setClipBox(box, next);
+    cropEmptiesScan.value = wouldEmptyScan(box, next);
   }
 
   /**
@@ -785,31 +927,60 @@ export function useThreeScene(
   function pendingCrop(): CropResult | null {
     if (!gizmo || !currentModel) return null;
 
-    const next = gizmo.getBox();
-    const centre = next.getCenter(new THREE.Vector3());
-    const delta = appliedCentre.clone().sub(centre);
+    const box = gizmo.getBox();
+    const mode = cropMode.value;
+
+    // A `keep` box at the scan's own bounds keeps everything, which is stored
+    // as no crop rather than as a box that happens to match. That is what Reset
+    // then Confirm does. `remove` has no such state: an empty removal box is
+    // not something the gizmo can express.
+    const cleared = mode === "keep" && isFullBounds(box);
+
+    // The frame box is the drawn box in `keep` mode and the surviving geometry
+    // in `remove` mode, where the drawn box is the part being deleted.
+    const frame = cleared
+      ? originalBounds
+      : mode === "keep"
+        ? box
+        : survivingBounds(box);
+
+    // Nothing survived, so there is no scan left to frame or look at. The panel
+    // stops this being reachable, and this is the backstop behind it.
+    if (frame.isEmpty()) return null;
+
+    const delta = appliedCentre
+      .clone()
+      .sub(frame.getCenter(new THREE.Vector3()));
 
     return {
-      crop: isFullBounds(next) ? null : cropFromBox(next),
+      crop: cleared
+        ? null
+        : { mode, box: cropFromBox(box), frame: cropFromBox(frame) },
       recenterDelta: { x: delta.x, y: delta.y, z: delta.z },
     };
   }
 
-  /** Applies the drawn box and closes the editor. For use once it is saved. */
-  function applyPendingCrop() {
+  /**
+   * Applies a crop and closes the editor. For use once the save has landed.
+   *
+   * Takes the result rather than recomputing it, so a `remove` crop walks the
+   * scan's vertices once per save instead of twice.
+   */
+  function applyPendingCrop(result: CropResult) {
     if (!gizmo || !currentModel) return;
 
-    const next = gizmo.getBox();
-    const full = isFullBounds(next);
-
-    committedCrop = full ? null : next.clone();
-    setClipBox(committedCrop);
+    committedCrop = result.crop;
+    setClipBox(
+      result.crop ? boxFromCrop(result.crop.box) : null,
+      result.crop?.mode ?? "keep",
+    );
     viewBeforeCrop = null;
-    frameOn(full ? originalBounds : next);
+    frameOn(result.crop ? boxFromCrop(result.crop.frame) : originalBounds);
 
-    cropMode.value = false;
+    cropEditing.value = false;
     gizmo.hide();
     cropDraft.value = null;
+    cropEmptiesScan.value = false;
   }
 
   function setMode(next: ViewMode) {
@@ -868,7 +1039,7 @@ export function useThreeScene(
     if (mode.value !== "orbit" || tweenActive) return;
     // The pivot must not move under a crop drag: OrbitControls sizes its steps
     // from it, and the gizmo's drag plane is built once at pointerdown.
-    if (cropMode.value) return;
+    if (cropEditing.value) return;
 
     const radius = camera.position.distanceTo(controls.target);
     // Cap it so a long ray across the scan can't fling the pivot somewhere that
@@ -1262,7 +1433,7 @@ export function useThreeScene(
   watch(modelUrl, (url) => {
     // A different scan means any crop edit in progress is about the previous
     // one, so it goes rather than being carried across.
-    if (cropMode.value) cancelCrop();
+    if (cropEditing.value) cancelCrop();
     if (url && scene) loadModel(url);
   });
 
@@ -1274,8 +1445,10 @@ export function useThreeScene(
     mode,
     createMode,
     markersVisible,
+    cropEditing,
     cropMode,
     cropDraft,
+    cropEmptiesScan,
     loadModel,
     setMode,
     pickPoint,
@@ -1286,6 +1459,7 @@ export function useThreeScene(
     startCrop,
     cancelCrop,
     resetCropBox,
+    setCropMode,
     pendingCrop,
     applyPendingCrop,
   };

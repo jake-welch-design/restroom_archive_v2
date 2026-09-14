@@ -2,7 +2,7 @@ import { desc, eq, inArray } from "drizzle-orm";
 import { useDb, schema } from "~~/server/utils/db";
 import { parseDescriptors } from "~~/server/utils/descriptors";
 import { versionedThumbUrl } from "~~/server/utils/urls";
-import { cropFromColumns } from "~~/shared/utils/crop";
+import { parseCrop } from "~~/shared/utils/crop";
 
 export default defineEventHandler(async (event) => {
   const db = useDb(event);
@@ -29,12 +29,7 @@ export default defineEventHandler(async (event) => {
       thumbKey: schema.restrooms.thumbKey,
       status: schema.restrooms.status,
       updatedAt: schema.restrooms.updatedAt,
-      cropMinX: schema.restrooms.cropMinX,
-      cropMinY: schema.restrooms.cropMinY,
-      cropMinZ: schema.restrooms.cropMinZ,
-      cropMaxX: schema.restrooms.cropMaxX,
-      cropMaxY: schema.restrooms.cropMaxY,
-      cropMaxZ: schema.restrooms.cropMaxZ,
+      crop: schema.restrooms.crop,
       submitterUsername: schema.users.username,
       submitterDisplayName: schema.users.displayName,
     })
@@ -59,8 +54,8 @@ export default defineEventHandler(async (event) => {
       ? { username: r.submitterUsername, displayName: r.submitterDisplayName }
       : null,
     status: r.status,
-    // The admin's crop box, or null for a scan shown at its own bounds.
-    crop: cropFromColumns(r),
+    // The admin's crop, or null for a scan shown at its own measured bounds.
+    crop: parseCrop(r.crop),
     // Relative URLs, resolved against document.baseURI on the client.
     // Avoids SSR-time host confusion (Nitro internal fetch reports localhost).
     modelUrl: `/api/r2/models/${r.file}`,

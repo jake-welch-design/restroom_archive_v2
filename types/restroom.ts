@@ -1,4 +1,4 @@
-import type { CropBox } from "~~/shared/utils/crop";
+import type { Crop } from "~~/shared/utils/crop";
 
 export interface PublicUserRef {
   username: string;
@@ -18,8 +18,8 @@ export interface RestroomSummary {
   descriptors: string[];
   submitter: PublicUserRef | null;
   status: string;
-  /** The admin's crop box, or null for a scan framed on its own bounds. */
-  crop: CropBox | null;
+  /** The admin's crop, or null for a scan framed on its own bounds. */
+  crop: Crop | null;
   modelUrl: string;
   thumbUrl: string | null;
 }

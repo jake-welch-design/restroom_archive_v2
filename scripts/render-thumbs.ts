@@ -34,46 +34,36 @@ if (!allFlag && !targetSlug) {
 // ---------------------------------------------------------------------------
 // Wrangler helpers
 // ---------------------------------------------------------------------------
-// D1 returns the columns as they are named in SQL, so these stay snake_case
-// rather than going through shared/utils/crop.ts's camelCase reader.
-type DbRow = {
-  id: number;
-  slug: string;
-  file: string;
-  crop_min_x: number | null;
-  crop_min_y: number | null;
-  crop_min_z: number | null;
-  crop_max_x: number | null;
-  crop_max_y: number | null;
-  crop_max_z: number | null;
-};
-
-type Crop = { min: [number, number, number]; max: [number, number, number] };
+type DbRow = { id: number; slug: string; file: string; crop: string | null };
 
 /**
- * The row's crop box, or null when it has none.
+ * The row's crop, or null when it has none.
  *
  * Without this the script would re-render every cropped entry at its full
  * bounds and quietly undo the framing an admin had corrected in the viewer.
+ * Parsed here rather than through shared/utils/crop.ts because this script runs
+ * outside the Nuxt build and has no path into the app's aliases.
  */
 function cropOf(row: DbRow): Crop | null {
-  if (
-    row.crop_min_x == null ||
-    row.crop_min_y == null ||
-    row.crop_min_z == null ||
-    row.crop_max_x == null ||
-    row.crop_max_y == null ||
-    row.crop_max_z == null
-  )
+  if (!row.crop) return null;
+  try {
+    const parsed = JSON.parse(row.crop) as Crop;
+    if (!parsed?.box || !parsed?.frame) return null;
+    return { ...parsed, mode: parsed.mode === "remove" ? "remove" : "keep" };
+  } catch {
     return null;
-  return {
-    min: [row.crop_min_x, row.crop_min_y, row.crop_min_z],
-    max: [row.crop_max_x, row.crop_max_y, row.crop_max_z],
-  };
+  }
 }
 
-const CROP_COLUMNS =
-  "crop_min_x, crop_min_y, crop_min_z, crop_max_x, crop_max_y, crop_max_z";
+type CropBox = {
+  minX: number;
+  minY: number;
+  minZ: number;
+  maxX: number;
+  maxY: number;
+  maxZ: number;
+};
+type Crop = { mode: "keep" | "remove"; box: CropBox; frame: CropBox };
 
 function d1Query(sql: string): DbRow[] {
   const out = execSync(
@@ -86,11 +76,11 @@ function d1Query(sql: string): DbRow[] {
 function fetchRows(): DbRow[] {
   if (targetSlug) {
     return d1Query(
-      `SELECT id, slug, file, ${CROP_COLUMNS} FROM restrooms WHERE slug='${targetSlug}'`,
+      `SELECT id, slug, file, crop FROM restrooms WHERE slug='${targetSlug}'`,
     );
   }
   return d1Query(
-    `SELECT id, slug, file, ${CROP_COLUMNS} FROM restrooms WHERE status='published' ORDER BY iso_date ASC`,
+    `SELECT id, slug, file, crop FROM restrooms WHERE status='published' ORDER BY iso_date ASC`,
   );
 }
 
@@ -156,20 +146,23 @@ renderer.localClippingEnabled = true
 const scene = new THREE.Scene()
 const camera = new THREE.PerspectiveCamera(70, 1, 0.01, 1000)
 
-// The admin's crop box for this entry, in the GLB's own local space, or null.
-// The model is never rotated here, so the planes are built once from it rather
-// than refreshed per frame the way the live viewer has to.
+// The admin's crop for this entry, in the GLB's own local space, or null. The
+// model is never rotated here, so the planes are built once from it rather than
+// refreshed per frame the way the live viewer has to.
 const CROP = ${crop ? JSON.stringify(crop) : "null"}
 const clipPlanes = CROP
   ? [
-      new THREE.Plane(new THREE.Vector3(1, 0, 0), -CROP.min[0]),
-      new THREE.Plane(new THREE.Vector3(-1, 0, 0), CROP.max[0]),
-      new THREE.Plane(new THREE.Vector3(0, 1, 0), -CROP.min[1]),
-      new THREE.Plane(new THREE.Vector3(0, -1, 0), CROP.max[1]),
-      new THREE.Plane(new THREE.Vector3(0, 0, 1), -CROP.min[2]),
-      new THREE.Plane(new THREE.Vector3(0, 0, -1), CROP.max[2]),
+      new THREE.Plane(new THREE.Vector3(1, 0, 0), -CROP.box.minX),
+      new THREE.Plane(new THREE.Vector3(-1, 0, 0), CROP.box.maxX),
+      new THREE.Plane(new THREE.Vector3(0, 1, 0), -CROP.box.minY),
+      new THREE.Plane(new THREE.Vector3(0, -1, 0), CROP.box.maxY),
+      new THREE.Plane(new THREE.Vector3(0, 0, 1), -CROP.box.minZ),
+      new THREE.Plane(new THREE.Vector3(0, 0, -1), CROP.box.maxZ),
     ]
   : null
+// 'remove' clips only the planes' intersection, which is the box's interior,
+// leaving everything around it. See composables/useThreeScene.ts.
+const CLIP_INTERSECTION = CROP?.mode === 'remove'
 
 // Unlit, matching the site viewer (composables/useThreeScene.ts): scans have
 // their lighting baked into the base color texture, so no lights or environment.
@@ -187,6 +180,7 @@ function toUnlit(src) {
     depthWrite: src.depthWrite,
     toneMapped: false,
     clippingPlanes: clipPlanes ?? undefined,
+    clipIntersection: CLIP_INTERSECTION,
   })
   src.dispose()
   return flat
@@ -219,8 +213,8 @@ loader.load('/model.glb', (gltf) => {
   // the near/far planes all come off whichever box is in force.
   const box = CROP
     ? new THREE.Box3(
-        new THREE.Vector3(...CROP.min),
-        new THREE.Vector3(...CROP.max),
+        new THREE.Vector3(CROP.frame.minX, CROP.frame.minY, CROP.frame.minZ),
+        new THREE.Vector3(CROP.frame.maxX, CROP.frame.maxY, CROP.frame.maxZ),
       )
     : new THREE.Box3().setFromObject(model)
   const center = box.getCenter(new THREE.Vector3())

@@ -5,11 +5,11 @@ import { requireRole } from "~~/server/utils/requireRole";
 import { recordAdminAction } from "~~/server/utils/auditLog";
 import { getRouterId } from "~~/server/utils/routeParams";
 import { now } from "~~/server/utils/sqlTime";
-import { MIN_CROP_SIZE } from "~~/shared/utils/crop";
+import { MIN_CROP_SIZE, serializeCrop } from "~~/shared/utils/crop";
 
 const Coord = z.number().finite();
 
-const CropSchema = z
+const BoxSchema = z
   .object({
     minX: Coord,
     minY: Coord,
@@ -25,6 +25,15 @@ const CropSchema = z
       c.maxZ - c.minZ >= MIN_CROP_SIZE,
     { message: "Crop box is too small on at least one axis" },
   );
+
+const CropSchema = z.object({
+  mode: z.enum(["keep", "remove"]),
+  box: BoxSchema,
+  // What the viewer centres on. Equal to the box in `keep` mode; in `remove`
+  // mode it is the surviving geometry's bounds, which only the client can
+  // measure, since the server would have to parse the GLB to find them.
+  frame: BoxSchema,
+});
 
 const Body = z.object({
   // Null clears the crop, which is how Reset gets back to the scan's own bounds.
@@ -62,12 +71,7 @@ export default defineEventHandler(async (event) => {
   const row = await db
     .update(schema.restrooms)
     .set({
-      cropMinX: crop?.minX ?? null,
-      cropMinY: crop?.minY ?? null,
-      cropMinZ: crop?.minZ ?? null,
-      cropMaxX: crop?.maxX ?? null,
-      cropMaxY: crop?.maxY ?? null,
-      cropMaxZ: crop?.maxZ ?? null,
+      crop: serializeCrop(crop),
       updatedAt: now(),
     })
     .where(eq(schema.restrooms.id, id))

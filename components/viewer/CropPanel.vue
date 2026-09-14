@@ -3,15 +3,23 @@
  * The controls beside the crop gizmo.
  *
  * Deliberately thin: the box itself is dragged in the scene, so this is only
- * the things the 3D surface cannot say. It reads the draft box rather than
- * owning it, because the gizmo is the source of truth while an edit is open.
+ * what the 3D surface cannot say. It reads the draft box rather than owning it,
+ * because the gizmo is the source of truth while an edit is open.
+ *
+ * There is no Cancel button. The viewer's crop button toggles the tool off and
+ * Escape does the same, so a third way out would be one control more than the
+ * job needs.
  */
-import type { CropBox } from "~~/shared/utils/crop";
+import type { CropBox, CropMode } from "~~/shared/utils/crop";
 import type { Annotation } from "~/types/annotation";
 
 const props = defineProps<{
   /** The box as currently dragged, in model-local space. */
   draft: CropBox | null;
+  /** Which side of the box survives. */
+  mode: CropMode;
+  /** Whether the box as drawn would leave no scan behind. */
+  emptiesScan: boolean;
   /** Whether a save is in flight. */
   saving: boolean;
   /** Annotations on this entry, for the out-of-box warning. */
@@ -19,7 +27,7 @@ const props = defineProps<{
   error: string;
 }>();
 
-defineEmits<{ reset: []; cancel: []; save: [] }>();
+defineEmits<{ reset: []; confirm: []; mode: [CropMode] }>();
 
 /**
  * The box's dimensions, in the units the scan was captured in.
@@ -37,29 +45,29 @@ const dimensions = computed(() => {
 });
 
 /**
- * How many annotations sit outside the box as drawn.
+ * How many annotations sit on geometry this crop would take away.
  *
- * A warning rather than a block. Cropping away an annotated surface is a
- * legitimate thing to do (the annotation may be on the very junk being
- * removed), and the annotation itself survives either way: only its marker
- * stops having a surface to sit on. What the admin needs is to know before
- * saving rather than to be stopped.
+ * Which side that is depends on the mode, so the same test answers both.
+ * Annotation points are stored in model-local space, the same space the box is
+ * in, so it is a direct comparison with nothing to transform.
  *
- * Annotation points are stored in model-local space, the same space the crop
- * box is in, so this is a direct comparison with nothing to transform.
+ * A warning rather than a block: cropping away an annotated surface is a
+ * legitimate thing to do, and the annotation itself survives either way. Only
+ * its marker stops having anything to sit on.
  */
 const strandedCount = computed(() => {
   const d = props.draft;
   if (!d || !props.annotations?.length) return 0;
-  return props.annotations.filter(
-    (a) =>
-      a.pointX < d.minX ||
-      a.pointX > d.maxX ||
-      a.pointY < d.minY ||
-      a.pointY > d.maxY ||
-      a.pointZ < d.minZ ||
-      a.pointZ > d.maxZ,
-  ).length;
+  return props.annotations.filter((a) => {
+    const inside =
+      a.pointX >= d.minX &&
+      a.pointX <= d.maxX &&
+      a.pointY >= d.minY &&
+      a.pointY <= d.maxY &&
+      a.pointZ >= d.minZ &&
+      a.pointZ <= d.maxZ;
+    return props.mode === "keep" ? !inside : inside;
+  }).length;
 });
 </script>
 
@@ -70,12 +78,45 @@ const strandedCount = computed(() => {
       <span v-if="dimensions" class="crop-dims">{{ dimensions }}</span>
     </div>
 
-    <p class="crop-hint">Drag a face to trim. Drag elsewhere to orbit.</p>
+    <div class="crop-modes" role="group" aria-label="What the box does">
+      <button
+        type="button"
+        class="crop-mode"
+        :class="{ active: mode === 'keep' }"
+        :aria-pressed="mode === 'keep'"
+        title="Keep what is inside the box"
+        @click="$emit('mode', 'keep')"
+      >
+        + Keep inside
+      </button>
+      <button
+        type="button"
+        class="crop-mode"
+        :class="{ active: mode === 'remove' }"
+        :aria-pressed="mode === 'remove'"
+        title="Remove what is inside the box"
+        @click="$emit('mode', 'remove')"
+      >
+        − Remove inside
+      </button>
+    </div>
 
-    <p v-if="strandedCount" class="crop-warn">
+    <p class="crop-hint">
+      {{
+        mode === "keep"
+          ? "Everything outside the box is trimmed."
+          : "Everything inside the box is deleted."
+      }}
+      Drag a face to resize, drag elsewhere to orbit.
+    </p>
+
+    <p v-if="emptiesScan" class="crop-warn">
+      This box covers the whole scan, so nothing would be left.
+    </p>
+    <p v-else-if="strandedCount" class="crop-warn">
       {{ strandedCount }}
-      {{ strandedCount === 1 ? "annotation falls" : "annotations fall" }}
-      outside this box.
+      {{ strandedCount === 1 ? "annotation sits" : "annotations sit" }}
+      on geometry this removes.
     </p>
 
     <p v-if="error" class="crop-warn">{{ error }}</p>
@@ -84,16 +125,13 @@ const strandedCount = computed(() => {
       <button type="button" class="crop-btn" @click="$emit('reset')">
         Reset
       </button>
-      <button type="button" class="crop-btn" @click="$emit('cancel')">
-        Cancel
-      </button>
       <button
         type="button"
-        class="crop-btn crop-save"
-        :disabled="saving"
-        @click="$emit('save')"
+        class="crop-btn crop-confirm"
+        :disabled="saving || emptiesScan"
+        @click="$emit('confirm')"
       >
-        {{ saving ? "Saving…" : "Save crop" }}
+        {{ saving ? "Saving…" : "Confirm" }}
       </button>
     </div>
   </div>
@@ -113,7 +151,7 @@ const strandedCount = computed(() => {
   transform: translateX(-50%);
   z-index: 5;
   width: max-content;
-  max-width: min(260px, calc(100% - 1.5rem));
+  max-width: min(280px, calc(100% - 1.5rem));
   padding: 8px 10px;
   border: 1px solid #fff;
   border-radius: 3px;
@@ -139,6 +177,40 @@ const strandedCount = computed(() => {
 .crop-dims {
   color: #999;
   font-variant-numeric: tabular-nums;
+}
+
+/* One bordered block split in two, like the account page's segmented sub-tabs:
+   the two are one choice, not two buttons. */
+.crop-modes {
+  display: flex;
+  margin-top: 8px;
+  border: 1px solid #fff;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.crop-mode {
+  flex: 1;
+  padding: 4px 6px;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.crop-mode + .crop-mode {
+  border-left: 1px solid #fff;
+}
+
+.crop-mode:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.crop-mode.active {
+  background: #fff;
+  color: #000;
 }
 
 .crop-hint {
@@ -173,7 +245,7 @@ const strandedCount = computed(() => {
   background: rgba(255, 255, 255, 0.15);
 }
 
-.crop-save:hover:not(:disabled) {
+.crop-confirm:hover:not(:disabled) {
   background: #ff0000;
   border-color: #ff0000;
 }

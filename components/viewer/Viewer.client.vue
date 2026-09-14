@@ -3,7 +3,7 @@ import type * as THREE from "three";
 import { useThreeScene } from "~/composables/useThreeScene";
 import type { CameraSnapshot } from "~/composables/useThreeScene";
 import { apiErrorMessage } from "~~/shared/utils/apiError";
-import type { CropBox } from "~~/shared/utils/crop";
+import type { Crop } from "~~/shared/utils/crop";
 
 const props = defineProps<{
   modelUrl?: string | null;
@@ -11,7 +11,7 @@ const props = defineProps<{
   thumbUrl?: string | null;
   /** Needed for the crop endpoint, which is keyed by id like every admin route. */
   restroomId?: number | null;
-  crop?: CropBox | null;
+  crop?: Crop | null;
 }>();
 const canvasRef = ref<HTMLCanvasElement | null>(null);
 const modelUrlRef = toRef(props, "modelUrl");
@@ -43,8 +43,10 @@ const {
   mode,
   createMode,
   markersVisible,
+  cropEditing,
   cropMode,
   cropDraft,
+  cropEmptiesScan,
   setMode,
   flyTo,
   project,
@@ -52,6 +54,7 @@ const {
   startCrop,
   cancelCrop,
   resetCropBox,
+  setCropMode,
   pendingCrop,
   applyPendingCrop,
 } = useThreeScene(canvasRef, modelUrlRef, cropRef, handlePickPoint);
@@ -160,9 +163,9 @@ const canCrop = computed(
 const cropSaving = ref(false);
 const cropError = ref("");
 
-function toggleCropMode() {
+function toggleCropTool() {
   cropError.value = "";
-  if (cropMode.value) {
+  if (cropEditing.value) {
     cancelCrop();
     showToast("Crop canceled");
   } else {
@@ -172,8 +175,15 @@ function toggleCropMode() {
 
 async function saveCrop() {
   const id = props.restroomId;
+  if (id == null) return;
+
+  // Computed before the request, and in `remove` mode this is where the scan's
+  // vertices get walked to find what survives.
   const pending = pendingCrop();
-  if (id == null || !pending) return;
+  if (!pending) {
+    cropError.value = "This crop would leave nothing of the scan.";
+    return;
+  }
 
   cropSaving.value = true;
   cropError.value = "";
@@ -184,7 +194,7 @@ async function saveCrop() {
     });
     // Only now, so a failed save leaves the editor open on the box the admin
     // drew rather than re-framing on a crop that was never stored.
-    applyPendingCrop();
+    applyPendingCrop(pending);
 
     // The crop changed the framing, so the catalog's thumbnail is of the old
     // one. Re-rendered here rather than left to the offline script, because
@@ -253,8 +263,8 @@ function toggleCreateMode() {
 // Esc to cancel create mode / close active bubble
 function onKeydown(e: KeyboardEvent) {
   if (e.key === "Escape") {
-    if (cropMode.value) {
-      if (!cropSaving.value) toggleCropMode();
+    if (cropEditing.value) {
+      if (!cropSaving.value) toggleCropTool();
     } else if (pendingPoint.value) {
       pendingPoint.value = null;
       pendingSnapshot.value = null;
@@ -335,13 +345,13 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
         <div v-if="canCrop" class="ctrl-group">
           <button
             class="ctrl-btn ctrl-crop"
-            :class="{ active: cropMode }"
-            :title="cropMode ? 'Close crop tool' : 'Crop and re-centre scan'"
+            :class="{ active: cropEditing }"
+            :title="cropEditing ? 'Close crop tool' : 'Crop and re-centre scan'"
             :aria-label="
-              cropMode ? 'Close crop tool' : 'Crop and re-centre scan'
+              cropEditing ? 'Close crop tool' : 'Crop and re-centre scan'
             "
-            :aria-pressed="cropMode"
-            @click="toggleCropMode"
+            :aria-pressed="cropEditing"
+            @click="toggleCropTool"
           >
             <!-- Crop marks: two overlapping right angles. -->
             <svg
@@ -364,7 +374,10 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
         <!-- Annotation controls: hidden without a slug (e.g. an in-progress
         submission preview, which has nothing to annotate yet). Otherwise
         toggle always visible; add button signed-in users only. -->
-        <div v-if="props.slug && !cropMode" class="ctrl-group annotation-group">
+        <div
+          v-if="props.slug && !cropEditing"
+          class="ctrl-group annotation-group"
+        >
           <button
             class="ctrl-toggle"
             :class="{ active: markersVisible }"
@@ -414,14 +427,16 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
     </div>
 
     <CropPanel
-      v-if="cropMode"
+      v-if="cropEditing"
       :draft="cropDraft"
+      :mode="cropMode"
+      :empties-scan="cropEmptiesScan"
       :saving="cropSaving"
       :annotations="annotations ?? null"
       :error="cropError"
       @reset="resetCropBox"
-      @cancel="toggleCropMode"
-      @save="saveCrop"
+      @mode="setCropMode"
+      @confirm="saveCrop"
     />
 
     <div

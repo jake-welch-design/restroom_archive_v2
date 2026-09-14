@@ -1,4 +1,4 @@
-import type { CropBox } from "~~/shared/utils/crop";
+import type { Crop } from "~~/shared/utils/crop";
 
 // Shared state bridging the account page (submission wizard, admin pending-
 // review) and the global layout's persistent Viewer. While a scan is loaded
@@ -20,7 +20,7 @@ import type { CropBox } from "~~/shared/utils/crop";
 export interface PreviewEntry {
   id: number;
   slug: string;
-  crop: CropBox | null;
+  crop: Crop | null;
 }
 
 export function useSubmissionPreview() {
