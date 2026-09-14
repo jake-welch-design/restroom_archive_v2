@@ -419,9 +419,8 @@ export function useThreeScene(
       // handing every model a full set would cost a per-fragment test on scans
       // that have nothing to clip.
       clippingPlanes: clippingActive ? cropWorldPlanes : undefined,
-      // `keep` clips the union of the six half-spaces, leaving the box's
-      // interior. `remove` clips only their intersection, which is the interior
-      // itself, leaving everything around it.
+      // Paired with the planes' orientation in `setClipBox`; neither works
+      // without the other. See there for why.
       clipIntersection: clipMode === "remove",
     });
     // Textures are handed to the new material, so only the material shell is
@@ -579,8 +578,20 @@ export function useThreeScene(
    * Points the clipping planes at `box`, or turns clipping off when it is null.
    *
    * The planes are written in the model's local space here and transformed to
-   * world space per frame (see `updateCropPlanes`). Three clips where the
-   * signed distance to a plane is negative, so each pair keeps the inside.
+   * world space per frame (see `updateCropPlanes`).
+   *
+   * Three discards a fragment on a plane's negative side, and the two modes
+   * need the planes facing opposite ways, not just a different combining rule:
+   *
+   * - `keep` faces them inward and leaves `clipIntersection` off, so a fragment
+   *   is discarded if it is behind any one of them: outside the box.
+   * - `remove` faces them outward and turns `clipIntersection` on, so a fragment
+   *   is discarded only if it is behind all six: strictly inside the box.
+   *
+   * Turning `clipIntersection` on with the planes still facing inward does
+   * nothing at all, because "behind all six" would then mean left of the box's
+   * minimum and right of its maximum at once, which no point can be. That was
+   * the original bug in `remove` mode.
    */
   function setClipBox(box: THREE.Box3 | null, mode: CropMode = "keep") {
     const wasActive = clippingActive;
@@ -596,6 +607,8 @@ export function useThreeScene(
       cropLocalPlanes[3].set(new THREE.Vector3(0, -1, 0), box.max.y);
       cropLocalPlanes[4].set(new THREE.Vector3(0, 0, 1), -box.min.z);
       cropLocalPlanes[5].set(new THREE.Vector3(0, 0, -1), box.max.z);
+      if (mode === "remove")
+        for (const plane of cropLocalPlanes) plane.negate();
       updateCropPlanes();
     }
 

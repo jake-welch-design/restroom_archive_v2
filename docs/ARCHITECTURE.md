@@ -357,11 +357,18 @@ crop stored in world space would compose with the previous crop's offset on
 every re-edit.
 
 **Hiding the rest is clipping, not geometry surgery.** Six planes on each
-material cut against the box, and `material.clipIntersection` is what makes the
-same six planes mean opposite things: left false they clip the union of their
-half-spaces, leaving the box's interior; set true they clip only the
-intersection, which is the interior itself, leaving everything around it. Three
-consequences:
+material cut against the box. Three discards a fragment on a plane's negative
+side, and the two modes differ in two things that only work together:
+
+- `keep` faces the planes inward with `clipIntersection` off, so a fragment
+  behind any one plane, outside the box, is discarded.
+- `remove` faces them outward with `clipIntersection` on, so only a fragment
+  behind all six, strictly inside the box, is discarded.
+
+Turning `clipIntersection` on without flipping the planes discards nothing:
+"behind all six inward planes" means left of the box and right of it at once.
+The first version of `remove` shipped exactly that way and removed nothing.
+Three consequences:
 
 - Clipping planes are world-space and the model turns (auto-rotate, and `flyTo`
   restoring an annotation's model rotation), so the planes are held in local

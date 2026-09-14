@@ -160,9 +160,11 @@ const clipPlanes = CROP
       new THREE.Plane(new THREE.Vector3(0, 0, -1), CROP.box.maxZ),
     ]
   : null
-// 'remove' clips only the planes' intersection, which is the box's interior,
-// leaving everything around it. See composables/useThreeScene.ts.
+// 'remove' needs the planes facing outward and clipIntersection on, so only
+// what is behind all six (inside the box) is discarded. Either one alone clips
+// nothing or the wrong side. See setClipBox in composables/useThreeScene.ts.
 const CLIP_INTERSECTION = CROP?.mode === 'remove'
+if (clipPlanes && CLIP_INTERSECTION) for (const plane of clipPlanes) plane.negate()
 
 // Unlit, matching the site viewer (composables/useThreeScene.ts): scans have
 // their lighting baked into the base color texture, so no lights or environment.
