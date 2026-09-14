@@ -47,7 +47,6 @@ const {
   cropMode,
   cropDraft,
   cropEmptiesScan,
-  cropPovHeight,
   setMode,
   flyTo,
   project,
@@ -56,6 +55,7 @@ const {
   cancelCrop,
   resetCropBox,
   setCropMode,
+  cropHasChanges,
   pendingCrop,
   applyPendingCrop,
 } = useThreeScene(canvasRef, modelUrlRef, cropRef, handlePickPoint);
@@ -162,32 +162,88 @@ const canCrop = computed(
 );
 
 const cropSaving = ref(false);
-const cropError = ref("");
 
-function toggleCropTool() {
-  cropError.value = "";
-  if (cropEditing.value) {
-    cancelCrop();
-    showToast("Crop canceled");
-  } else {
+/**
+ * How many annotations sit on geometry the box as drawn would take away.
+ *
+ * Which side that is depends on the mode, so the same test answers both.
+ * Annotation points are stored in model-local space, the same space the box is
+ * in, so it is a direct comparison with nothing to transform. Shown on the crop
+ * note as a warning rather than stopping the save: cropping away an annotated
+ * surface is a legitimate thing to do, and only the marker loses its surface.
+ */
+const strandedCount = computed(() => {
+  const d = cropDraft.value;
+  const list = annotations.value;
+  if (!d || !list?.length) return 0;
+  return list.filter((a) => {
+    const inside =
+      a.pointX >= d.minX &&
+      a.pointX <= d.maxX &&
+      a.pointY >= d.minY &&
+      a.pointY <= d.maxY &&
+      a.pointZ >= d.minZ &&
+      a.pointZ <= d.maxZ;
+    return cropMode.value === "keep" ? !inside : inside;
+  }).length;
+});
+
+/**
+ * The crop button: the first press opens the tool, the next one saves.
+ *
+ * There is no separate save control, so this is it. Abandoning an edit instead
+ * is Escape, or moving to another scan.
+ */
+function onCropButton() {
+  if (!cropEditing.value) {
     startCrop();
+    return;
   }
+  if (!cropSaving.value) void saveCrop();
+}
+
+function toggleCropMode() {
+  const next = cropMode.value === "keep" ? "remove" : "keep";
+  setCropMode(next);
+  showToast(next === "keep" ? "Keep inside box" : "Remove inside box");
+}
+
+function onResetCrop() {
+  resetCropBox();
+  showToast("Crop reset");
+}
+
+function cancelCropEdit() {
+  cancelCrop();
+  showToast("Crop canceled");
 }
 
 async function saveCrop() {
   const id = props.restroomId;
   if (id == null) return;
 
+  // Opening the tool and pressing the button again without touching anything
+  // is closing it, not saving the same crop over itself.
+  if (!cropHasChanges()) {
+    cancelCrop();
+    showToast("No changes");
+    return;
+  }
+
+  if (cropEmptiesScan.value) {
+    showToast("That box covers the whole scan", 2500);
+    return;
+  }
+
   // Computed before the request, and in `remove` mode this is where the scan's
   // vertices get walked to find what survives.
   const pending = pendingCrop();
   if (!pending) {
-    cropError.value = "This crop would leave nothing of the scan.";
+    showToast("That crop would leave nothing of the scan", 2500);
     return;
   }
 
   cropSaving.value = true;
-  cropError.value = "";
   try {
     await $fetch(`/api/admin/restrooms/${id}/crop`, {
       method: "POST",
@@ -217,28 +273,24 @@ async function saveCrop() {
     ]);
     showToast(pending.crop ? "Crop saved" : "Crop cleared");
   } catch (e) {
-    cropError.value = apiErrorMessage(e, "Could not save the crop.");
+    // Longer than the usual toast: this is the only place the failure is said,
+    // and the tool stays open on the box so the save can be tried again.
+    showToast(apiErrorMessage(e, "Could not save the crop."), 3500);
   } finally {
     cropSaving.value = false;
   }
 }
 
-// Leaving the entry abandons an open edit rather than carrying it to whatever
-// is selected next.
-watch(modelUrlRef, () => {
-  cropError.value = "";
-});
-
 // Transient toast describing the last viewport-button action
 const toastMessage = ref("");
 let toastTimer: ReturnType<typeof setTimeout> | null = null;
-function showToast(msg: string) {
+function showToast(msg: string, duration = 1200) {
   toastMessage.value = msg;
   if (toastTimer) clearTimeout(toastTimer);
   toastTimer = setTimeout(() => {
     toastMessage.value = "";
     toastTimer = null;
-  }, 1200);
+  }, duration);
 }
 
 function toggleViewMode() {
@@ -265,7 +317,7 @@ function toggleCreateMode() {
 function onKeydown(e: KeyboardEvent) {
   if (e.key === "Escape") {
     if (cropEditing.value) {
-      if (!cropSaving.value) toggleCropTool();
+      if (!cropSaving.value) cancelCropEdit();
     } else if (pendingPoint.value) {
       pendingPoint.value = null;
       pendingSnapshot.value = null;
@@ -287,10 +339,16 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
 
     <div class="overlay">
       <div class="overlay-right">
-        <!-- The scan's own controls, view mode and crop. A wrapper only so that
-        on the mobile sheet the two can stack in the bottom-left corner; on
-        desktop it is display: contents and the row is laid out as if it were
-        not there. -->
+        <!-- The scan's own controls: view mode, and the crop tool's buttons. A
+        wrapper only so that on the mobile sheet they can stack up the
+        left-hand edge; on desktop it is display: contents and the row is laid
+        out as if it were not there.
+
+        DOM order is the desktop order, left to right: view mode, reset, mode,
+        crop. The two tool buttons appear between view mode and crop, so the
+        crop button, which is pressed once to open the tool and again to save,
+        never moves between the two presses. Mobile reorders them with `order`
+        for the same reason; see the stylesheet. -->
         <div class="ctrl-stack">
           <!-- View mode: single circle that changes icon -->
           <div class="ctrl-group view-mode-group">
@@ -345,21 +403,82 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
             </button>
           </div>
 
+          <!-- Crop tool buttons, only while it is open. -->
+          <div
+            v-if="canCrop && cropEditing"
+            class="ctrl-group crop-reset-group"
+          >
+            <button
+              class="ctrl-btn"
+              title="Reset crop"
+              aria-label="Reset crop"
+              @click="onResetCrop"
+            >
+              <!-- Counter-clockwise arrow. -->
+              <svg
+                viewBox="0 0 24 24"
+                width="17"
+                height="17"
+                fill="none"
+                stroke="#ffffff"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M1 4v6h6" />
+                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+              </svg>
+            </button>
+          </div>
+
+          <div v-if="canCrop && cropEditing" class="ctrl-group crop-mode-group">
+            <!-- One press flips it, like the view-mode button, and the icon
+            shows the mode in force rather than the one a press would choose. -->
+            <button
+              class="ctrl-btn"
+              :title="
+                cropMode === 'keep'
+                  ? 'Keeping inside the box (switch to removing)'
+                  : 'Removing inside the box (switch to keeping)'
+              "
+              :aria-label="
+                cropMode === 'keep'
+                  ? 'Switch to removing what is inside the box'
+                  : 'Switch to keeping what is inside the box'
+              "
+              @click="toggleCropMode"
+            >
+              <svg
+                viewBox="0 0 16 16"
+                width="18"
+                height="18"
+                fill="none"
+                stroke="#ffffff"
+                stroke-width="1.6"
+                stroke-linecap="round"
+                aria-hidden="true"
+              >
+                <path d="M3 8h10" />
+                <path v-if="cropMode === 'keep'" d="M8 3v10" />
+              </svg>
+            </button>
+          </div>
+
           <!-- Crop: admins only, and only on an entry that exists. Sits with the
-        view-mode control rather than the annotation group because it is about
-        the scan itself, not about what has been written on it. -->
-          <div v-if="canCrop" class="ctrl-group">
+          view-mode control rather than the annotation group because it is about
+          the scan itself, not about what has been written on it. -->
+          <div v-if="canCrop" class="ctrl-group crop-group">
             <button
               class="ctrl-btn ctrl-crop"
               :class="{ active: cropEditing }"
-              :title="
-                cropEditing ? 'Close crop tool' : 'Crop and re-centre scan'
-              "
+              :title="cropEditing ? 'Save crop' : 'Crop and re-centre scan'"
               :aria-label="
-                cropEditing ? 'Close crop tool' : 'Crop and re-centre scan'
+                cropEditing ? 'Save crop' : 'Crop and re-centre scan'
               "
               :aria-pressed="cropEditing"
-              @click="toggleCropTool"
+              :disabled="cropSaving"
+              @click="onCropButton"
             >
               <!-- Crop marks: two overlapping right angles. -->
               <svg
@@ -383,9 +502,14 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
         <!-- Annotation controls: hidden without a slug (e.g. an in-progress
         submission preview, which has nothing to annotate yet). Otherwise
         toggle always visible; add button signed-in users only. -->
+        <!-- Concealed rather than removed while cropping. The desktop row is
+        anchored to the right, so taking these out would slide the crop button
+        sideways between the press that opens the tool and the one that saves
+        it. -->
         <div
-          v-if="props.slug && !cropEditing"
+          v-if="props.slug"
           class="ctrl-group annotation-group"
+          :class="{ 'is-concealed': cropEditing }"
         >
           <button
             class="ctrl-toggle"
@@ -435,19 +559,21 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
       </div>
     </div>
 
-    <CropPanel
-      v-if="cropEditing"
-      :draft="cropDraft"
-      :mode="cropMode"
-      :empties-scan="cropEmptiesScan"
-      :pov-height="cropPovHeight"
-      :saving="cropSaving"
-      :annotations="annotations ?? null"
-      :error="cropError"
-      @reset="resetCropBox"
-      @mode="setCropMode"
-      @confirm="saveCrop"
-    />
+    <!-- The crop tool's note, in the annotation hint's place and style. A toast
+    replaces it while it shows, as toasts replace that hint, which is how the
+    mode toggle's message gets the spot to itself. The warning is here because
+    there is no panel left to put it in, and it is the one thing worth knowing
+    before the next press saves. -->
+    <div v-if="cropEditing && !toastMessage" class="crosshair-hint crop-note">
+      {{ cropSaving ? "SAVING" : "CROP" }}
+      <span v-if="!cropSaving && cropEmptiesScan" class="crop-note-warn">
+        · covers the whole scan
+      </span>
+      <span v-else-if="!cropSaving && strandedCount" class="crop-note-warn">
+        · {{ strandedCount }}
+        {{ strandedCount === 1 ? "annotation" : "annotations" }} affected
+      </span>
+    </div>
 
     <div
       v-if="createMode && !pendingPoint && !toastMessage"
@@ -580,6 +706,21 @@ canvas {
   background: #ff0000;
   color: #ffffff;
 }
+.ctrl-btn:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+/* Hidden but still holding its space; see the template for why. */
+.annotation-group.is-concealed {
+  visibility: hidden;
+}
+.crop-note {
+  letter-spacing: 0.06em;
+}
+.crop-note-warn {
+  color: #ff0000;
+  letter-spacing: normal;
+}
 .ctrl-toggle {
   display: flex;
   align-items: center;
@@ -707,10 +848,13 @@ canvas {
   .overlay-right > * {
     pointer-events: auto;
   }
-  /* Crop above POV in the bottom-left corner, rather than beside it in a row
-  that is short of width. column-reverse keeps the DOM, and so the tab order,
-  POV then crop on both layouts. The stack is transparent to pointer events
-  like the row around it, so the gap between the two buttons does not swallow
+  /* The same buttons as the desktop row, stacked up the left-hand edge: view
+  mode at the bottom, level with the annotation toggle, then crop, then the
+  tool's mode and reset buttons above it while it is open. They grow upward
+  from crop, away from the corner, so neither view mode nor crop moves when
+  the tool opens. The DOM order is the desktop one, so `order` sets the stack's
+  and column-reverse lays it bottom up. The stack is transparent to pointer
+  events like the row around it, so the gaps between buttons do not swallow
   touches meant for the scan. */
   .ctrl-stack {
     display: flex;
@@ -722,6 +866,18 @@ canvas {
   }
   .ctrl-stack > * {
     pointer-events: auto;
+  }
+  .ctrl-stack > .view-mode-group {
+    order: 0;
+  }
+  .ctrl-stack > .crop-group {
+    order: 1;
+  }
+  .ctrl-stack > .crop-mode-group {
+    order: 2;
+  }
+  .ctrl-stack > .crop-reset-group {
+    order: 3;
   }
   .annotation-group {
     margin-left: auto;

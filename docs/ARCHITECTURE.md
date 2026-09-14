@@ -415,11 +415,29 @@ arbitrary and are not:
   quarter of each axis, because the honest rendering of that state is a black
   viewport.
 
-**The panel** carries only what the 3D surface cannot say: the mode toggle,
-Reset and Confirm. There is no Cancel, because the viewer's crop button and
-Escape both already close the tool. Reset returns the box to full bounds _and_
-the mode to `keep`, since full bounds means "no crop" one way round and "delete
-everything" the other.
+**The controls are icon buttons in the viewer's own control row**, not a panel.
+The crop button opens the tool and, pressed again, saves; there is no separate
+save. While the tool is open a reset button and a one-press `+`/`−` mode toggle
+appear beside it, and a "CROP" note sits in the annotation hint's place. Details
+that look arbitrary and are not:
+
+- **The crop button never moves between its two presses.** On desktop the row
+  is anchored to the right, so the new buttons appear to its left, between it
+  and view mode, and the annotation buttons are hidden with `visibility` rather
+  than removed, since removing them would slide the crop button sideways. On
+  the mobile sheet the same buttons stack up the left edge from the corner, with
+  `order` putting the new ones above crop.
+- **A second press with nothing changed closes the tool** instead of saving.
+  `cropHasChanges` compares the draft with the crop in force, so opening and
+  closing costs no request, thumbnail or audit entry.
+- **Toggling to `remove` and straight back restores the box.** Switching to
+  `remove` with the box at full bounds shrinks it to a quarter so the scan does
+  not vanish; switching back to `keep` before dragging it puts the original box
+  back. Left shrunk, one idle round trip of the toggle followed by a press would
+  save a crop that trims away most of the scan.
+- **Escape abandons an edit.** Reset returns the box to full bounds _and_ the
+  mode to `keep`, since full bounds means "no crop" one way round and "delete
+  everything" the other.
 
 **The POV eye** is set in the same tool. POV stands at the frame's centre, so in
 a tall room it inherits the room's midpoint height. A vertical guide runs through

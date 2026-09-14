@@ -182,14 +182,6 @@ export function useThreeScene(
    * every drag frame; the exact check happens once at save.
    */
   const cropEmptiesScan = ref(false);
-  /**
-   * The POV eye's height above the frame's floor while editing, for the panel.
-   *
-   * Above the floor rather than as a raw coordinate, because a scan's local Y
-   * origin is wherever the capture app put it and means nothing to the admin,
-   * while "1.5 above the lowest geometry" reads as an eye height.
-   */
-  const cropPovHeight = ref<number | null>(null);
 
   let renderer: THREE.WebGLRenderer | null = null;
   let scene: THREE.Scene | null = null;
@@ -260,6 +252,18 @@ export function useThreeScene(
    * become a fixed height that stays put.
    */
   let draftPovY: number | null = null;
+
+  /**
+   * The box as it was before switching to `remove` shrank it, while that shrunk
+   * box is still untouched. Null once a face has been dragged, or when no
+   * shrink happened.
+   *
+   * Switching back to `keep` restores it. Without that, flipping the mode to
+   * `remove` and back leaves a quarter-size `keep` box behind, which trims
+   * away most of the scan, and with the crop button saving on its next press
+   * one idle round trip of the toggle would be enough to save it.
+   */
+  let boxBeforeShrink: THREE.Box3 | null = null;
 
   /** The frame the current draft would save with, which the POV guide stands in. */
   const draftFrame = new THREE.Box3();
@@ -393,9 +397,10 @@ export function useThreeScene(
       },
       onPovChange: (y) => {
         draftPovY = y;
-        cropPovHeight.value = y - draftFrame.min.y;
       },
       onDragEnd: () => {
+        // A dragged box is the admin's, so there is no longer a shrink to undo.
+        boxBeforeShrink = null;
         if (cropMode.value === "remove") syncPovGuide();
       },
     });
@@ -634,7 +639,6 @@ export function useThreeScene(
     // A height the admin chose that the resized frame no longer contains is
     // pulled back inside it, so what is saved is what is shown.
     if (draftPovY != null) draftPovY = seated;
-    cropPovHeight.value = seated - draftFrame.min.y;
   }
 
   function isFullBounds(box: THREE.Box3): boolean {
@@ -907,6 +911,7 @@ export function useThreeScene(
       : originalBounds.clone();
     cropMode.value = committedCrop?.mode ?? "keep";
     draftPovY = committedCrop?.povY ?? null;
+    boxBeforeShrink = null;
     setClipBox(initial, cropMode.value);
     gizmo.show(initial, originalBounds);
     // A stored `remove` crop already knows its frame, so reopening one does not
@@ -965,7 +970,7 @@ export function useThreeScene(
     cropEmptiesScan.value = false;
     cropMode.value = committedCrop?.mode ?? "keep";
     draftPovY = null;
-    cropPovHeight.value = null;
+    boxBeforeShrink = null;
     setClipBox(clipBoxOf(committedCrop), committedCrop?.mode ?? "keep");
     restoreViewBeforeCrop();
   }
@@ -1008,6 +1013,7 @@ export function useThreeScene(
   function resetCropBox() {
     cropMode.value = "keep";
     draftPovY = null;
+    boxBeforeShrink = null;
     // Redraws, re-clips and re-seats the POV guide through the gizmo's onChange.
     gizmo?.setBox(originalBounds.clone());
   }
@@ -1025,7 +1031,14 @@ export function useThreeScene(
     cropMode.value = next;
 
     let box = gizmo.getBox();
-    if (wouldEmptyScan(box, next)) {
+    if (next === "keep" && boxBeforeShrink) {
+      // Back to `keep` without the shrunk box having been touched: put back
+      // the box it replaced. Through onChange, like the shrink itself.
+      const restored = boxBeforeShrink;
+      boxBeforeShrink = null;
+      gizmo.setBox(restored);
+    } else if (wouldEmptyScan(box, next)) {
+      boxBeforeShrink = box.clone();
       const centre = box.getCenter(new THREE.Vector3());
       const size = box.getSize(new THREE.Vector3()).multiplyScalar(0.25);
       box = new THREE.Box3().setFromCenterAndSize(centre, size);
@@ -1038,6 +1051,46 @@ export function useThreeScene(
     // The frame changes meaning with the mode, and onChange only re-seats the
     // guide for `keep`, so it is re-stood here whichever way the switch went.
     syncPovGuide();
+  }
+
+  /**
+   * Whether the draft differs from the crop already in force.
+   *
+   * The crop button both opens the tool and saves it, so pressing it twice
+   * without touching anything is a natural way to close it. Without this that
+   * would re-save the same crop, re-render its thumbnail and log an admin action
+   * that changed nothing.
+   */
+  function cropHasChanges(): boolean {
+    if (!gizmo) return false;
+    const box = gizmo.getBox();
+
+    if (!committedCrop) {
+      return !(
+        cropMode.value === "keep" &&
+        isFullBounds(box) &&
+        draftPovY == null
+      );
+    }
+
+    // Tighter than isFullBounds' millimetre, since this compares a box against
+    // the same box read back, not against a measurement.
+    const epsilon = 1e-4;
+    if (committedCrop.mode !== cropMode.value) return true;
+    const stored = boxFromCrop(committedCrop.box);
+    if (
+      stored.min.distanceTo(box.min) > epsilon ||
+      stored.max.distanceTo(box.max) > epsilon
+    )
+      return true;
+
+    const before = committedCrop.povY ?? null;
+    if ((before == null) !== (draftPovY == null)) return true;
+    return (
+      before != null &&
+      draftPovY != null &&
+      Math.abs(before - draftPovY) > epsilon
+    );
   }
 
   /**
@@ -1121,7 +1174,7 @@ export function useThreeScene(
     cropDraft.value = null;
     cropEmptiesScan.value = false;
     draftPovY = null;
-    cropPovHeight.value = null;
+    boxBeforeShrink = null;
   }
 
   function setMode(next: ViewMode) {
@@ -1590,7 +1643,6 @@ export function useThreeScene(
     cropMode,
     cropDraft,
     cropEmptiesScan,
-    cropPovHeight,
     loadModel,
     setMode,
     pickPoint,
@@ -1602,6 +1654,7 @@ export function useThreeScene(
     cancelCrop,
     resetCropBox,
     setCropMode,
+    cropHasChanges,
     pendingCrop,
     applyPendingCrop,
   };
