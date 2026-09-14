@@ -44,6 +44,7 @@ const {
   createMode,
   markersVisible,
   cropEditing,
+  cropReady,
   cropMode,
   cropDraft,
   cropEmptiesScan,
@@ -196,19 +197,25 @@ const strandedCount = computed(() => {
  */
 function onCropButton() {
   if (!cropEditing.value) {
-    startCrop();
+    // The box appears once the controls have finished moving; see startCrop.
+    startCrop({ sceneDelayMs: reducedMotion() ? 0 : SLIDE_MS + 40 });
     return;
   }
-  if (!cropSaving.value) void saveCrop();
+  // A second press before the box has even appeared is a double click, not a
+  // save of a crop nobody has seen.
+  if (!cropReady.value || cropSaving.value) return;
+  void saveCrop();
 }
 
 function toggleCropMode() {
+  if (!cropReady.value) return;
   const next = cropMode.value === "keep" ? "remove" : "keep";
   setCropMode(next);
   showToast(next === "keep" ? "Keep inside box" : "Remove inside box");
 }
 
 function onResetCrop() {
+  if (!cropReady.value) return;
   resetCropBox();
   showToast("Crop reset");
 }
@@ -253,6 +260,14 @@ async function saveCrop() {
     // drew rather than re-framing on a crop that was never stored.
     applyPendingCrop(pending);
 
+    // Rendering the thumbnail builds a second WebGL renderer and compiles every
+    // shader for it, which stalls the page. Closing the tool has just started
+    // the controls sliding back, so the render waits for that to finish rather
+    // than freezing it partway. Longer than the slide itself, because the slide
+    // only starts once the DOM has patched, a frame or two after this point.
+    if (!reducedMotion())
+      await new Promise((resolve) => setTimeout(resolve, SLIDE_MS + 150));
+
     // The crop changed the framing, so the catalog's thumbnail is of the old
     // one. Re-rendered here rather than left to the offline script, because
     // the corrected picture is the whole point of the correction.
@@ -279,6 +294,103 @@ async function saveCrop() {
   } finally {
     cropSaving.value = false;
   }
+}
+
+/* --- Control row motion -------------------------------------------------- */
+
+/**
+ * Opening the crop tool reshapes the control row: the annotation buttons go and
+ * the tool's buttons arrive. On desktop the row is anchored to the right, so
+ * the buttons that stay (view mode and crop) are pushed along into the space
+ * the annotation buttons leave. They slide there rather than jump, which is
+ * what lets the eye follow the crop button to where it will be pressed again
+ * to save.
+ *
+ * Done by hand rather than with TransitionGroup because the buttons that move
+ * are not all siblings: view mode and crop sit in a wrapper that exists for the
+ * mobile stack, and TransitionGroup only animates its own direct children. So
+ * this is the same technique written out. Every button's position is read before
+ * the change, the ones that stay are put back where they were with a transform
+ * once the new layout exists, and the transform is then transitioned away.
+ * Buttons that leave are pinned where they stood while they fade (see
+ * pinForLeave), so they drop out of the layout at once instead of holding their
+ * space until the fade ends and making the slide finish with a jump.
+ */
+const controlRowRef = ref<HTMLElement | null>(null);
+const rowRectsBefore = new Map<HTMLElement, DOMRect>();
+
+const SLIDE_MS = 260;
+
+function reducedMotion(): boolean {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+watch(
+  cropEditing,
+  () => {
+    rowRectsBefore.clear();
+    const row = controlRowRef.value;
+    if (!row) return;
+    for (const el of row.querySelectorAll<HTMLElement>(".ctrl-group"))
+      rowRectsBefore.set(el, el.getBoundingClientRect());
+  },
+  // Before the component re-renders, so these are the old positions.
+  { flush: "pre" },
+);
+
+watch(
+  cropEditing,
+  () => {
+    const row = controlRowRef.value;
+    if (!row || reducedMotion()) return;
+    for (const el of row.querySelectorAll<HTMLElement>("[data-slide]")) {
+      const from = rowRectsBefore.get(el);
+      if (!from) continue;
+      // Any slide still running is dropped first, so its transform does not
+      // pollute the measurement of where the button now belongs.
+      el.style.transition = "none";
+      el.style.transform = "";
+      const to = el.getBoundingClientRect();
+      const dx = from.left - to.left;
+      const dy = from.top - to.top;
+      if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) continue;
+      el.style.transform = `translate(${dx}px, ${dy}px)`;
+      // Reading layout commits the offset before the transition is set, or the
+      // browser would coalesce the two and nothing would animate.
+      void el.offsetWidth;
+      el.style.transition = `transform ${SLIDE_MS}ms cubic-bezier(0.2, 0.8, 0.2, 1)`;
+      el.style.transform = "";
+    }
+  },
+  // After the DOM has patched, so the new layout can be measured.
+  { flush: "post" },
+);
+
+/**
+ * Takes a leaving button out of the layout while leaving it where it was.
+ *
+ * Positioned against its containing block from where it stood before the
+ * change, which was read before anything moved. Falls back to its current
+ * position when it leaves for some other reason.
+ */
+function pinForLeave(el: Element) {
+  const node = el as HTMLElement;
+  const from = rowRectsBefore.get(node) ?? node.getBoundingClientRect();
+  const base = (
+    node.offsetParent as HTMLElement | null
+  )?.getBoundingClientRect();
+  node.style.position = "absolute";
+  node.style.margin = "0";
+  node.style.left = `${from.left - (base?.left ?? 0)}px`;
+  node.style.top = `${from.top - (base?.top ?? 0)}px`;
+}
+
+function unpin(el: Element) {
+  const node = el as HTMLElement;
+  node.style.position = "";
+  node.style.margin = "";
+  node.style.left = "";
+  node.style.top = "";
 }
 
 // Transient toast describing the last viewport-button action
@@ -338,20 +450,20 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
     <canvas ref="canvasRef" @pointerdown="onCanvasPointerDown" />
 
     <div class="overlay">
-      <div class="overlay-right">
+      <div ref="controlRowRef" class="overlay-right">
         <!-- The scan's own controls: view mode, and the crop tool's buttons. A
         wrapper only so that on the mobile sheet they can stack up the
         left-hand edge; on desktop it is display: contents and the row is laid
         out as if it were not there.
 
         DOM order is the desktop order, left to right: view mode, reset, mode,
-        crop. The two tool buttons appear between view mode and crop, so the
-        crop button, which is pressed once to open the tool and again to save,
-        never moves between the two presses. Mobile reorders them with `order`
-        for the same reason; see the stylesheet. -->
+        crop. On desktop, opening the tool slides view mode and crop right into
+        the space the annotation buttons leave (see "Control row motion" in the
+        script). On mobile the stack grows upward from crop, so neither moves;
+        `order` sets that stacking, see the stylesheet. -->
         <div class="ctrl-stack">
           <!-- View mode: single circle that changes icon -->
-          <div class="ctrl-group view-mode-group">
+          <div class="ctrl-group view-mode-group" data-slide>
             <button
               class="ctrl-btn"
               :title="
@@ -404,71 +516,86 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
           </div>
 
           <!-- Crop tool buttons, only while it is open. -->
-          <div
-            v-if="canCrop && cropEditing"
-            class="ctrl-group crop-reset-group"
+          <Transition
+            name="ctrl-pop"
+            @before-leave="pinForLeave"
+            @leave-cancelled="unpin"
           >
-            <button
-              class="ctrl-btn"
-              title="Reset crop"
-              aria-label="Reset crop"
-              @click="onResetCrop"
+            <div
+              v-if="canCrop && cropEditing"
+              class="ctrl-group crop-reset-group"
             >
-              <!-- Counter-clockwise arrow. -->
-              <svg
-                viewBox="0 0 24 24"
-                width="17"
-                height="17"
-                fill="none"
-                stroke="#ffffff"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                aria-hidden="true"
+              <button
+                class="ctrl-btn"
+                title="Reset crop"
+                aria-label="Reset crop"
+                @click="onResetCrop"
               >
-                <path d="M1 4v6h6" />
-                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
-              </svg>
-            </button>
-          </div>
+                <!-- Counter-clockwise arrow. -->
+                <svg
+                  viewBox="0 0 24 24"
+                  width="17"
+                  height="17"
+                  fill="none"
+                  stroke="#ffffff"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M1 4v6h6" />
+                  <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+                </svg>
+              </button>
+            </div>
+          </Transition>
 
-          <div v-if="canCrop && cropEditing" class="ctrl-group crop-mode-group">
-            <!-- One press flips it, like the view-mode button, and the icon
-            shows the mode in force rather than the one a press would choose. -->
-            <button
-              class="ctrl-btn"
-              :title="
-                cropMode === 'keep'
-                  ? 'Keeping inside the box (switch to removing)'
-                  : 'Removing inside the box (switch to keeping)'
-              "
-              :aria-label="
-                cropMode === 'keep'
-                  ? 'Switch to removing what is inside the box'
-                  : 'Switch to keeping what is inside the box'
-              "
-              @click="toggleCropMode"
+          <Transition
+            name="ctrl-pop"
+            @before-leave="pinForLeave"
+            @leave-cancelled="unpin"
+          >
+            <div
+              v-if="canCrop && cropEditing"
+              class="ctrl-group crop-mode-group"
             >
-              <svg
-                viewBox="0 0 16 16"
-                width="18"
-                height="18"
-                fill="none"
-                stroke="#ffffff"
-                stroke-width="1.6"
-                stroke-linecap="round"
-                aria-hidden="true"
+              <!-- One press flips it, like the view-mode button, and the icon
+            shows the mode in force rather than the one a press would choose. -->
+              <button
+                class="ctrl-btn"
+                :title="
+                  cropMode === 'keep'
+                    ? 'Keeping inside the box (switch to removing)'
+                    : 'Removing inside the box (switch to keeping)'
+                "
+                :aria-label="
+                  cropMode === 'keep'
+                    ? 'Switch to removing what is inside the box'
+                    : 'Switch to keeping what is inside the box'
+                "
+                @click="toggleCropMode"
               >
-                <path d="M3 8h10" />
-                <path v-if="cropMode === 'keep'" d="M8 3v10" />
-              </svg>
-            </button>
-          </div>
+                <svg
+                  viewBox="0 0 16 16"
+                  width="18"
+                  height="18"
+                  fill="none"
+                  stroke="#ffffff"
+                  stroke-width="1.6"
+                  stroke-linecap="round"
+                  aria-hidden="true"
+                >
+                  <path d="M3 8h10" />
+                  <path v-if="cropMode === 'keep'" d="M8 3v10" />
+                </svg>
+              </button>
+            </div>
+          </Transition>
 
           <!-- Crop: admins only, and only on an entry that exists. Sits with the
           view-mode control rather than the annotation group because it is about
           the scan itself, not about what has been written on it. -->
-          <div v-if="canCrop" class="ctrl-group crop-group">
+          <div v-if="canCrop" class="ctrl-group crop-group" data-slide>
             <button
               class="ctrl-btn ctrl-crop"
               :class="{ active: cropEditing }"
@@ -502,60 +629,63 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
         <!-- Annotation controls: hidden without a slug (e.g. an in-progress
         submission preview, which has nothing to annotate yet). Otherwise
         toggle always visible; add button signed-in users only. -->
-        <!-- Concealed rather than removed while cropping. The desktop row is
-        anchored to the right, so taking these out would slide the crop button
-        sideways between the press that opens the tool and the one that saves
-        it. -->
-        <div
-          v-if="props.slug"
-          class="ctrl-group annotation-group"
-          :class="{ 'is-concealed': cropEditing }"
+        <!-- Gone while cropping, fading towards the row's anchored edge. On
+        desktop the crop buttons slide into the space they leave. -->
+        <Transition
+          name="ctrl-out"
+          @before-leave="pinForLeave"
+          @leave-cancelled="unpin"
         >
-          <button
-            class="ctrl-toggle"
-            :class="{ active: markersVisible }"
-            title="Show annotations"
-            :aria-label="
-              markersVisible ? 'Hide annotations' : 'Show annotations'
-            "
-            :aria-pressed="markersVisible"
-            @click="toggleMarkers"
+          <div
+            v-if="props.slug && !cropEditing"
+            class="ctrl-group annotation-group"
           >
-            <span class="toggle-track"><span class="toggle-thumb" /></span>
-          </button>
-          <button
-            v-if="loggedIn"
-            class="ctrl-btn ctrl-add"
-            :class="{ active: createMode }"
-            :title="
-              createMode
-                ? 'Click to place an annotation (Esc to cancel)'
-                : 'Add annotation'
-            "
-            :aria-label="
-              createMode
-                ? 'Click to place an annotation (Esc to cancel)'
-                : 'Add annotation'
-            "
-            :aria-pressed="createMode"
-            @click="toggleCreateMode"
-          >
-            <svg
-              viewBox="0 0 16 16"
-              width="14"
-              height="14"
-              fill="none"
-              stroke="#ffffff"
-              stroke-width="1"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true"
+            <button
+              class="ctrl-toggle"
+              :class="{ active: markersVisible }"
+              title="Show annotations"
+              :aria-label="
+                markersVisible ? 'Hide annotations' : 'Show annotations'
+              "
+              :aria-pressed="markersVisible"
+              @click="toggleMarkers"
             >
-              <path d="M11.5 2.5l2 2L6 12H4v-2z" />
-              <path d="M10 4l2 2" />
-            </svg>
-          </button>
-        </div>
+              <span class="toggle-track"><span class="toggle-thumb" /></span>
+            </button>
+            <button
+              v-if="loggedIn"
+              class="ctrl-btn ctrl-add"
+              :class="{ active: createMode }"
+              :title="
+                createMode
+                  ? 'Click to place an annotation (Esc to cancel)'
+                  : 'Add annotation'
+              "
+              :aria-label="
+                createMode
+                  ? 'Click to place an annotation (Esc to cancel)'
+                  : 'Add annotation'
+              "
+              :aria-pressed="createMode"
+              @click="toggleCreateMode"
+            >
+              <svg
+                viewBox="0 0 16 16"
+                width="14"
+                height="14"
+                fill="none"
+                stroke="#ffffff"
+                stroke-width="1"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M11.5 2.5l2 2L6 12H4v-2z" />
+                <path d="M10 4l2 2" />
+              </svg>
+            </button>
+          </div>
+        </Transition>
       </div>
     </div>
 
@@ -565,7 +695,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
     there is no panel left to put it in, and it is the one thing worth knowing
     before the next press saves. -->
     <div v-if="cropEditing && !toastMessage" class="crosshair-hint crop-note">
-      {{ cropSaving ? "SAVING" : "CROP" }}
+      {{ cropSaving ? "Saving" : "Cropping" }}
       <span v-if="!cropSaving && cropEmptiesScan" class="crop-note-warn">
         · covers the whole scan
       </span>
@@ -710,16 +840,47 @@ canvas {
   cursor: default;
   opacity: 0.6;
 }
-/* Hidden but still holding its space; see the template for why. */
-.annotation-group.is-concealed {
-  visibility: hidden;
-}
-.crop-note {
-  letter-spacing: 0.06em;
-}
 .crop-note-warn {
   color: #ff0000;
-  letter-spacing: normal;
+}
+/* The crop tool's buttons pop in beside the crop button and out again. */
+.ctrl-pop-enter-active,
+.ctrl-pop-leave-active {
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+.ctrl-pop-enter-from,
+.ctrl-pop-leave-to {
+  opacity: 0;
+  transform: scale(0.8);
+}
+/* The annotation buttons fade out towards the edge the row is anchored to, and
+   back in from it. */
+.ctrl-out-enter-active,
+.ctrl-out-leave-active {
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+.ctrl-out-enter-from,
+.ctrl-out-leave-to {
+  opacity: 0;
+  transform: translateX(12px);
+}
+/* A button on its way out cannot be pressed. Scoped under .overlay to outrank
+   the mobile row's pointer-events rule. */
+.overlay .ctrl-pop-leave-active,
+.overlay .ctrl-out-leave-active {
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ctrl-pop-enter-active,
+  .ctrl-pop-leave-active,
+  .ctrl-out-enter-active,
+  .ctrl-out-leave-active {
+    transition: none;
+  }
 }
 .ctrl-toggle {
   display: flex;

@@ -182,6 +182,14 @@ export function useThreeScene(
    * every drag frame; the exact check happens once at save.
    */
   const cropEmptiesScan = ref(false);
+  /**
+   * Whether the crop tool's scene is set up: box shown, clipping on, camera
+   * framed. Lags `cropEditing` by `sceneDelayMs` when startCrop is given one.
+   *
+   * Until it is true there is no box to toggle, reset or save, so those all
+   * decline rather than act on whatever the gizmo held last time.
+   */
+  const cropReady = ref(false);
 
   let renderer: THREE.WebGLRenderer | null = null;
   let scene: THREE.Scene | null = null;
@@ -264,6 +272,12 @@ export function useThreeScene(
    * one idle round trip of the toggle would be enough to save it.
    */
   let boxBeforeShrink: THREE.Box3 | null = null;
+
+  /**
+   * Identifies the most recent startCrop, so a delayed scene setup can tell
+   * whether it has been overtaken by a cancel or another open before it runs.
+   */
+  let cropStartToken = 0;
 
   /** The frame the current draft would save with, which the POV guide stands in. */
   const draftFrame = new THREE.Box3();
@@ -881,19 +895,31 @@ export function useThreeScene(
   /**
    * Opens the crop gizmo on whatever is currently in force.
    *
+   * In two parts. `cropEditing` turns on at once, which is what the viewer's
+   * controls respond to. The scene work, showing the box, switching clipping on
+   * and reframing the camera, follows after `sceneDelayMs`. The first time in a
+   * session that work compiles shaders: the scan's, rebuilt with clipping
+   * planes, and the gizmo's own. That stalls the main thread for a frame or
+   * several, and done at the same moment it lands in the middle of the
+   * controls' opening animation. Deferred until the animation has run, the
+   * buttons slide cleanly and the box appears as they settle.
+   *
    * Clipping is switched on even when there is no crop yet, with the planes at
    * the scan's own bounds where they cut nothing. That way the first drag
    * trims immediately rather than having to turn clipping on mid-gesture and
    * rebuild every shader in the middle of the drag.
    */
-  function startCrop() {
+  function startCrop(options: { sceneDelayMs?: number } = {}) {
     if (!gizmo || !currentModel || !camera || !controls) return;
     // Mutually exclusive with placing an annotation: both want the pointer, and
     // a click meant for a handle must not leave a marker behind it.
     createMode.value = false;
     cropEditing.value = true;
+    cropReady.value = false;
     userInteracted = true;
 
+    // Captured now, before anything in the scene moves, so Cancel restores the
+    // view the admin actually had.
     viewBeforeCrop = {
       mode: mode.value,
       fov: camera.fov,
@@ -902,6 +928,18 @@ export function useThreeScene(
       rotationX: povState.rotationX,
       rotationY: povState.rotationY,
     };
+
+    const token = ++cropStartToken;
+    const delay = options.sceneDelayMs ?? 0;
+    if (delay > 0) setTimeout(() => setUpCropScene(token), delay);
+    else setUpCropScene(token);
+  }
+
+  function setUpCropScene(token: number) {
+    // A cancel or another open since startCrop ran makes this one stale.
+    if (token !== cropStartToken || !cropEditing.value) return;
+    if (!gizmo || !currentModel) return;
+
     // The box is dragged from outside it. From POV's vantage point inside the
     // scan the faces surround the camera and most handles are behind it.
     if (mode.value === "pov") setMode("orbit");
@@ -924,6 +962,7 @@ export function useThreeScene(
     frameWholeBox(initial);
     cropDraft.value = cropFromBox(initial);
     cropEmptiesScan.value = wouldEmptyScan(initial, cropMode.value);
+    cropReady.value = true;
   }
 
   /**
@@ -964,6 +1003,9 @@ export function useThreeScene(
   /** Abandons the edit. The model was never re-centred, so only clipping moves. */
   function cancelCrop() {
     if (!gizmo) return;
+    // Drops a scene setup still waiting on its delay.
+    cropStartToken++;
+    cropReady.value = false;
     cropEditing.value = false;
     gizmo.hide();
     cropDraft.value = null;
@@ -1011,6 +1053,7 @@ export function useThreeScene(
    * everything" rather than "no crop", which is not what a reset should offer.
    */
   function resetCropBox() {
+    if (!cropReady.value) return;
     cropMode.value = "keep";
     draftPovY = null;
     boxBeforeShrink = null;
@@ -1027,7 +1070,7 @@ export function useThreeScene(
    * a visible starting size to drag onto whatever is being deleted.
    */
   function setCropMode(next: CropMode) {
-    if (!gizmo || cropMode.value === next) return;
+    if (!gizmo || !cropReady.value || cropMode.value === next) return;
     cropMode.value = next;
 
     let box = gizmo.getBox();
@@ -1062,7 +1105,7 @@ export function useThreeScene(
    * that changed nothing.
    */
   function cropHasChanges(): boolean {
-    if (!gizmo) return false;
+    if (!gizmo || !cropReady.value) return false;
     const box = gizmo.getBox();
 
     if (!committedCrop) {
@@ -1109,7 +1152,7 @@ export function useThreeScene(
    * delta is for.
    */
   function pendingCrop(): CropResult | null {
-    if (!gizmo || !currentModel) return null;
+    if (!gizmo || !currentModel || !cropReady.value) return null;
 
     const box = gizmo.getBox();
     const mode = cropMode.value;
@@ -1170,6 +1213,7 @@ export function useThreeScene(
     frameOn(result.crop ? boxFromCrop(result.crop.frame) : originalBounds);
 
     cropEditing.value = false;
+    cropReady.value = false;
     gizmo.hide();
     cropDraft.value = null;
     cropEmptiesScan.value = false;
@@ -1640,6 +1684,7 @@ export function useThreeScene(
     createMode,
     markersVisible,
     cropEditing,
+    cropReady,
     cropMode,
     cropDraft,
     cropEmptiesScan,

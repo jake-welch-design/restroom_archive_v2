@@ -404,6 +404,12 @@ arbitrary and are not:
   an unclickable sliver when the camera looks along the face.
 - Brackets use `LineSegments2`, because WebGL ignores `linewidth` on ordinary
   lines and a one-pixel bracket is barely distinguishable from an edge.
+- The walls are faintly filled and, unlike the rest of the gizmo, depth-tested
+  against the scan. A wall is hidden wherever geometry stands in front of it, so
+  it reads as glass cutting through the room and shows where the cut falls. They
+  use `polygonOffset`, because a wall at the scan's full bounds lies on its
+  outermost geometry and would otherwise z-fight into a shimmer. The wall being
+  dragged is brought up.
 - The group follows the model's matrix instead of being parented to the model,
   which would put the handles inside the object annotations raycast against.
 - Hovering a handle disables `OrbitControls` before the press, so dragging a
@@ -418,15 +424,28 @@ arbitrary and are not:
 **The controls are icon buttons in the viewer's own control row**, not a panel.
 The crop button opens the tool and, pressed again, saves; there is no separate
 save. While the tool is open a reset button and a one-press `+`/`−` mode toggle
-appear beside it, and a "CROP" note sits in the annotation hint's place. Details
-that look arbitrary and are not:
+appear beside it, and a "Cropping" note sits in the annotation hint's place.
+Details that look arbitrary and are not:
 
-- **The crop button never moves between its two presses.** On desktop the row
-  is anchored to the right, so the new buttons appear to its left, between it
-  and view mode, and the annotation buttons are hidden with `visibility` rather
-  than removed, since removing them would slide the crop button sideways. On
-  the mobile sheet the same buttons stack up the left edge from the corner, with
-  `order` putting the new ones above crop.
+- **On desktop the crop buttons slide into the annotation buttons' place.** The
+  row is anchored to the right, so when the annotation buttons go, view mode and
+  crop move right. They slide rather than jump, so the eye follows the crop
+  button to where it is pressed again. The slide is written out by hand in
+  `Viewer.client.vue` rather than using `TransitionGroup`, because the buttons
+  that move sit in the mobile stack's wrapper and are not siblings of the ones
+  that leave. Leaving buttons are pinned absolutely where they stood as they
+  fade, so they drop out of the layout at once and the slide does not finish
+  with a jump. On the mobile sheet the same buttons stack up the left edge from
+  the corner, with `order` putting the new ones above crop, and nothing slides.
+- **The box appears after the controls have moved, not with them.** The first
+  open in a session compiles shaders, the scan's with clipping and the gizmo's
+  own, which stalls the main thread for several frames. `startCrop` takes a
+  `sceneDelayMs`, so `cropEditing` flips at once and the scene work follows once
+  the slide is done; `cropReady` covers the gap, and the tool's buttons ignore
+  presses until it is set. Saving waits the same way before rendering the
+  thumbnail, which builds a second renderer and compiles everything again.
+  Measured in a software renderer, where compiles are slowest, the first open
+  stalled 291ms mid-slide before this and 17ms at worst after.
 - **A second press with nothing changed closes the tool** instead of saving.
   `cropHasChanges` compares the draft with the crop in force, so opening and
   closing costs no request, thumbnail or audit entry.

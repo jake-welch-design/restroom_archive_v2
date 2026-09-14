@@ -66,6 +66,18 @@ const BRACKET_MAX_FRACTION = 0.38;
 const WHITE = 0xffffff;
 const ACCENT = 0xff0000;
 
+/**
+ * How much of the box's walls show, at rest and for the face being dragged.
+ *
+ * Faint enough that the scan reads through them. They are depth-tested against
+ * the scan, unlike the rest of the gizmo, which is what makes them useful: a
+ * wall is hidden wherever geometry stands in front of it, so it reads as a
+ * pane of glass cutting through the room, and where it passes through a
+ * surface the line of the cut is visible.
+ */
+const WALL_OPACITY = 0.1;
+const WALL_DRAG_OPACITY = 0.24;
+
 /** The six faces, as an axis and which end of it the face sits at. */
 const FACES = [
   { axis: "x", end: "min" },
@@ -83,6 +95,7 @@ interface Face {
   axis: Axis;
   end: FaceEnd;
   handle: THREE.Sprite;
+  wall: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
 }
 
 /** Anything the pointer can pick up: one of the six faces, or the POV dot. */
@@ -241,22 +254,7 @@ export function createCropGizmo(deps: CropGizmoDeps) {
   brackets.renderOrder = 3;
   group.add(brackets);
 
-  // Shown only for the face being dragged, so the cut plane is readable against
-  // whatever it is slicing through.
-  const fill = new THREE.Mesh(
-    new THREE.PlaneGeometry(1, 1),
-    new THREE.MeshBasicMaterial({
-      color: WHITE,
-      transparent: true,
-      opacity: 0.08,
-      side: THREE.DoubleSide,
-      depthTest: false,
-      depthWrite: false,
-    }),
-  );
-  fill.visible = false;
-  fill.renderOrder = 1;
-  group.add(fill);
+  const wallGeometry = new THREE.PlaneGeometry(1, 1);
 
   const handleTexture = createHandleTexture();
 
@@ -280,7 +278,31 @@ export function createCropGizmo(deps: CropGizmoDeps) {
     );
     handle.renderOrder = 4;
     group.add(handle);
-    return { axis, end, handle };
+
+    const wall = new THREE.Mesh(
+      wallGeometry,
+      new THREE.MeshBasicMaterial({
+        color: WHITE,
+        transparent: true,
+        opacity: WALL_OPACITY,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+        // Pulled towards the camera in depth. A wall at the scan's full bounds
+        // lies exactly on its outermost geometry, a floor most of all, and
+        // without the offset the two would z-fight into a shimmer.
+        polygonOffset: true,
+        polygonOffsetFactor: -1,
+        polygonOffsetUnits: -1,
+      }),
+    );
+    // Only three orientations exist, as for the handles before they were
+    // sprites; the material is double-sided, so which way each faces is moot.
+    if (axis === "x") wall.rotation.set(0, Math.PI / 2, 0);
+    else if (axis === "y") wall.rotation.set(Math.PI / 2, 0, 0);
+    wall.renderOrder = 1;
+    group.add(wall);
+
+    return { axis, end, handle, wall };
   });
 
   const handles = faces.map((f) => f.handle);
@@ -421,9 +443,21 @@ export function createCropGizmo(deps: CropGizmoDeps) {
     for (const face of faces) faceCentre(face, face.handle.position);
   }
 
+  /** Sizes and places each wall to fill its face of the box. */
+  function writeWalls() {
+    const size = box.getSize(scratch);
+    for (const face of faces) {
+      faceCentre(face, face.wall.position);
+      if (face.axis === "x") face.wall.scale.set(size.z, size.y, 1);
+      else if (face.axis === "y") face.wall.scale.set(size.x, size.z, 1);
+      else face.wall.scale.set(size.x, size.y, 1);
+    }
+  }
+
   function redraw() {
     writeEdges();
     writeBrackets();
+    writeWalls();
     positionHandles();
   }
 
@@ -462,24 +496,10 @@ export function createCropGizmo(deps: CropGizmoDeps) {
       : faceCentre(grip, out);
   }
 
-  function showFill(face: Face | null) {
-    if (!face) {
-      fill.visible = false;
-      return;
-    }
-    const size = box.getSize(new THREE.Vector3());
-    faceCentre(face, fill.position);
-    if (face.axis === "x") {
-      fill.rotation.set(0, Math.PI / 2, 0);
-      fill.scale.set(size.z, size.y, 1);
-    } else if (face.axis === "y") {
-      fill.rotation.set(Math.PI / 2, 0, 0);
-      fill.scale.set(size.x, size.z, 1);
-    } else {
-      fill.rotation.set(0, 0, 0);
-      fill.scale.set(size.x, size.y, 1);
-    }
-    fill.visible = true;
+  /** Brings up the wall of the face being dragged, so the cut is easy to follow. */
+  function emphasiseWall(face: Face | null) {
+    for (const f of faces)
+      f.wall.material.opacity = f === face ? WALL_DRAG_OPACITY : WALL_OPACITY;
   }
 
   /* --- Hit testing and dragging ------------------------------------------- */
@@ -566,7 +586,7 @@ export function createCropGizmo(deps: CropGizmoDeps) {
     dragStartAlongAxis = along;
     dragStartValue = gripValue(grip);
     setGripHighlight(grip);
-    if (grip !== "pov") showFill(grip);
+    if (grip !== "pov") emphasiseWall(grip);
     deps.renderer.domElement.style.cursor = "grabbing";
     // OrbitControls is disabled for the whole gesture rather than being asked
     // to ignore it, because it has already seen this pointerdown: its listener
@@ -607,7 +627,6 @@ export function createCropGizmo(deps: CropGizmoDeps) {
     }
 
     redraw();
-    showFill(dragging);
     deps.onChange(box);
   }
 
@@ -615,7 +634,7 @@ export function createCropGizmo(deps: CropGizmoDeps) {
     if (!dragging) return;
     const wasFace = dragging !== "pov";
     dragging = null;
-    showFill(null);
+    emphasiseWall(null);
     setGripHighlight(hovered);
     if (wasFace) deps.onDragEnd();
     deps.renderer.domElement.style.cursor = hovered ? "grab" : "";
@@ -632,7 +651,7 @@ export function createCropGizmo(deps: CropGizmoDeps) {
       hovered = null;
       dragging = null;
       setGripHighlight(null);
-      showFill(null);
+      emphasiseWall(null);
       redraw();
       group.visible = true;
     },
@@ -752,8 +771,8 @@ export function createCropGizmo(deps: CropGizmoDeps) {
       edges.material.dispose();
       brackets.geometry.dispose();
       brackets.material.dispose();
-      fill.geometry.dispose();
-      fill.material.dispose();
+      wallGeometry.dispose();
+      for (const face of faces) face.wall.material.dispose();
       handleTexture.dispose();
       for (const face of faces) face.handle.material.dispose();
       shaft.geometry.dispose();
