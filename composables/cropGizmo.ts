@@ -34,6 +34,25 @@ const HANDLE_VISIBLE_PX = 16;
  */
 const HANDLE_HIT_PX = 26;
 
+/**
+ * The POV eye dot's visible diameter and pick diameter, in CSS pixels.
+ *
+ * Larger than a face handle so the two are told apart by size as well as by the
+ * dot's pupil, and so the one control that is not about the box's shape does
+ * not get lost among the six that are.
+ */
+const POV_VISIBLE_PX = 20;
+const POV_HIT_PX = 30;
+
+/** Width of the vertical guide the POV dot slides along, in CSS pixels. */
+const SHAFT_WIDTH_PX = 2;
+
+/**
+ * How close the POV dot may get to the frame's floor or ceiling, in model units.
+ * An eye flush with the floor would be looking out through it.
+ */
+export const POV_EDGE_MARGIN = 0.05;
+
 /** Width of the corner brackets and of the full edges, in CSS pixels. */
 const BRACKET_WIDTH_PX = 3;
 const EDGE_WIDTH_PX = 1;
@@ -66,6 +85,9 @@ interface Face {
   handle: THREE.Sprite;
 }
 
+/** Anything the pointer can pick up: one of the six faces, or the POV dot. */
+type Grip = Face | "pov";
+
 export interface CropGizmoDeps {
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
@@ -74,6 +96,16 @@ export interface CropGizmoDeps {
   getModel: () => THREE.Object3D | null;
   /** Called whenever a drag changes the box, so the caller can re-clip live. */
   onChange: (box: THREE.Box3) => void;
+  /** Called when the POV dot is dragged, with its new model-local height. */
+  onPovChange: (y: number) => void;
+  /**
+   * Called once when a face drag is released.
+   *
+   * For work too heavy to redo on every drag frame: in `remove` mode the POV
+   * guide's position depends on what geometry survives, which means walking
+   * the scan's vertices.
+   */
+  onDragEnd: () => void;
 }
 
 /**
@@ -102,6 +134,40 @@ function createHandleTexture(): THREE.CanvasTexture {
     ctx.beginPath();
     ctx.arc(centre, centre, outer - ring, 0, Math.PI * 2);
     ctx.fillStyle = "#fff";
+    ctx.fill();
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+/**
+ * The POV dot's image: the handle's disc with a dark pupil in the middle.
+ *
+ * The pupil is what separates it from a face handle at a glance, and it keeps
+ * the same tinting trick: the white takes the accent on hover while the ring
+ * and pupil stay dark.
+ */
+function createPovTexture(): THREE.CanvasTexture {
+  const size = 64;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (ctx) {
+    const centre = size / 2;
+    const outer = (size * (POV_VISIBLE_PX / POV_HIT_PX)) / 2;
+    ctx.beginPath();
+    ctx.arc(centre, centre, outer, 0, Math.PI * 2);
+    ctx.fillStyle = "#000";
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(centre, centre, outer * 0.8, 0, Math.PI * 2);
+    ctx.fillStyle = "#fff";
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(centre, centre, outer * 0.32, 0, Math.PI * 2);
+    ctx.fillStyle = "#000";
     ctx.fill();
   }
   const texture = new THREE.CanvasTexture(canvas);
@@ -219,10 +285,39 @@ export function createCropGizmo(deps: CropGizmoDeps) {
 
   const handles = faces.map((f) => f.handle);
 
+  // The guide the POV eye slides along: a vertical line through the centre of
+  // the box the viewer will frame on, from its floor to its ceiling. POV stands
+  // at that centre, so this is where the camera actually is, and only its
+  // height is the admin's to choose.
+  const shaft = createLines(1, SHAFT_WIDTH_PX, 0.75);
+  shaft.renderOrder = 3;
+  group.add(shaft);
+
+  const povTexture = createPovTexture();
+  const povDot = new THREE.Sprite(
+    new THREE.SpriteMaterial({
+      map: povTexture,
+      color: WHITE,
+      sizeAttenuation: false,
+      depthTest: false,
+      depthWrite: false,
+      transparent: true,
+    }),
+  );
+  povDot.renderOrder = 5;
+  group.add(povDot);
+
+  const grips = [...handles, povDot];
+
   /* --- State -------------------------------------------------------------- */
 
-  let hovered: Face | null = null;
-  let dragging: Face | null = null;
+  let hovered: Grip | null = null;
+  let dragging: Grip | null = null;
+
+  /** The POV guide: where it stands, how far it runs, and where the eye is. */
+  const shaftFrame = { x: 0, z: 0, minY: 0, maxY: 0 };
+  let povY = 0;
+  const shaftValues = new Float32Array(6);
 
   /** Local-space plane the pointer is projected onto for the current drag. */
   const dragPlane = new THREE.Plane();
@@ -332,9 +427,39 @@ export function createCropGizmo(deps: CropGizmoDeps) {
     positionHandles();
   }
 
-  function setFaceHighlight(face: Face | null) {
+  function clampPov(y: number): number {
+    const low = shaftFrame.minY + POV_EDGE_MARGIN;
+    const high = shaftFrame.maxY - POV_EDGE_MARGIN;
+    // A frame shorter than two margins has no room either side; sit in it.
+    if (low > high) return (shaftFrame.minY + shaftFrame.maxY) / 2;
+    return Math.min(Math.max(y, low), high);
+  }
+
+  function writeShaft() {
+    const { x, z, minY, maxY } = shaftFrame;
+    shaftValues.set([x, minY, z, x, maxY, z]);
+    writeSegments(shaft, shaftValues);
+    povDot.position.set(x, povY, z);
+  }
+
+  function setGripHighlight(grip: Grip | null) {
     for (const f of faces)
-      f.handle.material.color.setHex(f === face ? ACCENT : WHITE);
+      f.handle.material.color.setHex(f === grip ? ACCENT : WHITE);
+    povDot.material.color.setHex(grip === "pov" ? ACCENT : WHITE);
+  }
+
+  function gripAxis(grip: Grip): Axis {
+    return grip === "pov" ? "y" : grip.axis;
+  }
+
+  function gripValue(grip: Grip): number {
+    return grip === "pov" ? povY : faceValue(grip);
+  }
+
+  function gripCentre(grip: Grip, out: THREE.Vector3): THREE.Vector3 {
+    return grip === "pov"
+      ? out.set(shaftFrame.x, povY, shaftFrame.z)
+      : faceCentre(grip, out);
   }
 
   function showFill(face: Face | null) {
@@ -369,11 +494,17 @@ export function createCropGizmo(deps: CropGizmoDeps) {
     raycaster.setFromCamera(pointer, deps.camera);
   }
 
-  function faceUnderPointer(event: PointerEvent): Face | null {
+  function gripUnderPointer(event: PointerEvent): Grip | null {
     setPointer(event);
-    // Sorted nearest first, so where two handles overlap on screen the one
+    const hits = raycaster.intersectObjects(grips, false);
+    // The POV dot wins wherever it overlaps a handle. It sits on the box's
+    // centre line, which from above or below is exactly where the top and
+    // bottom face handles project, and drawn on top of them it is the one the
+    // admin can see and is aiming at.
+    if (hits.some((h) => h.object === povDot)) return "pov";
+    // Otherwise nearest first, so where two handles overlap on screen the one
     // closer to the camera wins, which is the one drawn on top.
-    const hit = raycaster.intersectObjects(handles, false)[0];
+    const hit = hits[0];
     if (!hit) return null;
     return faces.find((f) => f.handle === hit.object) ?? null;
   }
@@ -396,20 +527,20 @@ export function createCropGizmo(deps: CropGizmoDeps) {
   }
 
   /** How far along the drag axis the pointer currently sits. */
-  function pointerAlongAxis(event: PointerEvent, face: Face): number | null {
+  function pointerAlongAxis(event: PointerEvent, grip: Grip): number | null {
     const ray = localPointerRay(event);
     if (!ray) return null;
     const point = ray.intersectPlane(dragPlane, scratch);
     if (!point) return null;
-    return point[face.axis];
+    return point[gripAxis(grip)];
   }
 
-  function beginDrag(face: Face, event: PointerEvent): boolean {
+  function beginDrag(grip: Grip, event: PointerEvent): boolean {
     const model = deps.getModel();
     if (!model) return false;
 
     localAxis.set(0, 0, 0);
-    localAxis[face.axis] = 1;
+    localAxis[gripAxis(grip)] = 1;
 
     // The drag plane contains the axis and faces the camera as squarely as it
     // can: the component of the view direction perpendicular to the axis. A
@@ -425,17 +556,17 @@ export function createCropGizmo(deps: CropGizmoDeps) {
     if (localViewDir.lengthSq() < 1e-8) return false;
     localViewDir.normalize().negate();
 
-    const centre = faceCentre(face, new THREE.Vector3());
+    const centre = gripCentre(grip, new THREE.Vector3());
     dragPlane.setFromNormalAndCoplanarPoint(localViewDir, centre);
 
-    const along = pointerAlongAxis(event, face);
+    const along = pointerAlongAxis(event, grip);
     if (along == null) return false;
 
-    dragging = face;
+    dragging = grip;
     dragStartAlongAxis = along;
-    dragStartValue = faceValue(face);
-    setFaceHighlight(face);
-    showFill(face);
+    dragStartValue = gripValue(grip);
+    setGripHighlight(grip);
+    if (grip !== "pov") showFill(grip);
     deps.renderer.domElement.style.cursor = "grabbing";
     // OrbitControls is disabled for the whole gesture rather than being asked
     // to ignore it, because it has already seen this pointerdown: its listener
@@ -450,6 +581,14 @@ export function createCropGizmo(deps: CropGizmoDeps) {
     if (along == null) return;
 
     const next = dragStartValue + (along - dragStartAlongAxis);
+
+    if (dragging === "pov") {
+      povY = clampPov(next);
+      writeShaft();
+      deps.onPovChange(povY);
+      return;
+    }
+
     const { axis, end } = dragging;
 
     // Clamped against the opposite face and against the scan's own bounds: the
@@ -474,9 +613,11 @@ export function createCropGizmo(deps: CropGizmoDeps) {
 
   function endDrag() {
     if (!dragging) return;
+    const wasFace = dragging !== "pov";
     dragging = null;
     showFill(null);
-    setFaceHighlight(hovered);
+    setGripHighlight(hovered);
+    if (wasFace) deps.onDragEnd();
     deps.renderer.domElement.style.cursor = hovered ? "grab" : "";
     deps.controls.enabled = !hovered;
   }
@@ -490,7 +631,7 @@ export function createCropGizmo(deps: CropGizmoDeps) {
       box.copy(initial);
       hovered = null;
       dragging = null;
-      setFaceHighlight(null);
+      setGripHighlight(null);
       showFill(null);
       redraw();
       group.visible = true;
@@ -499,7 +640,7 @@ export function createCropGizmo(deps: CropGizmoDeps) {
     hide() {
       endDrag();
       hovered = null;
-      setFaceHighlight(null);
+      setGripHighlight(null);
       group.visible = false;
       deps.renderer.domElement.style.cursor = "";
       deps.controls.enabled = true;
@@ -521,6 +662,25 @@ export function createCropGizmo(deps: CropGizmoDeps) {
     },
 
     /**
+     * Stands the POV guide in `frame` and puts the eye at `y`, clamped inside
+     * it. Returns where the eye ended up.
+     *
+     * Driven by the caller rather than derived here, because the frame is not
+     * always the drawn box: in `remove` mode it is whatever geometry survives,
+     * which only the scene can measure.
+     */
+    setShaft(frame: THREE.Box3, y: number): number {
+      const centre = frame.getCenter(new THREE.Vector3());
+      shaftFrame.x = centre.x;
+      shaftFrame.z = centre.z;
+      shaftFrame.minY = frame.min.y;
+      shaftFrame.maxY = frame.max.y;
+      povY = clampPov(y);
+      writeShaft();
+      return povY;
+    },
+
+    /**
      * Whether the gizmo took this pointerdown.
      *
      * True means the caller must not treat it as an orbit, a POV drag or an
@@ -528,9 +688,9 @@ export function createCropGizmo(deps: CropGizmoDeps) {
      */
     onPointerDown(event: PointerEvent): boolean {
       if (!group.visible) return false;
-      const face = faceUnderPointer(event);
-      if (!face) return false;
-      return beginDrag(face, event);
+      const grip = gripUnderPointer(event);
+      if (!grip) return false;
+      return beginDrag(grip, event);
     },
 
     onPointerMove(event: PointerEvent): boolean {
@@ -542,14 +702,14 @@ export function createCropGizmo(deps: CropGizmoDeps) {
       // Hover does double duty: it highlights the handle, and it takes
       // OrbitControls out of the way before the press, so dragging a handle
       // never also spins the camera. Dragging anywhere else still orbits.
-      const face = faceUnderPointer(event);
-      if (face !== hovered) {
-        hovered = face;
-        setFaceHighlight(face);
-        deps.renderer.domElement.style.cursor = face ? "grab" : "";
+      const grip = gripUnderPointer(event);
+      if (grip !== hovered) {
+        hovered = grip;
+        setGripHighlight(grip);
+        deps.renderer.domElement.style.cursor = grip ? "grab" : "";
       }
-      deps.controls.enabled = !face;
-      return Boolean(face);
+      deps.controls.enabled = !grip;
+      return Boolean(grip);
     },
 
     onPointerUp(): boolean {
@@ -577,11 +737,13 @@ export function createCropGizmo(deps: CropGizmoDeps) {
       const tan = Math.tan((deps.camera.fov * Math.PI) / 360);
       const scale = (HANDLE_HIT_PX * 2 * tan) / height;
       for (const face of faces) face.handle.scale.setScalar(scale);
+      povDot.scale.setScalar((POV_HIT_PX * 2 * tan) / height);
 
       // Line widths are in pixels of whatever resolution the material is told,
       // so it follows the canvas's CSS size to keep them in CSS pixels.
       edges.material.resolution.set(width, height);
       brackets.material.resolution.set(width, height);
+      shaft.material.resolution.set(width, height);
     },
 
     dispose() {
@@ -594,6 +756,10 @@ export function createCropGizmo(deps: CropGizmoDeps) {
       fill.material.dispose();
       handleTexture.dispose();
       for (const face of faces) face.handle.material.dispose();
+      shaft.geometry.dispose();
+      shaft.material.dispose();
+      povTexture.dispose();
+      povDot.material.dispose();
     },
   };
 }

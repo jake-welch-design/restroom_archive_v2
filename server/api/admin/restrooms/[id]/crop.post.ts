@@ -26,14 +26,22 @@ const BoxSchema = z
     { message: "Crop box is too small on at least one axis" },
   );
 
-const CropSchema = z.object({
-  mode: z.enum(["keep", "remove"]),
-  box: BoxSchema,
-  // What the viewer centres on. Equal to the box in `keep` mode; in `remove`
-  // mode it is the surviving geometry's bounds, which only the client can
-  // measure, since the server would have to parse the GLB to find them.
-  frame: BoxSchema,
-});
+const CropSchema = z
+  .object({
+    mode: z.enum(["keep", "remove"]),
+    box: BoxSchema,
+    // What the viewer centres on. Equal to the box in `keep` mode; in `remove`
+    // mode it is the surviving geometry's bounds, which only the client can
+    // measure, since the server would have to parse the GLB to find them.
+    frame: BoxSchema,
+    // The POV eye height, in the same local space as the boxes. Absent means
+    // the default.
+    povY: Coord.optional(),
+  })
+  .refine(
+    (c) => c.povY == null || (c.povY >= c.frame.minY && c.povY <= c.frame.maxY),
+    { message: "POV height is outside the scan" },
+  );
 
 const Body = z.object({
   // Null clears the crop, which is how Reset gets back to the scan's own bounds.

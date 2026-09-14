@@ -47,6 +47,7 @@ const {
   cropMode,
   cropDraft,
   cropEmptiesScan,
+  cropPovHeight,
   setMode,
   flyTo,
   project,
@@ -431,6 +432,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
       :draft="cropDraft"
       :mode="cropMode"
       :empties-scan="cropEmptiesScan"
+      :pov-height="cropPovHeight"
       :saving="cropSaving"
       :annotations="annotations ?? null"
       :error="cropError"

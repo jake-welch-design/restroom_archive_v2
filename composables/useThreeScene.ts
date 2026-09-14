@@ -5,7 +5,11 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { Ref } from "vue";
 import type { CameraMode } from "~/types/annotation";
 import type { Crop, CropBox, CropDelta, CropMode } from "~~/shared/utils/crop";
-import { createCropGizmo, type CropGizmo } from "~/composables/cropGizmo";
+import {
+  createCropGizmo,
+  POV_EDGE_MARGIN,
+  type CropGizmo,
+} from "~/composables/cropGizmo";
 
 export type ViewMode = "orbit" | "pov";
 
@@ -178,6 +182,14 @@ export function useThreeScene(
    * every drag frame; the exact check happens once at save.
    */
   const cropEmptiesScan = ref(false);
+  /**
+   * The POV eye's height above the frame's floor while editing, for the panel.
+   *
+   * Above the floor rather than as a raw coordinate, because a scan's local Y
+   * origin is wherever the capture app put it and means nothing to the admin,
+   * while "1.5 above the lowest geometry" reads as an eye height.
+   */
+  const cropPovHeight = ref<number | null>(null);
 
   let renderer: THREE.WebGLRenderer | null = null;
   let scene: THREE.Scene | null = null;
@@ -230,6 +242,42 @@ export function useThreeScene(
 
   /** Breathing room around the box when the crop tool frames it. */
   const CROP_FRAME_MARGIN = 1.08;
+
+  /**
+   * How far above the frame's centre POV stands when no height has been set.
+   *
+   * This is the height POV always used, kept as the default so every scan and
+   * every crop saved before the eye could be moved looks exactly as it did.
+   */
+  const DEFAULT_POV_RISE = 0.2;
+
+  /**
+   * The POV eye height being edited, in model-local Y, or null while it is
+   * still at the default.
+   *
+   * Null is a real state rather than "unset": a default eye follows the frame's
+   * centre as the box is resized, and only once the admin drags it does it
+   * become a fixed height that stays put.
+   */
+  let draftPovY: number | null = null;
+
+  /** The frame the current draft would save with, which the POV guide stands in. */
+  const draftFrame = new THREE.Box3();
+
+  /**
+   * Where POV puts the camera, in world space.
+   *
+   * Every POV placement goes through here: entering POV, re-framing while in
+   * it, and flying to a POV annotation. The model's centre is the world origin,
+   * so the eye is straight above or below it. Model rotation is about Y only,
+   * which is why a stored local height converts to world height by subtracting
+   * the centre's Y and nothing else.
+   */
+  function povPosition(out = new THREE.Vector3()): THREE.Vector3 {
+    const stored = committedCrop?.povY;
+    const y = stored == null ? DEFAULT_POV_RISE : stored - appliedCentre.y;
+    return out.set(0, y, 0);
+  }
 
   let gizmo: CropGizmo | null = null;
 
@@ -338,6 +386,17 @@ export function useThreeScene(
         setClipBox(box, cropMode.value);
         cropDraft.value = cropFromBox(box);
         cropEmptiesScan.value = wouldEmptyScan(box, cropMode.value);
+        // In `keep` mode the frame is the box, so the guide can follow every
+        // drag frame for free. In `remove` mode finding it means walking the
+        // scan's vertices, which waits for the drag to end (see onDragEnd).
+        if (cropMode.value === "keep") syncPovGuide();
+      },
+      onPovChange: (y) => {
+        draftPovY = y;
+        cropPovHeight.value = y - draftFrame.min.y;
+      },
+      onDragEnd: () => {
+        if (cropMode.value === "remove") syncPovGuide();
       },
     });
 
@@ -528,6 +587,56 @@ export function useThreeScene(
     return result;
   }
 
+  /**
+   * The box to clip against for a stored crop, or null when it cuts nothing.
+   *
+   * A crop saved only to move the POV eye keeps a `keep` box at the scan's full
+   * bounds, which hides nothing. Treating that as no clipping keeps the scan off
+   * the clipping shader, which every fragment would otherwise pay for.
+   */
+  function clipBoxOf(crop: Crop | null): THREE.Box3 | null {
+    if (!crop) return null;
+    const box = boxFromCrop(crop.box);
+    if (crop.mode === "keep" && isFullBounds(box)) return null;
+    return box;
+  }
+
+  /** `y` kept inside `frame`, clear of its floor and ceiling. */
+  function clampPovTo(frame: THREE.Box3, y: number): number {
+    const low = frame.min.y + POV_EDGE_MARGIN;
+    const high = frame.max.y - POV_EDGE_MARGIN;
+    if (low > high) return (frame.min.y + frame.max.y) / 2;
+    return Math.min(Math.max(y, low), high);
+  }
+
+  /**
+   * Stands the POV guide in the frame the current draft would save with, and
+   * seats the eye on it.
+   *
+   * Pass `frame` when it is already known, as it is for a stored `remove` crop
+   * reopened for editing, to skip measuring the surviving geometry again.
+   */
+  function syncPovGuide(frame?: THREE.Box3) {
+    if (!gizmo) return;
+    if (frame) draftFrame.copy(frame);
+    else {
+      const box = gizmo.getBox();
+      draftFrame.copy(cropMode.value === "keep" ? box : survivingBounds(box));
+    }
+    // A `remove` box covering the whole scan leaves no frame to stand in. The
+    // panel is already refusing that state, so there is nothing to draw.
+    if (draftFrame.isEmpty()) return;
+
+    const wanted =
+      draftPovY ??
+      draftFrame.getCenter(new THREE.Vector3()).y + DEFAULT_POV_RISE;
+    const seated = gizmo.setShaft(draftFrame, wanted);
+    // A height the admin chose that the resized frame no longer contains is
+    // pulled back inside it, so what is saved is what is shown.
+    if (draftPovY != null) draftPovY = seated;
+    cropPovHeight.value = seated - draftFrame.min.y;
+  }
+
   function isFullBounds(box: THREE.Box3): boolean {
     const epsilon = 1e-3;
     return (
@@ -696,7 +805,7 @@ export function useThreeScene(
     if (mode.value === "pov") {
       controls.enabled = false;
       camera.fov = povState.fov;
-      camera.position.set(0, 0.2, 0);
+      povPosition(camera.position);
       povState.rotationX = 0;
       povState.rotationY = 0;
       applyPovRotation();
@@ -748,10 +857,7 @@ export function useThreeScene(
       // Before the materials are built, so they are created with the right
       // number of clipping planes, and the right clipping mode, instead of
       // being rebuilt a moment later.
-      setClipBox(
-        stored ? boxFromCrop(stored.box) : null,
-        stored?.mode ?? "keep",
-      );
+      setClipBox(clipBoxOf(stored), stored?.mode ?? "keep");
       applyFlatMaterials(currentModel);
       // The frame box, not the drawn one: in `remove` mode they are different
       // boxes and the drawn one is the part that is gone.
@@ -800,8 +906,16 @@ export function useThreeScene(
       ? boxFromCrop(committedCrop.box)
       : originalBounds.clone();
     cropMode.value = committedCrop?.mode ?? "keep";
+    draftPovY = committedCrop?.povY ?? null;
     setClipBox(initial, cropMode.value);
     gizmo.show(initial, originalBounds);
+    // A stored `remove` crop already knows its frame, so reopening one does not
+    // walk the scan's vertices just to stand the guide back where it was.
+    syncPovGuide(
+      committedCrop?.mode === "remove"
+        ? boxFromCrop(committedCrop.frame)
+        : undefined,
+    );
     frameWholeBox(initial);
     cropDraft.value = cropFromBox(initial);
     cropEmptiesScan.value = wouldEmptyScan(initial, cropMode.value);
@@ -850,10 +964,9 @@ export function useThreeScene(
     cropDraft.value = null;
     cropEmptiesScan.value = false;
     cropMode.value = committedCrop?.mode ?? "keep";
-    setClipBox(
-      committedCrop ? boxFromCrop(committedCrop.box) : null,
-      committedCrop?.mode ?? "keep",
-    );
+    draftPovY = null;
+    cropPovHeight.value = null;
+    setClipBox(clipBoxOf(committedCrop), committedCrop?.mode ?? "keep");
     restoreViewBeforeCrop();
   }
 
@@ -885,7 +998,8 @@ export function useThreeScene(
   }
 
   /**
-   * Back to an untouched scan: the box at full bounds, keeping what is inside.
+   * Back to an untouched scan: the box at full bounds, keeping what is inside,
+   * with the POV eye back at its default height.
    *
    * Resetting the mode as well as the box matters, because full bounds means
    * opposite things either way round. Left on `remove` it would read as "delete
@@ -893,6 +1007,8 @@ export function useThreeScene(
    */
   function resetCropBox() {
     cropMode.value = "keep";
+    draftPovY = null;
+    // Redraws, re-clips and re-seats the POV guide through the gizmo's onChange.
     gizmo?.setBox(originalBounds.clone());
   }
 
@@ -915,11 +1031,13 @@ export function useThreeScene(
       box = new THREE.Box3().setFromCenterAndSize(centre, size);
       // Redraws, re-clips and refreshes the draft through the gizmo's onChange.
       gizmo.setBox(box);
-      return;
+    } else {
+      setClipBox(box, next);
+      cropEmptiesScan.value = wouldEmptyScan(box, next);
     }
-
-    setClipBox(box, next);
-    cropEmptiesScan.value = wouldEmptyScan(box, next);
+    // The frame changes meaning with the mode, and onChange only re-seats the
+    // guide for `keep`, so it is re-stood here whichever way the switch went.
+    syncPovGuide();
   }
 
   /**
@@ -946,8 +1064,9 @@ export function useThreeScene(
     // A `keep` box at the scan's own bounds keeps everything, which is stored
     // as no crop rather than as a box that happens to match. That is what Reset
     // then Confirm does. `remove` has no such state: an empty removal box is
-    // not something the gizmo can express.
-    const cleared = mode === "keep" && isFullBounds(box);
+    // not something the gizmo can express. A moved POV eye still needs saving,
+    // though, so a full-bounds box with one is kept as a crop that cuts nothing.
+    const cleared = mode === "keep" && isFullBounds(box) && draftPovY == null;
 
     // The frame box is the drawn box in `keep` mode and the surviving geometry
     // in `remove` mode, where the drawn box is the part being deleted.
@@ -965,10 +1084,20 @@ export function useThreeScene(
       .clone()
       .sub(frame.getCenter(new THREE.Vector3()));
 
+    // Re-seated against the frame actually being saved. In `remove` mode that
+    // frame was just measured and can differ from the one the guide last stood
+    // in, and the server refuses an eye outside its frame.
+    const povY = draftPovY == null ? undefined : clampPovTo(frame, draftPovY);
+
     return {
       crop: cleared
         ? null
-        : { mode, box: cropFromBox(box), frame: cropFromBox(frame) },
+        : {
+            mode,
+            box: cropFromBox(box),
+            frame: cropFromBox(frame),
+            ...(povY == null ? {} : { povY }),
+          },
       recenterDelta: { x: delta.x, y: delta.y, z: delta.z },
     };
   }
@@ -983,10 +1112,7 @@ export function useThreeScene(
     if (!gizmo || !currentModel) return;
 
     committedCrop = result.crop;
-    setClipBox(
-      result.crop ? boxFromCrop(result.crop.box) : null,
-      result.crop?.mode ?? "keep",
-    );
+    setClipBox(clipBoxOf(result.crop), result.crop?.mode ?? "keep");
     viewBeforeCrop = null;
     frameOn(result.crop ? boxFromCrop(result.crop.frame) : originalBounds);
 
@@ -994,6 +1120,8 @@ export function useThreeScene(
     gizmo.hide();
     cropDraft.value = null;
     cropEmptiesScan.value = false;
+    draftPovY = null;
+    cropPovHeight.value = null;
   }
 
   function setMode(next: ViewMode) {
@@ -1012,7 +1140,7 @@ export function useThreeScene(
     } else {
       controls.enabled = false;
       camera.fov = povState.fov;
-      camera.position.set(0, 0.2, 0);
+      povPosition(camera.position);
       povState.rotationX = 0;
       povState.rotationY = 0;
       applyPovRotation();
@@ -1132,7 +1260,7 @@ export function useThreeScene(
       mode.value = snapshot.cameraMode as ViewMode;
       if (snapshot.cameraMode === "pov") {
         controls.enabled = false;
-        camera.position.set(0, 0.2, 0);
+        povPosition(camera.position);
         povState.rotationX = snapshot.rotationX ?? 0;
         povState.rotationY = snapshot.rotationY ?? 0;
         // Drop orbit's orientation now rather than carrying its roll into the
@@ -1174,7 +1302,7 @@ export function useThreeScene(
       );
       targetFov = snapshot.cameraFov;
     } else {
-      targetPos = new THREE.Vector3(0, 0.2, 0);
+      targetPos = povPosition();
       targetTarget = new THREE.Vector3(0, 0, 0);
       targetFov = snapshot.cameraFov;
       targetRotX = snapshot.rotationX ?? 0;
@@ -1462,6 +1590,7 @@ export function useThreeScene(
     cropMode,
     cropDraft,
     cropEmptiesScan,
+    cropPovHeight,
     loadModel,
     setMode,
     pickPoint,

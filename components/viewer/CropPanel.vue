@@ -20,6 +20,8 @@ const props = defineProps<{
   mode: CropMode;
   /** Whether the box as drawn would leave no scan behind. */
   emptiesScan: boolean;
+  /** The POV eye's height above the frame's floor, or null before it is known. */
+  povHeight: number | null;
   /** Whether a save is in flight. */
   saving: boolean;
   /** Annotations on this entry, for the out-of-box warning. */
@@ -108,6 +110,16 @@ const strandedCount = computed(() => {
           : "Everything inside the box is deleted."
       }}
       Drag a face to resize, drag elsewhere to orbit.
+    </p>
+
+    <!-- A readout, not a control: the eye is set by dragging its dot on the
+    centre line, and this says where it has got to. -->
+    <p v-if="povHeight != null" class="crop-pov">
+      <span>POV eye height</span>
+      <span class="crop-dims">{{ povHeight.toFixed(2) }}</span>
+    </p>
+    <p v-if="povHeight != null" class="crop-hint">
+      Drag the dot on the centre line to raise or lower it.
     </p>
 
     <p v-if="emptiesScan" class="crop-warn">
@@ -216,6 +228,15 @@ const strandedCount = computed(() => {
 .crop-hint {
   margin: 6px 0 0;
   color: #999;
+}
+
+.crop-pov {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 8px 0 0;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.25);
 }
 
 .crop-warn {

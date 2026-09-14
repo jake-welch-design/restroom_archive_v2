@@ -421,6 +421,26 @@ Escape both already close the tool. Reset returns the box to full bounds _and_
 the mode to `keep`, since full bounds means "no crop" one way round and "delete
 everything" the other.
 
+**The POV eye** is set in the same tool. POV stands at the frame's centre, so in
+a tall room it inherits the room's midpoint height. A vertical guide runs through
+the frame's centre from floor to ceiling, and dragging the dot on it sets the
+crop's optional `povY`. Details worth knowing:
+
+- Every POV placement (entering POV, re-framing in it, flying to a POV
+  annotation) goes through `povPosition`. Missing one would put the camera at
+  the old height on that path only.
+- `povY` is an absolute local height, not an offset from the centre, so a later
+  re-crop that moves the centre leaves the eye where it was put. Model rotation
+  is about Y alone, which is why local height converts to world height by
+  subtracting the centre's Y.
+- Absent means the old default, 0.2 above the centre, so every scan and every
+  crop saved before this looks exactly as it did.
+- Moving the eye alone is saved as a `keep` crop at full bounds. `clipBoxOf`
+  treats that box as no clipping, so a scan with only its eye moved stays off
+  the clipping shader.
+- POV annotations store view angles but no position, so moving the eye changes
+  where they are seen from while keeping the direction they look.
+
 ---
 
 ## 5. Authentication and roles

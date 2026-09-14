@@ -48,6 +48,15 @@ export interface Crop {
    * every load.
    */
   frame: CropBox;
+  /**
+   * The POV camera's eye height, in the GLB's local Y, or absent for the
+   * default of a little above the frame's centre.
+   *
+   * An absolute height rather than an offset from the centre, so re-cropping
+   * later, which moves the centre, leaves the eye where the admin put it. The
+   * camera stands at the frame's centre horizontally; only the height is set.
+   */
+  povY?: number;
 }
 
 /** How a crop shifts the model's centre, and with it the viewer's world space. */
@@ -95,7 +104,11 @@ export function parseCrop(value: string | null | undefined): Crop | null {
     // Tolerated for a row written before `frame` existed, and for `keep`, where
     // the frame is the box by definition.
     const frame = isBox(parsed.frame) ? parsed.frame : parsed.box;
-    return { mode, box: parsed.box, frame };
+    const povY =
+      typeof parsed.povY === "number" && Number.isFinite(parsed.povY)
+        ? parsed.povY
+        : undefined;
+    return { mode, box: parsed.box, frame, ...(povY == null ? {} : { povY }) };
   } catch {
     return null;
   }
