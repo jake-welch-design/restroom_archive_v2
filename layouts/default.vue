@@ -102,8 +102,11 @@ function isSheetLayout() {
 
 /**
  * Tallest the sheet may be dragged: the grabber has to clear the viewer's
- * bottom control row (the annotation toggle) by the same margin that row keeps
- * from the bottom of the screen. Measured off the live controls rather than
+ * bottom control row by the same margin that row keeps from the bottom of the
+ * screen. The whole row is measured rather than the annotation toggle alone:
+ * for admins the crop button stacks above the view-mode button, which makes
+ * the row's left end taller than its right, and measuring only the toggle let
+ * the sheet slide over the crop button. Measured off the live controls rather than
  * hard-coded, so it follows their real rendered size. The row is anchored to the
  * bottom of the viewport and the viewer never moves once the sheet is past its
  * resting height, so one read at the start of the drag holds for all of it.
@@ -111,8 +114,8 @@ function isSheetLayout() {
 function maxSheetFrac(tab: HTMLElement) {
   const vh = window.innerHeight;
   const ctrl =
-    document.querySelector(".viewer-panel .annotation-group") ??
-    document.querySelector(".viewer-panel .overlay-right");
+    document.querySelector(".viewer-panel .overlay-right") ??
+    document.querySelector(".viewer-panel .annotation-group");
   const rect = ctrl?.getBoundingClientRect();
   const clearance =
     rect && rect.height > 0

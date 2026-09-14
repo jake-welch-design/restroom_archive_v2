@@ -287,89 +287,97 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
 
     <div class="overlay">
       <div class="overlay-right">
-        <!-- View mode: single circle that changes icon -->
-        <div class="ctrl-group view-mode-group">
-          <button
-            class="ctrl-btn"
-            :title="
-              mode === 'pov' ? 'Switch to orbit view' : 'Switch to POV view'
-            "
-            :aria-label="
-              mode === 'pov' ? 'Switch to orbit view' : 'Switch to POV view'
-            "
-            @click="toggleViewMode"
-          >
-            <!-- Eye icon for POV mode -->
-            <svg
-              v-if="mode === 'pov'"
-              viewBox="0 0 16 16"
-              width="20"
-              height="20"
-              fill="none"
-              stroke="#ffffff"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true"
+        <!-- The scan's own controls, view mode and crop. A wrapper only so that
+        on the mobile sheet the two can stack in the bottom-left corner; on
+        desktop it is display: contents and the row is laid out as if it were
+        not there. -->
+        <div class="ctrl-stack">
+          <!-- View mode: single circle that changes icon -->
+          <div class="ctrl-group view-mode-group">
+            <button
+              class="ctrl-btn"
+              :title="
+                mode === 'pov' ? 'Switch to orbit view' : 'Switch to POV view'
+              "
+              :aria-label="
+                mode === 'pov' ? 'Switch to orbit view' : 'Switch to POV view'
+              "
+              @click="toggleViewMode"
             >
-              <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" />
-              <circle cx="8" cy="8" r="2" />
-            </svg>
-            <!-- Orbit icon for Orbit mode -->
-            <svg
-              v-else
-              viewBox="252 0 810 750"
-              width="20"
-              height="20"
-              fill="none"
-              aria-hidden="true"
-            >
-              <path
-                d="M657.382716 505.679012L442.469136 379.259259V126.419753L657.382716 0l214.91358 126.419753v252.839506z m164.345679-151.703703V192.158025l-139.061728 84.878222v162.550518z m-328.691358 0l139.061728 85.586172V269.602765l-139.061728-83.361185V353.975309zM657.382716 50.567901l-144.371358 88.822519L660.214519 227.555556h5.676246l140.174223-85.560889z"
-                fill="#ffffff"
-              />
-              <path
-                d="M720.592593 670.024691l-113.777778 101.135803v-79.03763C412.988049 675.018272 252.839506 581.290667 252.839506 467.753086c0-51.098864 30.340741-98.089086 80.845432-136.06558l33.261037 35.043556C326.997333 395.39042 303.407407 430.168494 303.407407 467.753086c0 86.926222 137.569975 158.84642 303.407408 173.776593V568.888889z"
-                fill="#ffffff"
-              />
-              <path
-                d="M783.802469 632.907852C916.770765 607.446914 1011.358025 543.149827 1011.358025 467.753086c0-42.085136-29.50637-80.693728-78.569877-111.059753l34.866568-34.866568C1026.439901 361.34558 1061.925926 412.204247 1061.925926 467.753086c0 100.819753-116.67279 186.191012-278.123457 216.064v-50.909234z"
-                fill="#ffffff"
-              />
-            </svg>
-          </button>
-        </div>
+              <!-- Eye icon for POV mode -->
+              <svg
+                v-if="mode === 'pov'"
+                viewBox="0 0 16 16"
+                width="20"
+                height="20"
+                fill="none"
+                stroke="#ffffff"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" />
+                <circle cx="8" cy="8" r="2" />
+              </svg>
+              <!-- Orbit icon for Orbit mode -->
+              <svg
+                v-else
+                viewBox="252 0 810 750"
+                width="20"
+                height="20"
+                fill="none"
+                aria-hidden="true"
+              >
+                <path
+                  d="M657.382716 505.679012L442.469136 379.259259V126.419753L657.382716 0l214.91358 126.419753v252.839506z m164.345679-151.703703V192.158025l-139.061728 84.878222v162.550518z m-328.691358 0l139.061728 85.586172V269.602765l-139.061728-83.361185V353.975309zM657.382716 50.567901l-144.371358 88.822519L660.214519 227.555556h5.676246l140.174223-85.560889z"
+                  fill="#ffffff"
+                />
+                <path
+                  d="M720.592593 670.024691l-113.777778 101.135803v-79.03763C412.988049 675.018272 252.839506 581.290667 252.839506 467.753086c0-51.098864 30.340741-98.089086 80.845432-136.06558l33.261037 35.043556C326.997333 395.39042 303.407407 430.168494 303.407407 467.753086c0 86.926222 137.569975 158.84642 303.407408 173.776593V568.888889z"
+                  fill="#ffffff"
+                />
+                <path
+                  d="M783.802469 632.907852C916.770765 607.446914 1011.358025 543.149827 1011.358025 467.753086c0-42.085136-29.50637-80.693728-78.569877-111.059753l34.866568-34.866568C1026.439901 361.34558 1061.925926 412.204247 1061.925926 467.753086c0 100.819753-116.67279 186.191012-278.123457 216.064v-50.909234z"
+                  fill="#ffffff"
+                />
+              </svg>
+            </button>
+          </div>
 
-        <!-- Crop: admins only, and only on an entry that exists. Sits with the
+          <!-- Crop: admins only, and only on an entry that exists. Sits with the
         view-mode control rather than the annotation group because it is about
         the scan itself, not about what has been written on it. -->
-        <div v-if="canCrop" class="ctrl-group">
-          <button
-            class="ctrl-btn ctrl-crop"
-            :class="{ active: cropEditing }"
-            :title="cropEditing ? 'Close crop tool' : 'Crop and re-centre scan'"
-            :aria-label="
-              cropEditing ? 'Close crop tool' : 'Crop and re-centre scan'
-            "
-            :aria-pressed="cropEditing"
-            @click="toggleCropTool"
-          >
-            <!-- Crop marks: two overlapping right angles. -->
-            <svg
-              viewBox="0 0 16 16"
-              width="18"
-              height="18"
-              fill="none"
-              stroke="#ffffff"
-              stroke-width="1.3"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true"
+          <div v-if="canCrop" class="ctrl-group">
+            <button
+              class="ctrl-btn ctrl-crop"
+              :class="{ active: cropEditing }"
+              :title="
+                cropEditing ? 'Close crop tool' : 'Crop and re-centre scan'
+              "
+              :aria-label="
+                cropEditing ? 'Close crop tool' : 'Crop and re-centre scan'
+              "
+              :aria-pressed="cropEditing"
+              @click="toggleCropTool"
             >
-              <path d="M4.5 1v10.5H15" />
-              <path d="M1 4.5h10.5V15" />
-            </svg>
-          </button>
+              <!-- Crop marks: two overlapping right angles. -->
+              <svg
+                viewBox="0 0 16 16"
+                width="18"
+                height="18"
+                fill="none"
+                stroke="#ffffff"
+                stroke-width="1.3"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M4.5 1v10.5H15" />
+                <path d="M1 4.5h10.5V15" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         <!-- Annotation controls: hidden without a slug (e.g. an in-progress
@@ -523,6 +531,11 @@ canvas {
 }
 /* The three values the layout's nav buttons rebuild their height from, so the
    bottom row stays level on mobile. Changing them here moves both. */
+/* Present only for the mobile stack below. Without a box of its own, its two
+   groups sit in the desktop row exactly as they did before it existed. */
+.ctrl-stack {
+  display: contents;
+}
 .ctrl-group {
   display: flex;
   align-items: center;
@@ -694,8 +707,21 @@ canvas {
   .overlay-right > * {
     pointer-events: auto;
   }
-  .view-mode-group {
+  /* Crop above POV in the bottom-left corner, rather than beside it in a row
+  that is short of width. column-reverse keeps the DOM, and so the tab order,
+  POV then crop on both layouts. The stack is transparent to pointer events
+  like the row around it, so the gap between the two buttons does not swallow
+  touches meant for the scan. */
+  .ctrl-stack {
+    display: flex;
+    flex-direction: column-reverse;
+    align-items: flex-start;
+    gap: 8px;
     margin-right: auto;
+    pointer-events: none;
+  }
+  .ctrl-stack > * {
+    pointer-events: auto;
   }
   .annotation-group {
     margin-left: auto;
