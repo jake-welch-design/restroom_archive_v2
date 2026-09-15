@@ -63,7 +63,15 @@ type CropBox = {
   maxY: number;
   maxZ: number;
 };
-type Crop = { mode: "keep" | "remove"; box: CropBox; frame: CropBox };
+type Crop = {
+  mode: "keep" | "remove";
+  box: CropBox;
+  frame: CropBox;
+  level?: {
+    rotation: { x: number; y: number; z: number; w: number };
+    pivot: { x: number; y: number; z: number };
+  };
+};
 
 function d1Query(sql: string): DbRow[] {
   const out = execSync(
@@ -146,9 +154,10 @@ renderer.localClippingEnabled = true
 const scene = new THREE.Scene()
 const camera = new THREE.PerspectiveCamera(70, 1, 0.01, 1000)
 
-// The admin's crop for this entry, in the GLB's own local space, or null. The
-// model is never rotated here, so the planes are built once from it rather than
-// refreshed per frame the way the live viewer has to.
+// The admin's crop for this entry, in the scan's levelled local space (the GLB's
+// own, for a scan never levelled), or null. The model is not turned about Y
+// here, so the planes are built once from it rather than refreshed per frame
+// the way the live viewer has to.
 const CROP = ${crop ? JSON.stringify(crop) : "null"}
 const clipPlanes = CROP
   ? [
@@ -201,13 +210,30 @@ const loader = new GLTFLoader()
 loader.setDRACOLoader(dracoLoader)
 
 loader.load('/model.glb', (gltf) => {
-  const model = gltf.scene
-  model.traverse((child) => {
+  gltf.scene.traverse((child) => {
     if (!child.isMesh || !child.material) return
     child.material = Array.isArray(child.material)
       ? child.material.map(toUnlit)
       : toUnlit(child.material)
   })
+
+  // The live viewer's chain (composables/useThreeScene.ts): a wrapper that is
+  // positioned, around a level node that turns the scan as exported into the
+  // levelled space the crop boxes are drawn in. Without the level node a
+  // levelled scan would be framed and clipped against boxes meant for a scan
+  // standing upright, and render tilted.
+  const model = new THREE.Group()
+  const levelNode = new THREE.Group()
+  levelNode.add(gltf.scene)
+  model.add(levelNode)
+  if (CROP && CROP.level) {
+    const r = CROP.level.rotation
+    const p = CROP.level.pivot
+    const rotation = new THREE.Quaternion(r.x, r.y, r.z, r.w)
+    const pivot = new THREE.Vector3(p.x, p.y, p.z)
+    levelNode.quaternion.copy(rotation)
+    levelNode.position.copy(pivot).sub(pivot.clone().applyQuaternion(rotation))
+  }
   scene.add(model)
 
   // The crop box stands in for the measured one, exactly as the live viewer

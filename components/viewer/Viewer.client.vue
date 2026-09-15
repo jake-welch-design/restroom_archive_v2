@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type * as THREE from "three";
+import * as THREE from "three";
 import { useThreeScene } from "~/composables/useThreeScene";
 import type { CameraSnapshot } from "~/composables/useThreeScene";
 import { apiErrorMessage } from "~~/shared/utils/apiError";
@@ -45,6 +45,8 @@ const {
   markersVisible,
   cropEditing,
   cropReady,
+  cropTool,
+  rotateDegrees,
   cropMode,
   cropDraft,
   cropEmptiesScan,
@@ -56,7 +58,9 @@ const {
   cancelCrop,
   resetCropBox,
   setCropMode,
+  setCropTool,
   cropHasChanges,
+  toDraftSpace,
   pendingCrop,
   applyPendingCrop,
 } = useThreeScene(canvasRef, modelUrlRef, cropRef, handlePickPoint);
@@ -177,14 +181,18 @@ const strandedCount = computed(() => {
   const d = cropDraft.value;
   const list = annotations.value;
   if (!d || !list?.length) return 0;
+  const point = new THREE.Vector3();
   return list.filter((a) => {
+    // Where the point will be under any rotation being edited, since the box
+    // is drawn against that rotation, not the one the point was stored with.
+    toDraftSpace(point.set(a.pointX, a.pointY, a.pointZ), point);
     const inside =
-      a.pointX >= d.minX &&
-      a.pointX <= d.maxX &&
-      a.pointY >= d.minY &&
-      a.pointY <= d.maxY &&
-      a.pointZ >= d.minZ &&
-      a.pointZ <= d.maxZ;
+      point.x >= d.minX &&
+      point.x <= d.maxX &&
+      point.y >= d.minY &&
+      point.y <= d.maxY &&
+      point.z >= d.minZ &&
+      point.z <= d.maxZ;
     return cropMode.value === "keep" ? !inside : inside;
   }).length;
 });
@@ -207,8 +215,26 @@ function onCropButton() {
   void saveCrop();
 }
 
-function toggleCropMode() {
+function toggleRotateTool() {
   if (!cropReady.value) return;
+  const next = cropTool.value === "rotate" ? "box" : "rotate";
+  const { boxReset } = setCropTool(next);
+  if (next === "rotate") showToast("Rotate to level");
+  else if (boxReset) showToast("Box reset to fit the new level", 2500);
+  else showToast("Resize box");
+}
+
+/** The note's reading of a ring drag: signed degrees, one decimal. */
+const rotateReading = computed(() => {
+  const degrees = rotateDegrees.value;
+  if (degrees == null) return null;
+  return `${degrees > 0 ? "+" : ""}${degrees.toFixed(1)}°`;
+});
+
+function toggleCropMode() {
+  // The box is not on screen while rotating, so neither is the choice of what
+  // it keeps.
+  if (!cropReady.value || cropTool.value === "rotate") return;
   const next = cropMode.value === "keep" ? "remove" : "keep";
   setCropMode(next);
   showToast(next === "keep" ? "Keep inside box" : "Remove inside box");
@@ -228,6 +254,9 @@ function cancelCropEdit() {
 async function saveCrop() {
   const id = props.restroomId;
   if (id == null) return;
+
+  // Saving closes a rotate session first, which fits the box to the new level.
+  if (cropTool.value === "rotate") setCropTool("box");
 
   // Opening the tool and pressing the button again without touching anything
   // is closing it, not saving the same crop over itself.
@@ -456,8 +485,8 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
         left-hand edge; on desktop it is display: contents and the row is laid
         out as if it were not there.
 
-        DOM order is the desktop order, left to right: view mode, reset, mode,
-        crop. On desktop, opening the tool slides view mode and crop right into
+        DOM order is the desktop order, left to right: view mode, reset, rotate,
+        mode, crop. On desktop, opening the tool slides view mode and crop right into
         the space the annotation buttons leave (see "Control row motion" in the
         script). On mobile the stack grows upward from crop, so neither moves;
         `order` sets that stacking, see the stylesheet. -->
@@ -557,12 +586,60 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
           >
             <div
               v-if="canCrop && cropEditing"
+              class="ctrl-group crop-rotate-group"
+            >
+              <!-- Switches the scene between the box and the rotation rings,
+              and stays lit while the rings are up. -->
+              <button
+                class="ctrl-btn ctrl-rotate"
+                :class="{ active: cropTool === 'rotate' }"
+                :title="
+                  cropTool === 'rotate'
+                    ? 'Back to the crop box'
+                    : 'Rotate to level'
+                "
+                :aria-label="
+                  cropTool === 'rotate'
+                    ? 'Back to the crop box'
+                    : 'Rotate to level'
+                "
+                :aria-pressed="cropTool === 'rotate'"
+                @click="toggleRotateTool"
+              >
+                <!-- A spirit level: the bubble centred between its marks. -->
+                <svg
+                  viewBox="0 0 16 16"
+                  width="18"
+                  height="18"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.3"
+                  stroke-linecap="round"
+                  aria-hidden="true"
+                >
+                  <rect x="1.5" y="5" width="13" height="6" rx="3" />
+                  <circle cx="8" cy="8" r="1.4" />
+                  <path d="M5.2 6.3v3.4M10.8 6.3v3.4" />
+                </svg>
+              </button>
+            </div>
+          </Transition>
+
+          <Transition
+            name="ctrl-pop"
+            @before-leave="pinForLeave"
+            @leave-cancelled="unpin"
+          >
+            <div
+              v-if="canCrop && cropEditing"
               class="ctrl-group crop-mode-group"
             >
               <!-- One press flips it, like the view-mode button, and the icon
-            shows the mode in force rather than the one a press would choose. -->
+            shows the mode in force rather than the one a press would choose.
+            Off while rotating, when the box it applies to is not shown. -->
               <button
                 class="ctrl-btn"
+                :disabled="cropTool === 'rotate'"
                 :title="
                   cropMode === 'keep'
                     ? 'Keeping inside the box (switch to removing)'
@@ -695,11 +772,22 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
     there is no panel left to put it in, and it is the one thing worth knowing
     before the next press saves. -->
     <div v-if="cropEditing && !toastMessage" class="crosshair-hint crop-note">
-      {{ cropSaving ? "Saving" : "Cropping" }}
-      <span v-if="!cropSaving && cropEmptiesScan" class="crop-note-warn">
+      {{
+        cropSaving ? "Saving" : cropTool === "rotate" ? "Rotating" : "Cropping"
+      }}
+      <span v-if="!cropSaving && rotateReading" class="crop-note-reading">
+        · {{ rotateReading }}
+      </span>
+      <span
+        v-else-if="!cropSaving && cropTool === 'box' && cropEmptiesScan"
+        class="crop-note-warn"
+      >
         · covers the whole scan
       </span>
-      <span v-else-if="!cropSaving && strandedCount" class="crop-note-warn">
+      <span
+        v-else-if="!cropSaving && cropTool === 'box' && strandedCount"
+        class="crop-note-warn"
+      >
         · {{ strandedCount }}
         {{ strandedCount === 1 ? "annotation" : "annotations" }} affected
       </span>
@@ -835,6 +923,19 @@ canvas {
 .ctrl-crop.active {
   background: #ff0000;
   color: #ffffff;
+}
+/* Lit white rather than red while the rings are up: red already means the crop
+   button is the one that saves, and this is a switch between two views of the
+   same edit. Its icon draws in currentColor so it can invert. */
+.ctrl-rotate {
+  color: #ffffff;
+}
+.ctrl-rotate.active {
+  background: #ffffff;
+  color: #000000;
+}
+.crop-note-reading {
+  font-variant-numeric: tabular-nums;
 }
 .ctrl-btn:disabled {
   cursor: default;
@@ -1037,8 +1138,11 @@ canvas {
   .ctrl-stack > .crop-mode-group {
     order: 2;
   }
-  .ctrl-stack > .crop-reset-group {
+  .ctrl-stack > .crop-rotate-group {
     order: 3;
+  }
+  .ctrl-stack > .crop-reset-group {
+    order: 4;
   }
   .annotation-group {
     margin-left: auto;

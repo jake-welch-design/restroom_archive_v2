@@ -381,14 +381,58 @@ Three consequences:
   turning clipping on or changing mode rebuilds the program. Moving a plane does
   not, which is why dragging a face costs nothing.
 
-**Re-centring moves stored cameras.** Annotation points are model-local and
-unaffected, but `orbit_pos_*` and `orbit_target_*` are world-space. Moving the
-frame centre from `C_old` to `C_new` shifts every one of them by `C_old − C_new`.
-Only the client knows both centres, so it sends that delta with the crop, and
-`POST /api/admin/restrooms/[id]/crop` applies it to the entry's annotations in
-the same request. Skipping this leaves every saved annotation view pointing past
-its subject by exactly the distance the centre moved. POV annotations store no
-position and need nothing.
+**Re-centring and levelling move stored annotations.** Annotation points are in
+levelled local space, so a change of levelling rotation moves them; orbit
+cameras (`orbit_pos_*`, `orbit_target_*`) are in world space, so any change of
+centre or rotation moves them; POV annotations store only a view direction,
+which a rotation turns. `reframeAnnotation` in `shared/utils/levelling.ts` does
+all of it, and with no rotation it reduces to shifting orbit cameras by
+`C_old − C_new`. The client sends both centres, since only it can measure them;
+`POST /api/admin/restrooms/[id]/crop` takes the rotation before from the stored
+row and the rotation after from the crop, reads the entry's annotations from
+the database and rewrites them in one batch with the crop. Reading them there
+rather than taking them from the client means one added since the admin's page
+loaded is moved too. Skipping this leaves every saved view pointing past its
+subject.
+
+**Levelling** turns a scan exported off its axis upright. The model the viewer
+positions is a wrapper group around a level node around the GLB's scene:
+
+```
+world = Ry(θ) · L − C          wrapper: position −C, rotation.y θ
+L     = R · (q − p) + p        level node: rotation R about pivot p
+```
+
+`L` is levelled local space, where every crop box, the eye height and every
+annotation point live. For a scan never levelled the node is the identity, so
+nothing stored before levelling existed moves. The rotation and its pivot are
+stored as the crop's `level`; the pivot is fixed when a scan is first rotated,
+at the centre of the scan as exported, and kept after, so rotations compose
+without the levelled space drifting. Details worth knowing:
+
+- The maths is checked against three.js itself: 2,000 random trials of the
+  scene graph against `reframeAnnotation`, every error around 10⁻¹⁴.
+- Ring drags do not intersect the pointer with the ring's plane. That falls
+  apart as a ring turns edge-on, where the ray grazes the plane and a plain drag
+  along a visible ring does nothing. A ring facing the camera turns by circling
+  the pointer round its centre; any other turns by dragging its near side,
+  measured along eye × axis, so the near side keeps pace with the pointer.
+- Quarter turns snap within 3°, for scans that arrive lying on their side. Zero
+  does not, so corrections of a degree or two are not swallowed.
+- The level grid is depth-tested, so a floor that is not level visibly crosses
+  it. It re-seats at the scan's new floor after each drag.
+- Rotating changes the scan's bounds, so coming back to the box after a rotation
+  fits a fresh `keep` box to the levelled scan. A removal box is not carried
+  through a rotation, which could only grow it: level first, then crop.
+- While a rotation is being tried, markers and the stranded-annotation count use
+  `toDraftSpace`, the same move the server will make, so markers stay on their
+  surfaces as the scan turns.
+- Bounds are measured by walking vertices once a scan is levelled, because a
+  rotated mesh's transformed bounding box is up to √2 too loose. Visitors skip
+  that: a levelled scan always has a stored frame, and that frame, not the
+  measurement, is what the viewer centres on.
+- `scripts/render-thumbs.ts` builds the same wrapper and level node, or a later
+  `npm run thumbs` would render levelled scans tilted.
 
 **Thumbnails are re-rendered on save**, and `thumbUrl` carries `?v=` from
 `updated_at`. The thumbnail key is stable and served `immutable`, so without
@@ -423,8 +467,14 @@ arbitrary and are not:
 
 **The controls are icon buttons in the viewer's own control row**, not a panel.
 The crop button opens the tool and, pressed again, saves; there is no separate
-save. While the tool is open a reset button and a one-press `+`/`−` mode toggle
-appear beside it, and a "Cropping" note sits in the annotation hint's place.
+save. While the tool is open a reset button, a rotate button that switches the
+scene between the box and the levelling rings, and a one-press `+`/`−` mode
+toggle appear beside it, and a "Cropping" note, "Rotating" with a live angle
+while a ring is dragged, sits in the annotation hint's place. The rotate button
+lights white rather than red, since red already marks the button that saves, and
+the `+`/`−` toggle is disabled while the box it applies to is not shown. Saving
+from rotate mode closes the rotation first, and Reset clears the rotation along
+with everything else.
 Details that look arbitrary and are not:
 
 - **On desktop the crop buttons slide into the annotation buttons' place.** The

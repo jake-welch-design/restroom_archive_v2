@@ -4,11 +4,14 @@ import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { Ref } from "vue";
 import type { CameraMode } from "~/types/annotation";
-import type { Crop, CropBox, CropDelta, CropMode } from "~~/shared/utils/crop";
+import type { Crop, CropBox, CropMode } from "~~/shared/utils/crop";
+import { isLevelled, type Level, type Vec3 } from "~~/shared/utils/levelling";
 import {
   createCropGizmo,
   POV_EDGE_MARGIN,
   type CropGizmo,
+  type CropGizmoTool,
+  type RotateAxis,
 } from "~/composables/cropGizmo";
 
 export type ViewMode = "orbit" | "pov";
@@ -17,8 +20,13 @@ export type ViewMode = "orbit" | "pov";
 export interface CropResult {
   /** The new crop, or null when it was cleared back to the scan's own bounds. */
   crop: Crop | null;
-  /** How far the model's centre moved, which world-space records must follow. */
-  recenterDelta: CropDelta;
+  /**
+   * The centre the viewer framed on before and after, each in its own levelled
+   * space. The server needs both to move annotations through a change of
+   * rotation as well as of centre; see shared/utils/levelling.ts.
+   */
+  centreBefore: Vec3;
+  centreAfter: Vec3;
 }
 
 export interface CameraSnapshot {
@@ -190,12 +198,27 @@ export function useThreeScene(
    * decline rather than act on whatever the gizmo held last time.
    */
   const cropReady = ref(false);
+  /** Whether the crop tool is resizing the box or turning the scan. */
+  const cropTool = ref<CropGizmoTool>("box");
+  /** The angle of a ring drag in progress, in degrees, for the note. */
+  const rotateDegrees = ref<number | null>(null);
 
   let renderer: THREE.WebGLRenderer | null = null;
   let scene: THREE.Scene | null = null;
   let camera: THREE.PerspectiveCamera | null = null;
   let controls: OrbitControls | null = null;
+  /**
+   * The model as the viewer handles it: the group it positions and turns.
+   *
+   * A wrapper around the GLB's own scene rather than that scene itself, with
+   * `levelNode` between the two. The wrapper's local space is the levelled
+   * space every crop box, eye height and annotation point is stored in; the
+   * level node is the rotation that turns the scan as exported into it. For a
+   * scan that has never been levelled that node is the identity and the two
+   * spaces are the same, which is why nothing stored before it existed moves.
+   */
   let currentModel: THREE.Group | null = null;
+  let levelNode: THREE.Group | null = null;
   let raf = 0;
 
   let userInteracted = false;
@@ -272,6 +295,33 @@ export function useThreeScene(
    * one idle round trip of the toggle would be enough to save it.
    */
   let boxBeforeShrink: THREE.Box3 | null = null;
+
+  /**
+   * The levelling rotation being edited, and the point it turns about.
+   *
+   * Applied to the level node live, so the scan turns as a ring is dragged. The
+   * pivot is the stored one for a scan already levelled, or the centre of the
+   * scan as exported for one being levelled for the first time.
+   */
+  const draftRotation = new THREE.Quaternion();
+  const draftPivot = new THREE.Vector3();
+  /** The rotation when the current ring drag, and the current rotate session, began. */
+  const rotationAtDragStart = new THREE.Quaternion();
+  const rotationAtToolStart = new THREE.Quaternion();
+  /**
+   * The rotation actually in force, mirrored as a quaternion so drawing each
+   * annotation marker every frame does not rebuild one from the stored crop.
+   */
+  const committedRotation = new THREE.Quaternion();
+  const relativeRotation = new THREE.Quaternion();
+  const IDENTITY = new THREE.Quaternion();
+  /** Two rotations closer than this, a hundredth of a degree, are the same. */
+  const ROTATION_EPSILON = (0.01 * Math.PI) / 180;
+  const AXES: Record<RotateAxis, THREE.Vector3> = {
+    x: new THREE.Vector3(1, 0, 0),
+    y: new THREE.Vector3(0, 1, 0),
+    z: new THREE.Vector3(0, 0, 1),
+  };
 
   /**
    * Identifies the most recent startCrop, so a delayed scene setup can tell
@@ -411,6 +461,21 @@ export function useThreeScene(
       },
       onPovChange: (y) => {
         draftPovY = y;
+      },
+      onRotate: (axis, angle) => {
+        draftRotation
+          .setFromAxisAngle(AXES[axis], angle)
+          .multiply(rotationAtDragStart);
+        applyLevel(draftRotation, draftPivot);
+        rotateDegrees.value = (angle * 180) / Math.PI;
+      },
+      onRotateEnd: () => {
+        rotationAtDragStart.copy(draftRotation);
+        rotateDegrees.value = null;
+        // Re-seat the grid at the scan's new floor, so the next adjustment is
+        // judged against where the floor now is rather than where it was.
+        const floor = measureScanBounds({ precise: true });
+        if (!floor.isEmpty()) gizmo?.setGridFloor(floor.min.y);
       },
       onDragEnd: () => {
         // A dragged box is the admin's, so there is no longer a shrink to undo.
@@ -566,7 +631,89 @@ export function useThreeScene(
    * Runs once, in the admin's browser, when a crop is saved. The result is
    * stored, so no visitor ever pays for it.
    */
+  /**
+   * Turns the level node to `rotation` about `pivot`.
+   *
+   * A rotation about the origin plus the translation that puts the pivot back
+   * where it was: L = R · (q − p) + p. Turning about the scan's own middle
+   * rather than the GLB's origin, which can be anywhere, keeps the scan in view
+   * while it turns.
+   */
+  function applyLevel(rotation: THREE.Quaternion, pivot: THREE.Vector3) {
+    if (!levelNode) return;
+    levelNode.quaternion.copy(rotation);
+    levelNode.position.copy(pivot).sub(pivot.clone().applyQuaternion(rotation));
+  }
+
+  function draftLevel(): Level | null {
+    const level: Level = {
+      rotation: {
+        x: draftRotation.x,
+        y: draftRotation.y,
+        z: draftRotation.z,
+        w: draftRotation.w,
+      },
+      pivot: { x: draftPivot.x, y: draftPivot.y, z: draftPivot.z },
+    };
+    return isLevelled(level) ? level : null;
+  }
+
+  function rotationOf(crop: Crop | null): THREE.Quaternion {
+    const r = crop?.level?.rotation;
+    return r
+      ? new THREE.Quaternion(r.x, r.y, r.z, r.w)
+      : new THREE.Quaternion();
+  }
+
+  /**
+   * The centre of the scan as exported, in the level node's own space.
+   *
+   * The pivot a first levelling turns about. Mesh bounds rather than vertices,
+   * since a pivot only has to be somewhere near the middle.
+   */
+  function rawCentre(): THREE.Vector3 {
+    const bounds = new THREE.Box3().makeEmpty();
+    if (!levelNode) return bounds.getCenter(new THREE.Vector3());
+    levelNode.updateMatrixWorld(true);
+    const inverse = levelNode.matrixWorld.clone().invert();
+    const toLevel = new THREE.Matrix4();
+    const meshBox = new THREE.Box3();
+    levelNode.traverse((child) => {
+      const mesh = child as THREE.Mesh;
+      if (!mesh.isMesh || !mesh.geometry) return;
+      mesh.geometry.computeBoundingBox();
+      if (!mesh.geometry.boundingBox) return;
+      toLevel.multiplyMatrices(inverse, mesh.matrixWorld);
+      bounds.union(
+        meshBox.copy(mesh.geometry.boundingBox).applyMatrix4(toLevel),
+      );
+    });
+    return bounds.isEmpty()
+      ? new THREE.Vector3()
+      : bounds.getCenter(new THREE.Vector3());
+  }
+
   function survivingBounds(box: THREE.Box3): THREE.Box3 {
+    return measureScanBounds({
+      exclude: box,
+      precise: isLevelled(draftLevel()),
+    });
+  }
+
+  /**
+   * The scan's bounds in levelled local space, optionally leaving out whatever
+   * lies inside `exclude`.
+   *
+   * `precise` walks every vertex rather than transforming each mesh's bounding
+   * box. For an unturned scan the two agree, and the bounding boxes are far
+   * cheaper. For a turned one the transformed box of a mesh is looser than the
+   * mesh, by up to the square root of two at forty-five degrees, which would
+   * frame a levelled scan from further back than it needs.
+   */
+  function measureScanBounds(
+    options: { exclude?: THREE.Box3; precise?: boolean } = {},
+  ): THREE.Box3 {
+    const { exclude, precise = false } = options;
     const result = new THREE.Box3().makeEmpty();
     if (!currentModel) return result;
 
@@ -588,18 +735,20 @@ export function useThreeScene(
       mesh.geometry.computeBoundingBox();
       if (!mesh.geometry.boundingBox) return;
 
-      // A mesh the box does not reach keeps all of its geometry, so its own
-      // bounds are enough and its vertices can be skipped. Scans are usually a
-      // single mesh, in which case this never fires, but it costs one box test.
+      // A mesh nothing is excluded from keeps all of its geometry, so unless
+      // precision is asked for its own bounds are enough and its vertices can
+      // be skipped. Scans are usually a single mesh, so for a remove crop this
+      // rarely fires, but it costs one box test.
       meshBox.copy(mesh.geometry.boundingBox).applyMatrix4(toModel);
-      if (!meshBox.intersectsBox(box)) {
+      if (!precise && (!exclude || !meshBox.intersectsBox(exclude))) {
         result.union(meshBox);
         return;
       }
 
       for (let i = 0; i < position.count; i++) {
         vertex.fromBufferAttribute(position, i).applyMatrix4(toModel);
-        if (!box.containsPoint(vertex)) result.expandByPoint(vertex);
+        if (!exclude || !exclude.containsPoint(vertex))
+          result.expandByPoint(vertex);
       }
     });
 
@@ -859,19 +1008,30 @@ export function useThreeScene(
       if (myId !== loadId) return;
       profile?.phase("fetch+parse");
 
-      currentModel = gltf.scene;
+      currentModel = new THREE.Group();
+      levelNode = new THREE.Group();
+      levelNode.add(gltf.scene);
+      currentModel.add(levelNode);
       scene.add(currentModel);
-
-      // Measured before anything moves the model. `setFromObject` reports world
-      // space, and the model's transform is still the identity at this point,
-      // so this is the scan's own local bounds. It cannot be taken again later:
-      // once `frameOn` offsets the model the same call would report something
-      // else entirely, which is why the crop's ceiling is captured here and
-      // kept for the life of the load.
-      originalBounds.copy(new THREE.Box3().setFromObject(currentModel));
 
       const stored = storedCrop.value ?? null;
       committedCrop = stored;
+      committedRotation.copy(rotationOf(stored));
+      if (stored?.level) {
+        const { pivot } = stored.level;
+        applyLevel(
+          rotationOf(stored),
+          new THREE.Vector3(pivot.x, pivot.y, pivot.z),
+        );
+      }
+
+      // Measured before anything moves the model, so this is the scan's own
+      // levelled bounds. Not precise even for a levelled scan: a levelled scan
+      // always has a stored crop, whose frame is what the viewer centres on,
+      // so the looser measurement never reaches a visitor's framing and every
+      // visitor is spared walking the scan's vertices. The crop tool measures
+      // precisely when it opens.
+      originalBounds.copy(measureScanBounds());
       // Before the materials are built, so they are created with the right
       // number of clipping planes, and the right clipping mode, instead of
       // being rebuilt a moment later.
@@ -944,6 +1104,20 @@ export function useThreeScene(
     // scan the faces surround the camera and most handles are behind it.
     if (mode.value === "pov") setMode("orbit");
 
+    // The levelling in force is where editing starts. A scan levelled before
+    // gets its bounds measured precisely now, so the box's ceiling and the
+    // "is this the whole scan" test agree with the precise box it was saved
+    // with.
+    const level = committedCrop?.level;
+    draftRotation.copy(rotationOf(committedCrop));
+    if (level) draftPivot.set(level.pivot.x, level.pivot.y, level.pivot.z);
+    else draftPivot.copy(rawCentre());
+    rotationAtDragStart.copy(draftRotation);
+    rotationAtToolStart.copy(draftRotation);
+    cropTool.value = "box";
+    rotateDegrees.value = null;
+    if (level) originalBounds.copy(measureScanBounds({ precise: true }));
+
     const initial = committedCrop
       ? boxFromCrop(committedCrop.box)
       : originalBounds.clone();
@@ -1013,6 +1187,22 @@ export function useThreeScene(
     cropMode.value = committedCrop?.mode ?? "keep";
     draftPovY = null;
     boxBeforeShrink = null;
+    cropTool.value = "box";
+    rotateDegrees.value = null;
+    // Turn the scan back if a rotation was being tried, and re-measure against
+    // the rotation that is actually in force.
+    const committedRotation = rotationOf(committedCrop);
+    if (committedRotation.angleTo(draftRotation) > ROTATION_EPSILON) {
+      const pivot = committedCrop?.level?.pivot;
+      applyLevel(
+        committedRotation,
+        pivot ? new THREE.Vector3(pivot.x, pivot.y, pivot.z) : draftPivot,
+      );
+      draftRotation.copy(committedRotation);
+      originalBounds.copy(
+        measureScanBounds({ precise: Boolean(committedCrop?.level) }),
+      );
+    }
     setClipBox(clipBoxOf(committedCrop), committedCrop?.mode ?? "keep");
     restoreViewBeforeCrop();
   }
@@ -1053,12 +1243,82 @@ export function useThreeScene(
    * everything" rather than "no crop", which is not what a reset should offer.
    */
   function resetCropBox() {
-    if (!cropReady.value) return;
+    if (!gizmo || !cropReady.value) return;
     cropMode.value = "keep";
     draftPovY = null;
     boxBeforeShrink = null;
+    rotateDegrees.value = null;
+
+    // Reset means an untouched scan, so the levelling goes too.
+    const wasTurned =
+      draftRotation.angleTo(new THREE.Quaternion()) > ROTATION_EPSILON;
+    draftRotation.identity();
+    rotationAtDragStart.identity();
+    rotationAtToolStart.identity();
+    if (wasTurned) {
+      applyLevel(draftRotation, draftPivot);
+      originalBounds.copy(measureScanBounds());
+    }
+
+    cropTool.value = "box";
+    gizmo.show(originalBounds.clone(), originalBounds);
     // Redraws, re-clips and re-seats the POV guide through the gizmo's onChange.
-    gizmo?.setBox(originalBounds.clone());
+    gizmo.setBox(originalBounds.clone());
+    if (wasTurned) frameWholeBox(originalBounds);
+  }
+
+  /**
+   * Switches the crop tool between resizing the box and turning the scan.
+   *
+   * Turning a scan changes its bounds and tips any box drawn against the old
+   * ones out of true, so coming back from a rotation that changed anything
+   * fits the box to the newly levelled scan, in `keep` mode, with the eye back
+   * at its default. Rather than try to carry a removal box through a rotation,
+   * which could only grow it and delete more than was meant, levelling is
+   * treated as the step before cropping. `boxReset` says whether a box that was
+   * already drawn was lost to it, so the viewer can say so.
+   */
+  function setCropTool(next: CropGizmoTool): { boxReset: boolean } {
+    const unchanged = { boxReset: false };
+    if (!gizmo || !cropReady.value || cropTool.value === next) return unchanged;
+
+    if (next === "rotate") {
+      rotationAtToolStart.copy(draftRotation);
+      rotationAtDragStart.copy(draftRotation);
+      cropTool.value = "rotate";
+      // The box stays fixed in levelled space while the scan turns through it,
+      // which would cut the scan apart mid-turn, so the whole scan shows while
+      // rotating and the box's clipping comes back afterwards.
+      setClipBox(null);
+      const size = originalBounds.getSize(new THREE.Vector3());
+      gizmo.setTool("rotate", {
+        centre: draftPivot,
+        size: Math.max(size.x, size.y, size.z),
+        floorY: originalBounds.min.y,
+      });
+      return unchanged;
+    }
+
+    cropTool.value = "box";
+    rotateDegrees.value = null;
+    if (rotationAtToolStart.angleTo(draftRotation) <= ROTATION_EPSILON) {
+      gizmo.setTool("box");
+      setClipBox(gizmo.getBox(), cropMode.value);
+      return unchanged;
+    }
+
+    const drawn = gizmo.getBox();
+    const hadBox =
+      cropMode.value !== "keep" || !isFullBounds(drawn) || draftPovY != null;
+
+    originalBounds.copy(measureScanBounds({ precise: true }));
+    cropMode.value = "keep";
+    draftPovY = null;
+    boxBeforeShrink = null;
+    gizmo.show(originalBounds.clone(), originalBounds);
+    gizmo.setBox(originalBounds.clone());
+    frameWholeBox(originalBounds);
+    return { boxReset: hadBox };
   }
 
   /**
@@ -1108,6 +1368,9 @@ export function useThreeScene(
     if (!gizmo || !cropReady.value) return false;
     const box = gizmo.getBox();
 
+    if (rotationOf(committedCrop).angleTo(draftRotation) > ROTATION_EPSILON)
+      return true;
+
     if (!committedCrop) {
       return !(
         cropMode.value === "keep" &&
@@ -1152,17 +1415,22 @@ export function useThreeScene(
    * delta is for.
    */
   function pendingCrop(): CropResult | null {
-    if (!gizmo || !currentModel || !cropReady.value) return null;
+    // A rotate session has to be closed first, which fits the box to the new
+    // level; saving mid-rotation would store a box drawn for the old one.
+    if (!gizmo || !currentModel || !cropReady.value || cropTool.value !== "box")
+      return null;
 
     const box = gizmo.getBox();
     const mode = cropMode.value;
+    const level = draftLevel();
 
     // A `keep` box at the scan's own bounds keeps everything, which is stored
     // as no crop rather than as a box that happens to match. That is what Reset
     // then Confirm does. `remove` has no such state: an empty removal box is
     // not something the gizmo can express. A moved POV eye still needs saving,
     // though, so a full-bounds box with one is kept as a crop that cuts nothing.
-    const cleared = mode === "keep" && isFullBounds(box) && draftPovY == null;
+    const cleared =
+      mode === "keep" && isFullBounds(box) && draftPovY == null && !level;
 
     // The frame box is the drawn box in `keep` mode and the surviving geometry
     // in `remove` mode, where the drawn box is the part being deleted.
@@ -1176,9 +1444,7 @@ export function useThreeScene(
     // stops this being reachable, and this is the backstop behind it.
     if (frame.isEmpty()) return null;
 
-    const delta = appliedCentre
-      .clone()
-      .sub(frame.getCenter(new THREE.Vector3()));
+    const centreAfter = frame.getCenter(new THREE.Vector3());
 
     // Re-seated against the frame actually being saved. In `remove` mode that
     // frame was just measured and can differ from the one the guide last stood
@@ -1193,8 +1459,14 @@ export function useThreeScene(
             box: cropFromBox(box),
             frame: cropFromBox(frame),
             ...(povY == null ? {} : { povY }),
+            ...(level ? { level } : {}),
           },
-      recenterDelta: { x: delta.x, y: delta.y, z: delta.z },
+      centreBefore: {
+        x: appliedCentre.x,
+        y: appliedCentre.y,
+        z: appliedCentre.z,
+      },
+      centreAfter: { x: centreAfter.x, y: centreAfter.y, z: centreAfter.z },
     };
   }
 
@@ -1208,6 +1480,7 @@ export function useThreeScene(
     if (!gizmo || !currentModel) return;
 
     committedCrop = result.crop;
+    committedRotation.copy(rotationOf(result.crop));
     setClipBox(clipBoxOf(result.crop), result.crop?.mode ?? "keep");
     viewBeforeCrop = null;
     frameOn(result.crop ? boxFromCrop(result.crop.frame) : originalBounds);
@@ -1219,6 +1492,8 @@ export function useThreeScene(
     cropEmptiesScan.value = false;
     draftPovY = null;
     boxBeforeShrink = null;
+    cropTool.value = "box";
+    rotateDegrees.value = null;
   }
 
   function setMode(next: ViewMode) {
@@ -1507,6 +1782,34 @@ export function useThreeScene(
     }
   }
 
+  /**
+   * Where a stored annotation point sits once the rotation being edited is
+   * saved.
+   *
+   * Annotation points are stored against the rotation in force, and the server
+   * moves them only when a new one is saved. While a rotation is being tried
+   * the scan turns beneath them, so without this their markers would stay where
+   * they were and float off their surfaces, and the count of annotations a box
+   * would strand would be checked against points in the wrong place. This is
+   * the same move the server makes, about the same pivot.
+   */
+  function toDraftSpace(
+    point: THREE.Vector3,
+    out = new THREE.Vector3(),
+  ): THREE.Vector3 {
+    out.copy(point);
+    if (!cropEditing.value) return out;
+    relativeRotation
+      .copy(committedRotation)
+      .invert()
+      .premultiply(draftRotation);
+    if (relativeRotation.angleTo(IDENTITY) <= ROTATION_EPSILON) return out;
+    return out
+      .sub(draftPivot)
+      .applyQuaternion(relativeRotation)
+      .add(draftPivot);
+  }
+
   function project(point: THREE.Vector3): {
     x: number;
     y: number;
@@ -1515,7 +1818,7 @@ export function useThreeScene(
     if (!camera || !renderer) return { x: 0, y: 0, inFront: false };
     const canvas = renderer.domElement;
     // Transform from model-local to current world space so markers track the rotating model
-    const worldPoint = point.clone();
+    const worldPoint = toDraftSpace(point);
     if (currentModel) currentModel.localToWorld(worldPoint);
     const ndc = worldPoint.project(camera);
     const inFront = ndc.z < 1;
@@ -1531,7 +1834,13 @@ export function useThreeScene(
     // The gizmo gets first refusal: a press that lands on a handle is a crop
     // drag and nothing else. It declines anything that misses, so pressing
     // elsewhere still orbits the scan while the box is open.
-    if (gizmo?.onPointerDown(e)) return;
+    if (gizmo?.onPointerDown(e)) {
+      // Captured so the drag keeps tracking once the pointer leaves the
+      // viewer, which a big rotation on a small screen soon does. Moves are
+      // listened for on the canvas, so without this they simply stop.
+      (e.currentTarget as Element | null)?.setPointerCapture?.(e.pointerId);
+      return;
+    }
     if (mode.value === "orbit") {
       // Drag start is discrete and rare, so skip the throttle here.
       reanchorOrbitTarget(true);
@@ -1685,6 +1994,8 @@ export function useThreeScene(
     markersVisible,
     cropEditing,
     cropReady,
+    cropTool,
+    rotateDegrees,
     cropMode,
     cropDraft,
     cropEmptiesScan,
@@ -1699,7 +2010,9 @@ export function useThreeScene(
     cancelCrop,
     resetCropBox,
     setCropMode,
+    setCropTool,
     cropHasChanges,
+    toDraftSpace,
     pendingCrop,
     applyPendingCrop,
   };

@@ -1,3 +1,5 @@
+import { isLevelled, quatNormalize, type Level } from "./levelling";
+
 /**
  * The admin-drawn crop, shared because both sides of it have to agree.
  *
@@ -57,6 +59,13 @@ export interface Crop {
    * camera stands at the frame's centre horizontally; only the height is set.
    */
   povY?: number;
+  /**
+   * The rotation that levels the scan, or absent when it is shown as exported.
+   *
+   * Applied beneath everything else here: the boxes and the eye height are all
+   * in the levelled space it produces. See shared/utils/levelling.ts.
+   */
+  level?: Level;
 }
 
 /** How a crop shifts the model's centre, and with it the viewer's world space. */
@@ -108,10 +117,41 @@ export function parseCrop(value: string | null | undefined): Crop | null {
       typeof parsed.povY === "number" && Number.isFinite(parsed.povY)
         ? parsed.povY
         : undefined;
-    return { mode, box: parsed.box, frame, ...(povY == null ? {} : { povY }) };
+    const level = parseLevel(parsed.level);
+    return {
+      mode,
+      box: parsed.box,
+      frame,
+      ...(povY == null ? {} : { povY }),
+      ...(level ? { level } : {}),
+    };
   } catch {
     return null;
   }
+}
+
+const finite = (v: unknown): v is number =>
+  typeof v === "number" && Number.isFinite(v);
+
+/**
+ * A stored level, normalised, or undefined when absent, malformed or a turn of
+ * nothing. Lenient for the same reason as parseCrop.
+ */
+function parseLevel(value: unknown): Level | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const { rotation, pivot } = value as Record<string, Record<string, unknown>>;
+  if (
+    !rotation ||
+    !pivot ||
+    ![rotation.x, rotation.y, rotation.z, rotation.w].every(finite) ||
+    ![pivot.x, pivot.y, pivot.z].every(finite)
+  )
+    return undefined;
+  const level: Level = {
+    rotation: quatNormalize(rotation as unknown as Level["rotation"]),
+    pivot: pivot as unknown as Level["pivot"],
+  };
+  return isLevelled(level) ? level : undefined;
 }
 
 export function serializeCrop(crop: Crop | null): string | null {

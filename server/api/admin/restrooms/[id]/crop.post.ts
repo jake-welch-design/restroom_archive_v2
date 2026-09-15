@@ -1,13 +1,28 @@
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { useDb, schema } from "~~/server/utils/db";
 import { requireRole } from "~~/server/utils/requireRole";
 import { recordAdminAction } from "~~/server/utils/auditLog";
 import { getRouterId } from "~~/server/utils/routeParams";
 import { now } from "~~/server/utils/sqlTime";
-import { MIN_CROP_SIZE, serializeCrop } from "~~/shared/utils/crop";
+import {
+  MIN_CROP_SIZE,
+  parseCrop,
+  serializeCrop,
+  type Crop,
+} from "~~/shared/utils/crop";
+import {
+  IDENTITY_QUAT,
+  isLevelled,
+  quatConjugate,
+  quatMultiply,
+  quatNormalize,
+  reframeAnnotation,
+  type Framing,
+} from "~~/shared/utils/levelling";
 
 const Coord = z.number().finite();
+const Vec3Schema = z.object({ x: Coord, y: Coord, z: Coord });
 
 const BoxSchema = z
   .object({
@@ -26,6 +41,17 @@ const BoxSchema = z
     { message: "Crop box is too small on at least one axis" },
   );
 
+const LevelSchema = z.object({
+  rotation: z
+    .object({ x: Coord, y: Coord, z: Coord, w: Coord })
+    // A unit quaternion to within rounding. Normalised below regardless, but
+    // anything far from unit length is not a rotation that was meant.
+    .refine((q) => Math.abs(Math.hypot(q.x, q.y, q.z, q.w) - 1) < 1e-3, {
+      message: "Level rotation is not a unit quaternion",
+    }),
+  pivot: Vec3Schema,
+});
+
 const CropSchema = z
   .object({
     mode: z.enum(["keep", "remove"]),
@@ -37,6 +63,8 @@ const CropSchema = z
     // The POV eye height, in the same local space as the boxes. Absent means
     // the default.
     povY: Coord.optional(),
+    // The rotation that levels the scan. Absent means as exported.
+    level: LevelSchema.optional(),
   })
   .refine(
     (c) => c.povY == null || (c.povY >= c.frame.minY && c.povY <= c.frame.maxY),
@@ -46,77 +74,142 @@ const CropSchema = z
 const Body = z.object({
   // Null clears the crop, which is how Reset gets back to the scan's own bounds.
   crop: CropSchema.nullable(),
-  // How far the model's centre moves as a result, in the viewer's world space.
-  // Supplied by the client because it is the only side that knows both the old
-  // and the new centre: the old one depends on the crop that was applied when
-  // the scan was loaded, and computing it here would mean parsing the GLB.
-  recenterDelta: z.object({ x: Coord, y: Coord, z: Coord }),
+  // The centre of the box the viewer framed on before this save and after it,
+  // each in its own levelled space. Supplied by the client because only it can
+  // measure them: with no crop, the centre is the scan's own bounds, which the
+  // server would have to parse the GLB to find. The rotations are not taken
+  // from the client: the one before comes from the stored row, the one after
+  // from `crop` itself.
+  centreBefore: Vec3Schema,
+  centreAfter: Vec3Schema,
 });
 
 /**
- * Stores an admin's crop box for one entry, and keeps existing annotations
- * pointing where they were pointing.
+ * Stores an admin's crop for one entry, and keeps its annotations marking and
+ * framing what they marked and framed.
  *
- * The crop moves the model's centre, and the viewer defines world space by
- * subtracting that centre, so every world-space coordinate already on record
- * for this entry shifts with it. Annotation points do not: they are stored in
- * model-local space precisely so they track the model. Annotation *cameras*
- * are world-space, so the six orbit columns are shifted by the same delta here.
- * Skipping this would leave every saved view flying to a point offset by the
- * amount the crop moved the centre.
+ * A crop changes the frame the scan is drawn in: its centre always can, and its
+ * levelling rotation can too. Annotation points are stored in the scan's
+ * levelled local space, so a new rotation moves them; annotation cameras are in
+ * world space, so any change of centre or rotation moves them. The arithmetic
+ * is in shared/utils/levelling.ts. Skipping it would leave every saved view
+ * pointing past its subject by however far the scan moved.
  *
- * POV annotations store rotations and no position, and are re-anchored
- * implicitly by the new centre, so there is nothing to migrate for them.
+ * The annotations are read from the database and rewritten in the same batch
+ * as the crop, rather than taken from the client, so one added since the admin's
+ * page loaded is moved too, and a failure moves nothing.
  */
 export default defineEventHandler(async (event) => {
   requireRole(event, "admin");
 
   const id = getRouterId(event);
-  const { crop, recenterDelta } = await readValidatedBody(event, Body.parse);
+  const body = await readValidatedBody(event, Body.parse);
 
   const db = useDb(event);
 
   const row = await db
-    .update(schema.restrooms)
-    .set({
-      crop: serializeCrop(crop),
-      updatedAt: now(),
-    })
+    .select({ slug: schema.restrooms.slug, crop: schema.restrooms.crop })
+    .from(schema.restrooms)
     .where(eq(schema.restrooms.id, id))
-    .returning({ id: schema.restrooms.id, slug: schema.restrooms.slug })
     .get();
 
   if (!row)
     throw createError({ statusCode: 404, statusMessage: "Restroom not found" });
 
-  // A delta of zero is the common case on a re-save that only trimmed a face
-  // symmetrically, and writing six columns across every annotation to add zero
-  // is work with no result.
-  const moved =
-    recenterDelta.x !== 0 || recenterDelta.y !== 0 || recenterDelta.z !== 0;
+  // A level that turns the scan by nothing is dropped rather than stored, so a
+  // rotation dragged away and back does not leave a crop that only looks set.
+  const crop: Crop | null = body.crop
+    ? (() => {
+        const { level, ...rest } = body.crop;
+        const normalised = level && {
+          rotation: quatNormalize(level.rotation),
+          pivot: level.pivot,
+        };
+        return isLevelled(normalised) ? { ...rest, level: normalised } : rest;
+      })()
+    : null;
 
-  if (moved) {
-    // Raw SQL rather than a read-modify-write: the shift is the same arithmetic
-    // on every row, and doing it in one statement keeps a partially migrated
-    // set of annotations off the table. The NULL guards matter -- a POV
-    // annotation has NULL in all six of these, and `NULL + 0.4` is NULL, which
-    // would erase the distinction between "no orbit camera" and "an orbit
-    // camera at the origin".
-    await db.run(sql`
-      UPDATE annotations SET
-        orbit_pos_x = CASE WHEN orbit_pos_x IS NULL THEN NULL ELSE orbit_pos_x + ${recenterDelta.x} END,
-        orbit_pos_y = CASE WHEN orbit_pos_y IS NULL THEN NULL ELSE orbit_pos_y + ${recenterDelta.y} END,
-        orbit_pos_z = CASE WHEN orbit_pos_z IS NULL THEN NULL ELSE orbit_pos_z + ${recenterDelta.z} END,
-        orbit_target_x = CASE WHEN orbit_target_x IS NULL THEN NULL ELSE orbit_target_x + ${recenterDelta.x} END,
-        orbit_target_y = CASE WHEN orbit_target_y IS NULL THEN NULL ELSE orbit_target_y + ${recenterDelta.y} END,
-        orbit_target_z = CASE WHEN orbit_target_z IS NULL THEN NULL ELSE orbit_target_z + ${recenterDelta.z} END
-      WHERE restroom_id = ${id}
-    `);
+  const before: Framing = {
+    level: parseCrop(row.crop)?.level ?? null,
+    centre: body.centreBefore,
+  };
+  const after: Framing = {
+    level: crop?.level ?? null,
+    centre: body.centreAfter,
+  };
+
+  const rotated = isLevelled({
+    rotation: quatMultiply(
+      after.level?.rotation ?? IDENTITY_QUAT,
+      quatConjugate(before.level?.rotation ?? IDENTITY_QUAT),
+    ),
+    pivot: { x: 0, y: 0, z: 0 },
+  });
+  const recentred =
+    before.centre.x !== after.centre.x ||
+    before.centre.y !== after.centre.y ||
+    before.centre.z !== after.centre.z;
+
+  const writeCrop = db
+    .update(schema.restrooms)
+    .set({ crop: serializeCrop(crop), updatedAt: now() })
+    .where(eq(schema.restrooms.id, id));
+
+  let moved = 0;
+  if (rotated || recentred) {
+    const annotations = await db
+      .select({
+        id: schema.annotations.id,
+        pointX: schema.annotations.pointX,
+        pointY: schema.annotations.pointY,
+        pointZ: schema.annotations.pointZ,
+        cameraMode: schema.annotations.cameraMode,
+        orbitPosX: schema.annotations.orbitPosX,
+        orbitPosY: schema.annotations.orbitPosY,
+        orbitPosZ: schema.annotations.orbitPosZ,
+        orbitTargetX: schema.annotations.orbitTargetX,
+        orbitTargetY: schema.annotations.orbitTargetY,
+        orbitTargetZ: schema.annotations.orbitTargetZ,
+        rotationX: schema.annotations.rotationX,
+        rotationY: schema.annotations.rotationY,
+        modelRotationY: schema.annotations.modelRotationY,
+      })
+      .from(schema.annotations)
+      .where(eq(schema.annotations.restroomId, id))
+      .all();
+
+    const writeAnnotations = annotations.map(({ id: annotationId, ...a }) => {
+      const next = reframeAnnotation(a, before, after);
+      return db
+        .update(schema.annotations)
+        .set({
+          pointX: next.pointX,
+          pointY: next.pointY,
+          pointZ: next.pointZ,
+          orbitPosX: next.orbitPosX,
+          orbitPosY: next.orbitPosY,
+          orbitPosZ: next.orbitPosZ,
+          orbitTargetX: next.orbitTargetX,
+          orbitTargetY: next.orbitTargetY,
+          orbitTargetZ: next.orbitTargetZ,
+          rotationX: next.rotationX,
+          rotationY: next.rotationY,
+        })
+        .where(eq(schema.annotations.id, annotationId));
+    });
+    moved = writeAnnotations.length;
+    // One batch, so the crop and its annotations change together or not at all.
+    await db.batch([writeCrop, ...writeAnnotations]);
+  } else {
+    await writeCrop;
   }
 
   await recordAdminAction(event, "restroom.crop", "restroom", id, {
     crop,
-    recenterDelta: moved ? recenterDelta : undefined,
+    ...(recentred
+      ? { centreBefore: body.centreBefore, centreAfter: body.centreAfter }
+      : {}),
+    ...(moved ? { annotationsMoved: moved } : {}),
   });
 
   return { ok: true, slug: row.slug };
