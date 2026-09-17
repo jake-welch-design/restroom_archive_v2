@@ -6,6 +6,13 @@
  *
  * `name` is an asset basename under public/guide/, as in GuideVideo, except
  * that stills are a single `.jpg`.
+ *
+ * The still opens at full size in a new tab when clicked. The sources are
+ * 1080px square shown in a 460px column, and at least one of them — the
+ * description example — is a screenshot whose point is text the reader has to
+ * actually read, which 460px leaves legible only just. The diagnostic stills
+ * benefit too: a blurred patch or a break in the mesh is worth looking at
+ * closely.
  */
 const props = defineProps<{
   /** Asset basename under public/guide/, e.g. "holes". */
@@ -13,11 +20,16 @@ const props = defineProps<{
   /** Caption, and the image's alt text. */
   label: string;
 }>();
+
+const src = computed(() => `/guide/${props.name}.jpg`);
 </script>
 
 <template>
   <figure class="guide-figure">
-    <img :src="`/guide/${props.name}.jpg`" :alt="props.label" loading="lazy" />
+    <!-- The alt text names the link, so it needs no separate label. -->
+    <a :href="src" target="_blank" rel="noopener" title="Open full size">
+      <img :src="src" :alt="props.label" loading="lazy" />
+    </a>
     <figcaption>{{ props.label }}</figcaption>
   </figure>
 </template>
@@ -25,6 +37,19 @@ const props = defineProps<{
 <style scoped>
 .guide-figure {
   margin: 0 0 0.9em;
+}
+
+/* The dialog underlines its links; this one is an image, so it shouldn't get a
+   rule under it. `block` also drops the inline descender gap under the img. */
+.guide-figure a {
+  display: block;
+  text-decoration: none;
+  cursor: zoom-in;
+}
+
+.guide-figure a:focus-visible {
+  outline: 2px solid #000;
+  outline-offset: 2px;
 }
 
 /* Matches GuideVideo: see the note there on why guide media is capped. */

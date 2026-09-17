@@ -111,7 +111,7 @@ function onKeydown(e: KeyboardEvent) {
     @keydown="onKeydown"
   >
     <div class="guide-head">
-      <h2 id="guide-title">Guide</h2>
+      <h2 id="guide-title">Submission Guide</h2>
       <button
         type="button"
         class="guide-close"
@@ -136,8 +136,9 @@ function onKeydown(e: KeyboardEvent) {
       <h3>{{ step.title }}</h3>
 
       <!-- Media is a <GuideVideo> or <GuideImage>, both taking an asset
-           basename under public/guide/ and a caption. Anything still to come is
-           a `guide-media-todo` box labelled with what belongs there. -->
+           basename under public/guide/ and a caption. Every slot is filled;
+           adding one means encoding the asset (scripts/encode-guide-media.sh)
+           and dropping the component into the step. -->
 
       <template v-if="step.id === 'app'">
         <p>
@@ -283,12 +284,7 @@ function onKeydown(e: KeyboardEvent) {
           also cause the scan to process at a tilted angle. It is encouraged to
           go in and crop and level your restroom models before exporting.
         </p>
-        <!-- Awaiting a clip. Drop crop.mp4/.webm/-poster.jpg into public/guide/
-             (see scripts/encode-guide-media.sh) and swap this for:
-             <GuideVideo name="crop" label="…" /> -->
-        <div class="guide-media-todo">
-          Video: cropping and levelling a scan before export
-        </div>
+        <GuideVideo name="crop" label="Cropping a scan" />
       </template>
 
       <template v-else-if="step.id === 'details'">
@@ -300,6 +296,10 @@ function onKeydown(e: KeyboardEvent) {
           restroom that ties it to the establishment or neighborhood? These
           details will be important during the submission process.
         </p>
+        <GuideImage
+          name="description-example"
+          label="Example of a description which provides excellent context to the scan"
+        />
       </template>
 
       <template v-else-if="step.id === 'export'">
@@ -490,21 +490,6 @@ function onKeydown(e: KeyboardEvent) {
 .guide-note {
   border-left: 3px solid #000;
   padding: 2px 0 2px 10px;
-}
-
-/* Stand-in for an image or video not yet added. Remove once none remain. */
-.guide-media-todo {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  aspect-ratio: 16 / 9;
-  margin: 0 0 0.9em;
-  border: 1px dashed #bbb;
-  background: #f7f7f7;
-  color: #999;
-  font-size: 12px;
-  text-align: center;
-  padding: 12px;
 }
 
 .guide-foot {

@@ -20,7 +20,7 @@ const open = ref(false);
     aria-haspopup="dialog"
     @click="open = true"
   >
-    Guide
+    Submission Guide
     <span class="guide-icon" aria-hidden="true">?</span>
     <Teleport to="body">
       <AccountArchivistGuideDialog :open="open" @close="open = false" />

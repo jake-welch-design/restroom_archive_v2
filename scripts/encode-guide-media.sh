@@ -59,12 +59,23 @@ encode "$SRC/Scan demo.mp4" scan-demo 28 36 720:720
 encode "$SRC/reprocess.mp4" reprocess 23 32
 encode "$SRC/download.mp4" download 23 32
 encode "$SRC/Upload.mp4" upload 23 32
+encode "$SRC/crop.mp4" crop 23 32
 
 # Stills are already well under 250KB at 1080 square and are displayed at 460,
 # so they are copied rather than re-encoded.
-for still in holes blur drift; do
-  cp "$SRC/$still.jpg" "$OUT/$still.jpg"
-done
+#
+# Taken as explicit source-to-name pairs rather than a loop over the guide
+# folder, because the description example was exported with a different set and
+# still lives there.
+still() {
+  [ -f "$1" ] || { echo "missing still: $1" >&2; exit 1; }
+  cp "$1" "$OUT/$2.jpg"
+}
+
+still "$SRC/holes.jpg" holes
+still "$SRC/blur.jpg" blur
+still "$SRC/drift.jpg" drift
+still "$HOME/Desktop/Projects/Personal/The Restroom Archive/Restroom Archive Instagram/2026-09-15/Artboard 1.jpg" description-example
 
 echo
 du -sh "$OUT"
