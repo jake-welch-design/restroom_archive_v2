@@ -112,7 +112,7 @@ function onKeydown(e: KeyboardEvent) {
     @keydown="onKeydown"
   >
     <div class="guide-head">
-      <h2 id="guide-title">Archivist Guide</h2>
+      <h2 id="guide-title">Guide</h2>
       <button
         type="button"
         class="guide-close"
@@ -133,7 +133,7 @@ function onKeydown(e: KeyboardEvent) {
     </div>
 
     <div ref="body" class="guide-body thin-scroll" role="tabpanel">
-      <p class="guide-step-count">Step {{ index + 1 }} of {{ STEPS.length }}</p>
+      <!-- <p class="guide-step-count">Step {{ index + 1 }} of {{ STEPS.length }}</p> -->
       <h3>{{ step.title }}</h3>
 
       <!-- 1. Download a 3D scanning app -->
