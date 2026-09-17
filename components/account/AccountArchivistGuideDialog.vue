@@ -22,12 +22,11 @@ type Step = { id: string; label: string; title: string };
 const STEPS: Step[] = [
   { id: "app", label: "App", title: "Download a 3D scanning app" },
   { id: "scan", label: "Scan", title: "Scan your restroom" },
-  { id: "process", label: "Process", title: "Process and optimize" },
-  { id: "crop", label: "Crop", title: "Crop and clean up the scan" },
+  { id: "process", label: "Processing", title: "Process and optimize" },
   { id: "details", label: "Details", title: "Take note of contextual details" },
   {
     id: "export",
-    label: "Export",
+    label: "Download",
     title: "Open on desktop and save as .GLB/.GLTF",
   },
   {
@@ -136,39 +135,199 @@ function onKeydown(e: KeyboardEvent) {
       <!-- <p class="guide-step-count">Step {{ index + 1 }} of {{ STEPS.length }}</p> -->
       <h3>{{ step.title }}</h3>
 
-      <!-- 1. Download a 3D scanning app -->
+      <!-- Media is a <GuideVideo> or <GuideImage>, both taking an asset
+           basename under public/guide/ and a caption. Anything still to come is
+           a `guide-media-todo` box labelled with what belongs there. -->
+
       <template v-if="step.id === 'app'">
-        <p class="guide-placeholder">Content coming soon.</p>
+        <p>
+          Download a 3D scanning app to your mobile device.
+          <a href="https://poly.cam/" target="_blank" rel="noopener">Polycam</a>
+          or
+          <a href="https://scaniverse.com/" target="_blank" rel="noopener"
+            >Scaniverse</a
+          >
+          are two great options. Jake uses Polycam because of its ease of use
+          and advanced processing tools.
+        </p>
+        <p class="guide-note">
+          <strong>Note:</strong> Everything you need to scan, edit, and submit a
+          restroom to The Restroom Archive is available on Polycam’s free tier
+          without a paid subscription.
+        </p>
       </template>
 
-      <!-- 2. Scan your restroom -->
       <template v-else-if="step.id === 'scan'">
-        <p class="guide-placeholder">Content coming soon.</p>
+        <h4>LiDAR vs. photogrammetry</h4>
+        <p>
+          To produce scans for The Restroom Archive, 3D scanning apps typically
+          use two methods: LiDAR and photogrammetry.
+        </p>
+        <p>
+          LiDAR, or light detection and ranging, uses laser sensors and your
+          phone camera to measure distances and build a textured mesh. iPhone
+          Pro/Max models from 12 onward, as well as select Android devices, have
+          LiDAR sensors.
+        </p>
+        <p>
+          Photogrammetry works by taking multiple overlapping photographs of a
+          space from different angles and stitching them together to form an
+          approximate mesh. While photogrammetry is less accurate than LiDAR, it
+          is still a viable method for those who can’t use LiDAR on their
+          device.
+        </p>
+        <ul>
+          <li>
+            Click
+            <a
+              href="https://learn.poly.cam/hc/en-us/articles/36655587097620-How-to-Use-Space-Mode-with-LiDAR-enabled-devices#h_01K3P12AHC1PG459TBPJN6H7Y9"
+              target="_blank"
+              rel="noopener"
+              >here</a
+            >
+            to learn more on how to scan with LiDAR
+          </li>
+          <li>
+            Click
+            <a
+              href="https://learn.poly.cam/hc/en-us/articles/43933482446996-How-to-Use-Space-Mode-Non-LiDAR-Devices#h_05_scanning"
+              target="_blank"
+              rel="noopener"
+              >here</a
+            >
+            to learn more on how to scan with photogrammetry
+          </li>
+        </ul>
+
+        <h4>Scanning techniques</h4>
+        <p>
+          While techniques may vary depending on the method you choose to make a
+          scan, it is generally recommended to start towards the bottom in an
+          empty corner, and then slowly and methodically move around the room in
+          one direction, from bottom to top, stopping to capture all angles of
+          every object in the space, until you reach the top.
+        </p>
+        <p>
+          Be sure to capture the floor and ceiling and avoid crossing over the
+          same spot too many times. If using LiDAR, the lasers will bounce off
+          of reflective surfaces such as mirrors or stainless steel trashcans or
+          appliances. Spend a bit of time on more matte, reflective surfaces to
+          capture them at a steeper angle if you can—but it is expected that
+          these will create holes and artifacts—that’s okay.
+        </p>
+        <GuideVideo
+          name="scan-demo"
+          label="Working around a restroom in Polycam’s space mode, bottom to top."
+        />
+
+        <h4>Common issues</h4>
+        <p>
+          The most common scanning issues Archivists encounter are large holes,
+          blurry patches, and scanning drift. If these are too severe or distort
+          important elements beyond recognition, the scan will likely be
+          rejected from being added to the Archive.
+        </p>
+        <p>
+          Large holes and blurry spots most often occur when an area is missed
+          during the scanning process. Occasionally, even if a surface seemed to
+          be well-captured, these gaps will appear if the surface is busy and
+          complicated (like walls covered with heavy graffiti) or if there was
+          low lighting in the space. Blurry patches occur where there were
+          smaller holes, and the 3D scanning software filled the gap during
+          processing, approximating the missed texture.
+        </p>
+        <GuideImage
+          name="holes"
+          label="Large holes: a surface the scan never captured, left open in the mesh."
+        />
+        <GuideImage
+          name="blur"
+          label="Blurry patches: a small hole the app filled in, guessing at the texture."
+        />
+        <p>
+          Scanning drift is when parts of the mesh don’t line up, causing
+          artifacts such as duplicate objects and breaks in what are obviously
+          straight lines. This most commonly happens when moving too fast or
+          when going over the same portion of the space too many times.
+        </p>
+        <GuideImage
+          name="drift"
+          label="Scanning drift: the mesh has slipped, duplicating objects and breaking straight lines."
+        />
+        <p>
+          All of these issues can be prevented by following the scanning
+          techniques as outlined above. They do, however, still occur no matter
+          what. Artifacts are expected, so if you think the scan is still high
+          enough quality where it matters (toilets, sinks, etc.), you are
+          encouraged to still submit.
+        </p>
+
+        <h4>Rescuing a scan</h4>
+        <p>
+          If your scan came out with some of the above issues, it might not be
+          beyond saving. Many 3D scanning apps offer reprocessing tools. In
+          Polycam, you can reprocess using Dense mode, Custom, and Cloud. Try
+          experimenting with all three, adjusting settings as you go.
+          Oftentimes, holes will fill, and scanning drift will resolve itself.
+        </p>
+        <GuideVideo
+          name="reprocess"
+          label="Finding the reprocessing settings: Advanced → Reprocess scan, then Dense, Custom or Cloud."
+        />
       </template>
 
-      <!-- 3. Process and optimize -->
       <template v-else-if="step.id === 'process'">
-        <p class="guide-placeholder">Content coming soon.</p>
+        <p>
+          After scanning, there are likely to still be artifacts caused by
+          reflective surfaces, as mentioned earlier. Sometimes an error might
+          also cause the scan to process at a tilted angle. It is encouraged to
+          go in and crop and level your restroom models before exporting.
+        </p>
+        <!-- Awaiting a clip. Drop crop.mp4/.webm/-poster.jpg into public/guide/
+             (see scripts/encode-guide-media.sh) and swap this for:
+             <GuideVideo name="crop" label="…" /> -->
+        <div class="guide-media-todo">
+          Video: cropping and levelling a scan before export
+        </div>
       </template>
 
-      <!-- 4. Crop and clean up the scan -->
-      <template v-else-if="step.id === 'crop'">
-        <p class="guide-placeholder">Content coming soon.</p>
-      </template>
-
-      <!-- 5. Take note of contextual details -->
       <template v-else-if="step.id === 'details'">
-        <p class="guide-placeholder">Content coming soon.</p>
+        <p>
+          As an Archivist, it’s important to not only capture the space, but to
+          provide valuable context. Take note while you’re in the space of any
+          peculiarities. How does someone access the restroom? Was the door
+          outside labeled anything unusual? Is there any storytelling in the
+          restroom that ties it to the establishment or neighborhood? These
+          details will be important during the submission process.
+        </p>
       </template>
 
-      <!-- 6. Open on desktop and save as .GLB/.GLTF -->
       <template v-else-if="step.id === 'export'">
-        <p class="guide-placeholder">Content coming soon.</p>
+        <p>
+          Once you’re ready to submit, download the model as a .GLB/.GLTF file.
+          This format is important as it saves the 3D mesh together with its
+          texture and is relatively small in file size. Note that the max file
+          size to upload is 25MB, so if your scan is larger, it is recommended
+          that you compress it beforehand.
+        </p>
+        <GuideVideo
+          name="download"
+          label="Exporting from Polycam on desktop: choose GLTF under Mesh, then Export."
+        />
       </template>
 
-      <!-- 7. Upload and complete your submission -->
       <template v-else-if="step.id === 'upload'">
-        <p class="guide-placeholder">Content coming soon.</p>
+        <p>
+          Find your exported file and upload it to the site. Follow the
+          submission process and be sure to check the tool tips along the way if
+          you need any extra guidance. Write a detailed description using any
+          notes you gathered earlier and submit. Once approved, your restroom
+          will now be part of The Restroom Archive!
+        </p>
+        <GuideVideo
+          name="upload"
+          label="The submission wizard end to end: scan, details, description, review."
+        />
       </template>
     </div>
 
@@ -319,7 +478,8 @@ function onKeydown(e: KeyboardEvent) {
   text-decoration: underline;
 }
 
-.guide-body img {
+.guide-body img,
+.guide-body video {
   display: block;
   max-width: 100%;
   height: auto;
@@ -327,8 +487,24 @@ function onKeydown(e: KeyboardEvent) {
   border: 1px solid #ddd;
 }
 
-.guide-placeholder {
+.guide-note {
+  border-left: 3px solid #000;
+  padding: 2px 0 2px 10px;
+}
+
+/* Stand-in for an image or video not yet added. Remove once none remain. */
+.guide-media-todo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 16 / 9;
+  margin: 0 0 0.9em;
+  border: 1px dashed #bbb;
+  background: #f7f7f7;
   color: #999;
+  font-size: 12px;
+  text-align: center;
+  padding: 12px;
 }
 
 .guide-foot {
