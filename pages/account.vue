@@ -494,7 +494,9 @@ function setAdminSection(value: string) {
         v-if="primarySubTabs.length"
         v-model="primarySelection"
         :tabs="primarySubTabs"
-      />
+      >
+        <AccountArchivistGuide v-if="accountTab === 'submissions'" />
+      </AccountSubTabs>
 
       <!-- The Admin tab's second row: the sections inside the chosen group.
            Absent for a group that is a single list, so the row never appears

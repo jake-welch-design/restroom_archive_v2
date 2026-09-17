@@ -49,6 +49,9 @@ defineEmits<{ (e: "update:modelValue", id: string): void }>();
         <span v-if="t.count" class="count">{{ t.count }}</span>
       </button>
     </template>
+    <!-- Trailing controls that are not tabs, such as a help button. Given the
+         `subtab-btn` class they take the same look, set a gap apart. -->
+    <slot />
   </nav>
 </template>
 
@@ -60,7 +63,8 @@ defineEmits<{ (e: "update:modelValue", id: string): void }>();
   flex-wrap: wrap;
   margin-bottom: 15px;
 }
-.subtab-btn {
+.subtab-btn,
+:slotted(.subtab-btn) {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -80,10 +84,16 @@ defineEmits<{ (e: "update:modelValue", id: string): void }>();
 .subtab-btn.gap-before {
   margin-left: 11px;
 }
+/* A slotted control is not part of the segmented block, so it always stands
+   apart, including on a phone where `gap-before` gives way to a line break. */
+:slotted(.subtab-btn) {
+  margin: 0 0 -1px 11px;
+}
 .row-break {
   display: none;
 }
-.subtab-btn:hover:not(.active) {
+.subtab-btn:hover:not(.active),
+:slotted(.subtab-btn:hover) {
   background: #f4f4f4;
   color: #000;
 }
@@ -148,7 +158,8 @@ defineEmits<{ (e: "update:modelValue", id: string): void }>();
 
 /* Same panel-width step as the account page these sit in. */
 @container panel (max-width: 560px) {
-  .subtab-btn {
+  .subtab-btn,
+  :slotted(.subtab-btn) {
     padding: 5px 10px;
   }
   .is-plain .subtab-btn {
