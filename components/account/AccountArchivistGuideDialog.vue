@@ -217,7 +217,7 @@ function onKeydown(e: KeyboardEvent) {
         </p>
         <GuideVideo
           name="scan-demo"
-          label="Working around a restroom in Polycam’s space mode, bottom to top."
+          label="Demo of scanning a restroom from all angles from bottom to top"
         />
 
         <h4>Common issues</h4>
@@ -238,11 +238,11 @@ function onKeydown(e: KeyboardEvent) {
         </p>
         <GuideImage
           name="holes"
-          label="Large holes: a surface the scan never captured, left open in the mesh."
+          label="Example of scan missing important details"
         />
         <GuideImage
           name="blur"
-          label="Blurry patches: a small hole the app filled in, guessing at the texture."
+          label="Example of scan with holes, blurry patches, and surface drift"
         />
         <p>
           Scanning drift is when parts of the mesh don’t line up, causing
@@ -252,7 +252,7 @@ function onKeydown(e: KeyboardEvent) {
         </p>
         <GuideImage
           name="drift"
-          label="Scanning drift: the mesh has slipped, duplicating objects and breaking straight lines."
+          label="Example of Scanning drift, note the paper towel dispnser, trashcan, and door."
         />
         <p>
           All of these issues can be prevented by following the scanning
@@ -272,7 +272,7 @@ function onKeydown(e: KeyboardEvent) {
         </p>
         <GuideVideo
           name="reprocess"
-          label="Finding the reprocessing settings: Advanced → Reprocess scan, then Dense, Custom or Cloud."
+          label="Example of using Polycam's reprocessing settings"
         />
       </template>
 

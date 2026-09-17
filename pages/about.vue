@@ -47,6 +47,13 @@ const statsSentence = computed(() => {
 // looking for it.
 const legalOpen = ref(false);
 
+// The same walkthrough the account page opens, reached from here as well: this
+// is where somebody who isn't an Archivist yet is reading about becoming one,
+// and the guide answers "what am I signing up for" before the account does.
+// Opened straight from this page rather than linked to /account, which would
+// land them on a sign-in form instead of the thing they asked to see.
+const guideOpen = ref(false);
+
 // Support links. There is deliberately no amount field here: these are Stripe
 // Payment Links, which take no amount from the URL, so a field on this page
 // could not carry a value through to the checkout. The donor picks the amount
@@ -122,40 +129,22 @@ async function submitContact() {
       </section>
 
       <section>
-        <h1>How to scan a restroom</h1>
+        <h1>Become an Archivist</h1>
         <p>
-          Most of the Archive was scanned using
-          <a
-            href="https://apps.apple.com/us/app/polycam-3d-scans-floor-plans/id1532482376"
-            >Polycam for iPhone</a
-          >, but any mobile 3D scanning app should work. iPhone Pro models
-          support LiDAR scanning, which is recommended, but if you don't have
-          access to LiDAR, high-quality scans are possible using photogrammetry.
+          Create an account and request submission access to contribute to the
+          Archive.
         </p>
-        <ul>
-          <li>
-            Click
-            <a
-              href="https://learn.poly.cam/hc/en-us/articles/36655587097620-How-to-Use-Space-Mode-with-LiDAR-enabled-devices#h_01K3P12AHC1PG459TBPJN6H7Y9"
-              >here</a
-            >
-            to learn how to scan with LiDAR
-          </li>
-          <li>
-            Click
-            <a
-              href="https://learn.poly.cam/hc/en-us/articles/43933482446996-How-to-Use-Space-Mode-Non-LiDAR-Devices#h_05_scanning"
-              >here</a
-            >
-            to learn how to scan with photogrammetry
-          </li>
-        </ul>
-        <p>
-          Once scanned, download the model as a .GLB/.GLTF file; Polycam allows
-          users to scan and export in this format on their free tier without a
-          subscription. To become an Archivist, please sign up for an account
-          and request submission access on the Account page.
-        </p>
+        <!-- Label and `?` as in AccountArchivistGuide, so the two entry points
+             to the same walkthrough are recognisably the same button. -->
+        <button
+          type="button"
+          class="primary-btn guide-btn"
+          aria-haspopup="dialog"
+          @click="guideOpen = true"
+        >
+          Submission Guide
+          <span class="guide-icon" aria-hidden="true">?</span>
+        </button>
         <p>
           <a href="#" @click.prevent="legalOpen = true"
             >Click here to view the full terms</a
@@ -266,7 +255,7 @@ async function submitContact() {
 
       <footer class="about-footer">
         <p>© 2026 Jake Welch</p>
-        <p>• </p>
+        <p>•</p>
         <p class="dim">
           <a href="#" @click.prevent="legalOpen = true">Privacy and Terms</a>
         </p>
@@ -274,6 +263,7 @@ async function submitContact() {
     </article>
 
     <LegalDialog :open="legalOpen" @close="legalOpen = false" />
+    <AccountArchivistGuideDialog :open="guideOpen" @close="guideOpen = false" />
   </div>
 </template>
 
@@ -350,6 +340,30 @@ async function submitContact() {
 
 .about-content section:last-of-type p:last-child {
   margin-bottom: 0;
+}
+
+/* Carries the paragraph's bottom margin so the button sits in the same rhythm
+   as the prose it stands between, rather than crowding the line under it. */
+.guide-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 1.2em;
+  font-size: 14px;
+}
+
+/* InfoTooltip's circle, in the colour of the button text around it -- as in
+   AccountArchivistGuide, whose button this one echoes. */
+.guide-icon {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  line-height: 1;
 }
 
 /* Contact */

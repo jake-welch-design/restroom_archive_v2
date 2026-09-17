@@ -304,9 +304,10 @@ onBeforeUnmount(() => {
       @pointercancel="onPointerUp"
       @keydown="onKeydown"
     >
-      <div class="gv-fill" :style="{ width: `${progress * 100}%` }">
-        <span class="gv-handle" />
-      </div>
+      <!-- The fill's leading edge is the playhead; there is no separate handle
+           to draw, since the bar is the full width of the video and the join
+           between black and white already says where you are. -->
+      <div class="gv-fill" :style="{ width: `${progress * 100}%` }" />
     </div>
 
     <figcaption>{{ props.label }}</figcaption>
@@ -361,40 +362,32 @@ onBeforeUnmount(() => {
   filter: drop-shadow(0 0 3px rgb(0 0 0 / 0.5));
 }
 
-/* Generous padding, no visible height of its own: a 3px bar is an awkward drag
-   target, especially by thumb, so the hit area is the padding and the bar is
-   what it draws. */
+/* An outlined bar butted to the foot of the video, the same width as it:
+   unplayed is white inside, played is solid black, and nothing else.
+
+   Deliberately NOT `box-sizing: border-box`. There is no global border-box
+   reset, so the video is content-box — `width: 100%` plus a 1px border. The
+   track has to use the same box model for the two to come out the same width
+   on screen; switching just this element would make it 2px narrower.
+
+   `position: relative` is what keeps the seam a single line. `.gv-frame` is
+   positioned, so it paints above static siblings and its grey video border
+   would otherwise show through the 1px overlap; positioning the track too puts
+   both in the same paint step, where the later one in the tree wins. */
 .gv-track {
+  position: relative;
   width: 100%;
   max-width: 460px;
-  margin: 0 auto;
-  padding: 9px 0;
+  height: 10px; /* 12px on screen, with the borders */
+  margin: -1px auto 0; /* sit on the video's bottom border, not below it */
+  border: 1px solid #000;
+  background: #fff;
   cursor: pointer;
   touch-action: none; /* or a horizontal drag scrolls the step instead */
 }
 
-.gv-track::before {
-  content: "";
-  display: block;
-  height: 3px;
-  background: #e4e4e4;
-}
-
 .gv-fill {
-  position: relative;
-  height: 3px;
-  margin-top: -3px;
-  background: #000;
-}
-
-.gv-handle {
-  position: absolute;
-  top: 50%;
-  right: 0;
-  width: 9px;
-  height: 9px;
-  transform: translate(50%, -50%);
-  border-radius: 50%;
+  height: 100%;
   background: #000;
 }
 
@@ -403,9 +396,11 @@ onBeforeUnmount(() => {
   outline-offset: 2px;
 }
 
+/* Clear of the bar rather than tucked under it: the bar now has an edge of its
+   own, and 2px against it read as part of the control. */
 .guide-video figcaption {
   max-width: 460px;
-  margin: 2px auto 0;
+  margin: 7px auto 0;
   font-size: 12px;
   line-height: 1.4;
   color: #666;
