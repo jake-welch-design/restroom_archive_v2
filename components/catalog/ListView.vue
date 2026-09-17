@@ -79,7 +79,7 @@ async function scrollToSelected(slug: string | null | undefined) {
   if (!slug || !tbodyRef.value) return;
   await nextTick();
   const el = tbodyRef.value.querySelector<HTMLElement>(`[data-slug="${slug}"]`);
-  el?.scrollIntoView({ block: "start", behavior: "smooth" });
+  if (el) scrollRowIntoView(tbodyRef.value, el);
 }
 
 watch(() => props.selectedSlug, scrollToSelected);

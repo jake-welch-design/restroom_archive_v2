@@ -52,7 +52,16 @@ export default defineNuxtConfig({
         ].join("; "),
       },
     },
-    "/": { swr: 60 },
+    // No shared cache on `/`. What the homepage renders depends on the visitor:
+    // the `viewMode` cookie picks list/grid/map, and the session decides whether
+    // the header offers Login or Account. Cached, every visitor got the first
+    // render — list, logged out — and a grid user's client then hydrated grid
+    // markup onto list markup. Vue patched what it could and left the leftovers
+    // loose in the panel, whose extra height let `scrollIntoView` scroll the
+    // whole panel and carry the header and view controls off the top of the
+    // screen. The response also re-sent that render's `Set-Cookie: viewMode=list`
+    // to everyone, quietly overwriting the preference it was meant to remember.
+    "/": { ssr: true },
     "/r/**": { ssr: true },
     "/about": { ssr: true },
     "/account": { ssr: true },

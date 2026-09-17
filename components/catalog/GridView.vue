@@ -37,7 +37,7 @@ async function scrollToSelected(slug: string | null | undefined) {
   const el = gridWrapRef.value.querySelector<HTMLElement>(
     `[data-slug="${slug}"]`,
   );
-  el?.scrollIntoView({ block: "start", behavior: "smooth" });
+  if (el) scrollRowIntoView(gridWrapRef.value, el);
 }
 
 watch(() => props.selectedSlug, scrollToSelected);
@@ -46,9 +46,18 @@ onMounted(() => scrollToSelected(props.selectedSlug));
 /**
  * An unselected tile is a real `<a href="/r/:slug">` so the grid links the
  * pages it lists; without it every entry is an orphan only the sitemap knows
- * about. The selected tile stays a `<button>` because its expanded state nests
- * its own buttons (descriptor chips, annotations), which may not live inside an
- * anchor — and a link to the entry already open is worth nothing anyway.
+ * about. The selected tile is a plain `<div>`: a link to the entry already open
+ * is worth nothing, and its expanded state nests its own buttons (descriptor
+ * chips, the annotations toggle and its delete buttons), which may live inside
+ * neither an anchor nor a button.
+ *
+ * It was a `<button>`, and a nested button is worse than merely invalid: the
+ * HTML parser ends the outer one where the inner one starts, so the browser
+ * built a tree the server never rendered — the rest of the tile, and every tile
+ * after it, hoisted out of the grid, some of it clear out of the panel. Vue
+ * then hydrated against that tree, and the leftovers stayed behind as loose
+ * full-width tiles below the catalog, tall enough to scroll the panel's own
+ * header and view controls off the top of the screen.
  *
  * Selection still happens here, so a plain click must not let the browser
  * navigate on top of it. Modified clicks are left alone: cmd/middle-click opens
@@ -66,15 +75,11 @@ function onTileClick(slug: string, e: MouseEvent) {
   <div ref="gridWrapRef" class="grid-wrap thin-scroll">
     <div class="grid">
       <component
-        :is="r.slug === selectedSlug ? 'button' : 'a'"
+        :is="r.slug === selectedSlug ? 'div' : 'a'"
         v-for="r in rows"
         :key="r.id"
         :data-slug="r.slug"
-        v-bind="
-          r.slug === selectedSlug
-            ? { type: 'button' }
-            : { href: `/r/${r.slug}` }
-        "
+        :href="r.slug === selectedSlug ? undefined : `/r/${r.slug}`"
         class="tile"
         :class="{ selected: r.slug === selectedSlug }"
         @click="onTileClick(r.slug, $event)"
@@ -161,9 +166,8 @@ function onTileClick(slug: string, e: MouseEvent) {
     gap: 8px;
   }
 }
-/* Shared by both tile elements: the <button> the selected tile renders as, and
-   the <a> every other tile renders as. The link inherits so it reads exactly as
-   the button it replaced. */
+/* Shared by both tile elements: the <div> the selected tile renders as, and the
+   <a> every other tile renders as, so the two read as one grid. */
 .tile {
   background: transparent;
   border: 0;
@@ -173,9 +177,6 @@ function onTileClick(slug: string, e: MouseEvent) {
   display: block;
   color: inherit;
   text-decoration: none;
-  /* A <button> takes the UA's own font rather than inheriting, an <a> inherits.
-     Without this the selected tile and the rest would disagree on font family in
-     browsers whose button font isn't Arial. Both now take `.grid-wrap`'s. */
   font: inherit;
 }
 .tile:hover:not(.selected) .thumb img,
