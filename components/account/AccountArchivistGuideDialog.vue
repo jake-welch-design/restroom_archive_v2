@@ -27,7 +27,7 @@ const STEPS: Step[] = [
   {
     id: "export",
     label: "Download",
-    title: "Open on desktop and save as .GLB/.GLTF",
+    title: "Export as .GLB/.GLTF",
   },
   {
     id: "upload",
@@ -143,18 +143,16 @@ function onKeydown(e: KeyboardEvent) {
       <template v-if="step.id === 'app'">
         <p>
           Download a 3D scanning app to your mobile device.
-          <a href="https://poly.cam/" target="_blank" rel="noopener">Polycam</a>
-          or
           <a href="https://scaniverse.com/" target="_blank" rel="noopener"
             >Scaniverse</a
           >
-          are two great options. Jake uses Polycam because of its ease of use
-          and advanced processing tools.
+          is a great option. While Jake previously used Polycam, he now finds
+          Scaniverse to be the most reliable at rendering complete restroom
+          models without significant holes or drift, and it’s totally free!
         </p>
-        <p class="guide-note">
-          <strong>Note:</strong> Everything you need to scan, edit, and submit a
-          restroom to The Restroom Archive is available on Polycam’s free tier
-          without a paid subscription.
+        <p>
+          For scanning a restroom, open Scaniverse and select:
+          <strong>+ → Mesh → Large Object / Area</strong>. Then begin scanning!
         </p>
       </template>
 
@@ -177,28 +175,16 @@ function onKeydown(e: KeyboardEvent) {
           is still a viable method for those who can’t use LiDAR on their
           device.
         </p>
-        <ul>
-          <li>
-            Click
-            <a
-              href="https://learn.poly.cam/hc/en-us/articles/36655587097620-How-to-Use-Space-Mode-with-LiDAR-enabled-devices#h_01K3P12AHC1PG459TBPJN6H7Y9"
-              target="_blank"
-              rel="noopener"
-              >here</a
-            >
-            to learn more on how to scan with LiDAR
-          </li>
-          <li>
-            Click
-            <a
-              href="https://learn.poly.cam/hc/en-us/articles/43933482446996-How-to-Use-Space-Mode-Non-LiDAR-Devices#h_05_scanning"
-              target="_blank"
-              rel="noopener"
-              >here</a
-            >
-            to learn more on how to scan with photogrammetry
-          </li>
-        </ul>
+        <p>
+          Click
+          <a
+            href="https://dev.scaniverse.com/support"
+            target="_blank"
+            rel="noopener"
+            >here</a
+          >
+          to read more tips on scanning techniques.
+        </p>
 
         <h4>Scanning techniques</h4>
         <p>
@@ -222,6 +208,11 @@ function onKeydown(e: KeyboardEvent) {
         />
 
         <h4>Common issues</h4>
+        <p class="guide-note">
+          <strong>Note:</strong> Since switching to Scaniverse, Jake has
+          encountered these issues much less frequently than when he was using
+          Polycam.
+        </p>
         <p>
           The most common scanning issues Archivists encounter are large holes,
           blurry patches, and scanning drift. If these are too severe or distort
@@ -253,7 +244,7 @@ function onKeydown(e: KeyboardEvent) {
         </p>
         <GuideImage
           name="drift"
-          label="Example of Scanning drift, note the paper towel dispnser, trashcan, and door."
+          label="Example of Scanning drift, note the paper towel dispenser, trashcan, and door."
         />
         <p>
           All of these issues can be prevented by following the scanning
@@ -267,9 +258,10 @@ function onKeydown(e: KeyboardEvent) {
         <p>
           If your scan came out with some of the above issues, it might not be
           beyond saving. Many 3D scanning apps offer reprocessing tools. In
-          Polycam, you can reprocess using Dense mode, Custom, and Cloud. Try
-          experimenting with all three, adjusting settings as you go.
-          Oftentimes, holes will fill, and scanning drift will resolve itself.
+          Polycam, for example, you can reprocess using Dense mode, Custom, and
+          Cloud. Try experimenting with your app’s options, adjusting settings
+          as you go. Oftentimes, holes will fill, and scanning drift will
+          resolve itself.
         </p>
         <GuideVideo
           name="reprocess"
