@@ -42,24 +42,26 @@ encode() {
   [ -n "$scale" ] && vf=(-vf "scale=$scale")
 
   echo "→ $name"
-  ffmpeg -y -v error -i "$in" -an -r 30 "${vf[@]}" \
+  ffmpeg -y -v error -i "$in" -an -r 30 ${vf[@]+"${vf[@]}"} \
     -c:v libx264 -crf "$crf" -preset slow -pix_fmt yuv420p \
     -movflags +faststart "$OUT/$name.mp4"
 
-  ffmpeg -y -v error -i "$in" -an -r 30 "${vf[@]}" \
+  ffmpeg -y -v error -i "$in" -an -r 30 ${vf[@]+"${vf[@]}"} \
     -c:v libvpx-vp9 -crf "$vp9crf" -b:v 0 -row-mt 1 -pix_fmt yuv420p \
     "$OUT/$name.webm"
 
   # First frame, for a refused autoplay and for reduced-motion readers.
-  ffmpeg -y -v error -ss 0 -i "$in" -frames:v 1 "${vf[@]}" -q:v 4 \
+  ffmpeg -y -v error -ss 0 -i "$in" -frames:v 1 ${vf[@]+"${vf[@]}"} -q:v 4 \
     "$OUT/$name-poster.jpg"
 }
 
-encode "$SRC/Scan demo.mp4" scan-demo 28 36 720:720
+# The 2.0 folder holds the re-recordings from 2026-09-22; the rest are still the
+# originals.
+encode "$SRC/2.0/scanning.mp4" scan-demo 28 36 720:720
 encode "$SRC/reprocess.mp4" reprocess 23 32
-encode "$SRC/download.mp4" download 23 32
+encode "$SRC/2.0/exporting.mp4" download 23 32
 encode "$SRC/Upload.mp4" upload 23 32
-encode "$SRC/crop.mp4" crop 23 32
+encode "$SRC/2.0/Cropping.mp4" crop 23 32
 
 # Stills are already well under 250KB at 1080 square and are displayed at 460,
 # so they are copied rather than re-encoded.

@@ -146,46 +146,11 @@ function onKeydown(e: KeyboardEvent) {
           <a href="https://scaniverse.com/" target="_blank" rel="noopener"
             >Scaniverse</a
           >
-          is a great option. While Jake previously used Polycam, he now finds
-          Scaniverse to be the most reliable at rendering complete restroom
-          models without significant holes or drift, and it’s totally free!
-        </p>
-        <p>
-          For scanning a restroom, open Scaniverse and select:
-          <strong>+ → Mesh → Large Object / Area</strong>. Then begin scanning!
+          is the current recommended option.
         </p>
       </template>
 
       <template v-else-if="step.id === 'scan'">
-        <h4>LiDAR vs. photogrammetry</h4>
-        <p>
-          To produce scans for The Restroom Archive, 3D scanning apps typically
-          use two methods: LiDAR and photogrammetry.
-        </p>
-        <p>
-          LiDAR, or light detection and ranging, uses laser sensors and your
-          phone camera to measure distances and build a textured mesh. iPhone
-          Pro/Max models from 12 onward, as well as select Android devices, have
-          LiDAR sensors.
-        </p>
-        <p>
-          Photogrammetry works by taking multiple overlapping photographs of a
-          space from different angles and stitching them together to form an
-          approximate mesh. While photogrammetry is less accurate than LiDAR, it
-          is still a viable method for those who can’t use LiDAR on their
-          device.
-        </p>
-        <p>
-          Click
-          <a
-            href="https://dev.scaniverse.com/support"
-            target="_blank"
-            rel="noopener"
-            >here</a
-          >
-          to read more tips on scanning techniques.
-        </p>
-
         <h4>Scanning techniques</h4>
         <p>
           While techniques may vary depending on the method you choose to make a
@@ -196,11 +161,12 @@ function onKeydown(e: KeyboardEvent) {
         </p>
         <p>
           Be sure to capture the floor and ceiling and avoid crossing over the
-          same spot too many times. If using LiDAR, the lasers will bounce off
-          of reflective surfaces such as mirrors or stainless steel trashcans or
-          appliances. Spend a bit of time on more matte, reflective surfaces to
-          capture them at a steeper angle if you can—but it is expected that
-          these will create holes and artifacts—that’s okay.
+          same spot too many times which might cause drift. If using LiDAR, the
+          lasers will bounce off of reflective surfaces such as mirrors or
+          stainless steel trashcans or appliances. Spend a bit of time on these
+          if they're slightly matte and can be captured at a steeper angle, but
+          otherwise, it is expected that these will create holes and artifacts
+          and that’s okay.
         </p>
         <GuideVideo
           name="scan-demo"
@@ -211,7 +177,7 @@ function onKeydown(e: KeyboardEvent) {
         <p class="guide-note">
           <strong>Note:</strong> Since switching to Scaniverse, Jake has
           encountered these issues much less frequently than when he was using
-          Polycam.
+          Polycam. Consider making the change if you haven't already.
         </p>
         <p>
           The most common scanning issues Archivists encounter are large holes,
@@ -254,19 +220,34 @@ function onKeydown(e: KeyboardEvent) {
           encouraged to still submit.
         </p>
 
-        <h4>Rescuing a scan</h4>
+        <h4>LiDAR vs. photogrammetry</h4>
         <p>
-          If your scan came out with some of the above issues, it might not be
-          beyond saving. Many 3D scanning apps offer reprocessing tools. In
-          Polycam, for example, you can reprocess using Dense mode, Custom, and
-          Cloud. Try experimenting with your app’s options, adjusting settings
-          as you go. Oftentimes, holes will fill, and scanning drift will
-          resolve itself.
+          To produce scans for The Restroom Archive, 3D scanning apps typically
+          use two methods: LiDAR and photogrammetry.
         </p>
-        <GuideVideo
-          name="reprocess"
-          label="Example of using Polycam's reprocessing settings"
-        />
+        <p>
+          LiDAR, or light detection and ranging, uses laser sensors and your
+          phone camera to measure distances and build a textured mesh. iPhone
+          Pro/Max models from 12 onward, as well as select Android devices, have
+          LiDAR sensors.
+        </p>
+        <p>
+          Photogrammetry works by taking multiple overlapping photographs of a
+          space from different angles and stitching them together to form an
+          approximate mesh. While photogrammetry is less accurate than LiDAR, it
+          is still a viable method for those who can’t use LiDAR on their
+          device.
+        </p>
+        <p>
+          Click
+          <a
+            href="https://dev.scaniverse.com/support"
+            target="_blank"
+            rel="noopener"
+            >here</a
+          >
+          to read more tips on scanning techniques.
+        </p>
       </template>
 
       <template v-else-if="step.id === 'process'">
@@ -274,7 +255,7 @@ function onKeydown(e: KeyboardEvent) {
           After scanning, there are likely to still be artifacts caused by
           reflective surfaces, as mentioned earlier. Sometimes an error might
           also cause the scan to process at a tilted angle. It is encouraged to
-          go in and crop and level your restroom models before exporting.
+          crop and level your restroom models before exporting.
         </p>
         <GuideVideo name="crop" label="Cropping a scan" />
       </template>
@@ -296,11 +277,11 @@ function onKeydown(e: KeyboardEvent) {
 
       <template v-else-if="step.id === 'export'">
         <p>
-          Once you’re ready to submit, download the model as a .GLB/.GLTF file.
-          This format is important as it saves the 3D mesh together with its
-          texture and is relatively small in file size. Note that the max file
-          size to upload is 25MB, so if your scan is larger, it is recommended
-          that you compress it beforehand.
+          Once you’re ready to submit, download the model as a .GLB or .GLTF
+          file. This format is important as it saves the 3D mesh together with
+          its texture and is relatively small in file size. Note that the max
+          file size to upload is 25MB, so if your scan is larger, it is
+          recommended that you compress it beforehand.
         </p>
         <GuideVideo
           name="download"
