@@ -6,6 +6,12 @@ import {
   MAX_GLB_MB,
   formatFileSize,
 } from "~~/shared/utils/uploadLimits";
+import {
+  COUNTRIES,
+  composeLocation,
+  countryName,
+  subdivisionsFor,
+} from "~~/shared/utils/regions";
 const emit = defineEmits<{ submitted: [] }>();
 
 const { isAdmin } = useAuth();
@@ -23,7 +29,13 @@ const steps = [
 ];
 
 const uploadName = ref("");
-const uploadLocation = ref("");
+// City is typed; country and subdivision are picked. The `location` string the
+// entry is stored and shown under is composed from all three, so the display
+// format stays what it has always been while the country becomes a value of its
+// own rather than something read back out of that string.
+const uploadCity = ref("");
+const uploadCountry = ref("");
+const uploadSubdivision = ref("");
 const uploadDate = ref("");
 const uploadLat = ref("");
 const uploadLng = ref("");
@@ -111,14 +123,38 @@ onBeforeUnmount(() => {
 
 const step1Valid = computed(() => !!uploadFile.value);
 
-// Trailing ", XX" region code. Matches "Salt Lake City, UT" and "Amsterdam, NL".
-const locationFormatValid = computed(() =>
-  /^.+,\s*[A-Za-z]{2}$/.test(uploadLocation.value.trim()),
+// The subdivisions offered for the chosen country, or null where the archive
+// collects none. Only the US and Canada have one; everywhere else the city and
+// the country are the whole answer.
+const subdivisions = computed(() => subdivisionsFor(uploadCountry.value));
+
+// A country change invalidates whatever subdivision was picked under the last
+// one -- "NY" means nothing in Canada -- so it is cleared rather than carried
+// over into a location that would read as somewhere real but wrong.
+watch(uploadCountry, () => {
+  uploadSubdivision.value = "";
+});
+
+const locationValid = computed(() => {
+  if (!uploadCity.value.trim() || !uploadCountry.value) return false;
+  return !subdivisions.value || !!uploadSubdivision.value;
+});
+
+// What the catalog will show, previewed live under the fields so the picks and
+// the resulting entry are visibly the same thing.
+const uploadLocation = computed(() =>
+  locationValid.value
+    ? composeLocation(
+        uploadCity.value,
+        uploadCountry.value,
+        uploadSubdivision.value,
+      )
+    : "",
 );
 
 const step2Valid = computed(() => {
   if (!uploadName.value.trim()) return false;
-  if (!locationFormatValid.value) return false;
+  if (!locationValid.value) return false;
   if (!uploadDate.value) return false;
   const lat = parseFloat(uploadLat.value);
   const lng = parseFloat(uploadLng.value);
@@ -199,6 +235,7 @@ async function submitUpload() {
     fd.append("file", uploadFile.value);
     fd.append("name", uploadName.value);
     fd.append("location", uploadLocation.value);
+    fd.append("country", uploadCountry.value);
     fd.append("isoDate", uploadDate.value);
     if (uploadLat.value) fd.append("lat", uploadLat.value);
     if (uploadLng.value) fd.append("lng", uploadLng.value);
@@ -229,7 +266,9 @@ async function submitUpload() {
 
 function resetUpload() {
   uploadName.value = "";
-  uploadLocation.value = "";
+  uploadCity.value = "";
+  uploadCountry.value = "";
+  uploadSubdivision.value = "";
   uploadDate.value = "";
   uploadLat.value = "";
   uploadLng.value = "";
@@ -318,26 +357,54 @@ function resetUpload() {
 
         <label class="field">
           <span class="field-label-row">
-            <span class="field-label">Location <span class="req">*</span></span>
+            <span class="field-label">City <span class="req">*</span></span>
             <InfoTooltip>
-              <p>City, State (U.S.) or</p>
-              <p>City, Country (non-U.S.)</p>
+              The town, city or borough. The Archive adds the state, province or
+              country from your picks below.
             </InfoTooltip>
           </span>
           <input
-            v-model="uploadLocation"
+            v-model="uploadCity"
             type="text"
-            placeholder="City, State"
+            placeholder="Brooklyn"
             class="field-input"
           />
-          <p
-            v-if="uploadLocation && !locationFormatValid"
-            class="field-hint field-hint-warn"
-          >
-            Use the format "City, ST" or "City, CC", for example "Salt Lake
-            City, UT" or "Amsterdam, NL".
-          </p>
         </label>
+
+        <label class="field">
+          <span class="field-label">Country <span class="req">*</span></span>
+          <select v-model="uploadCountry" class="field-input">
+            <option value="" disabled>Select a country</option>
+            <option v-for="c in COUNTRIES" :key="c.code" :value="c.code">
+              {{ c.name }}
+            </option>
+          </select>
+        </label>
+
+        <!-- Only the US and Canada collect one, so this is absent rather than
+             empty for the rest of the world. -->
+        <label v-if="subdivisions" class="field">
+          <span class="field-label">
+            {{ uploadCountry === "CA" ? "Province" : "State" }}
+            <span class="req">*</span>
+          </span>
+          <select v-model="uploadSubdivision" class="field-input">
+            <option value="" disabled>
+              Select a {{ uploadCountry === "CA" ? "province" : "state" }}
+            </option>
+            <option
+              v-for="sub in subdivisions"
+              :key="sub.code"
+              :value="sub.code"
+            >
+              {{ sub.name }}
+            </option>
+          </select>
+        </label>
+
+        <p v-if="uploadLocation" class="field-hint">
+          Will be listed as "{{ uploadLocation }}".
+        </p>
 
         <div class="field">
           <span class="field-label-row">
@@ -494,6 +561,13 @@ function resetUpload() {
           <div class="review-row">
             <span class="review-label">Location</span>
             <span>{{ uploadLocation }}</span>
+          </div>
+          <!-- Shown in its own right because the location above does not
+               reveal it: a US or Canadian entry ends in a state or province,
+               and this is the value the entry is actually counted under. -->
+          <div class="review-row">
+            <span class="review-label">Country</span>
+            <span>{{ countryName(uploadCountry) }}</span>
           </div>
           <div class="review-row">
             <span class="review-label">Coordinates</span>

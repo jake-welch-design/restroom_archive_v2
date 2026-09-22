@@ -35,9 +35,16 @@ const plural = (n: number, one: string, many: string) =>
 const statsSentence = computed(() => {
   const s = stats.value;
   const verb = s.restrooms === 1 ? "has" : "have";
+  // A null country count means some published entry has no country stored, so
+  // the archive cannot stand behind a figure. The clause comes out altogether
+  // rather than printing a number that would be quietly too low.
+  const where =
+    s.countries != null
+      ? `${plural(s.cities, "city", "cities")} and ${plural(s.countries, "country", "countries")}`
+      : plural(s.cities, "city", "cities");
   return (
     `Currently, ${plural(s.restrooms, "restroom", "restrooms")} ${verb} been ` +
-    `archived in ${plural(s.cities, "city", "cities")} by ` +
+    `archived in ${where} by ` +
     `${plural(s.archivists, "archivist", "archivists")}.`
   );
 });

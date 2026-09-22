@@ -122,6 +122,26 @@
   color: var(--ink);
 }
 
+/* Native selects arrive with rounded chrome and a system-coloured button,
+   which next to these square transparent boxes reads as a control borrowed
+   from somewhere else. Stripped back to the same box, with a caret drawn in so
+   it still announces itself as a menu rather than a text field. */
+select.field-input {
+  appearance: none;
+  border-radius: 0;
+  padding-right: 22px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='6'%3E%3Cpath d='M1 1l3.5 3.5L8 1' fill='none' stroke='%23000' stroke-width='1.2'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 7px center;
+  cursor: pointer;
+}
+
+/* The placeholder option, which is `disabled` so it cannot be chosen back. */
+select.field-input:invalid,
+select.field-input option[value=""] {
+  color: var(--dim);
+}
+
 /* Vertical only. Horizontal resizing escapes the panel the form sits in. */
 .field-textarea {
   resize: vertical;

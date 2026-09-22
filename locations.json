@@ -1,0 +1,542 @@
+[
+  {
+    "results": [
+      {
+        "location": "Akureyri, IS",
+        "n": 3,
+        "published": 3,
+        "lat": 65.6516378,
+        "lng": -18.4010653
+      },
+      {
+        "location": "American Fork, UT",
+        "n": 1,
+        "published": 1,
+        "lat": 40.38133647740039,
+        "lng": -111.81554953635771
+      },
+      {
+        "location": "Anaheim, CA",
+        "n": 1,
+        "published": 1,
+        "lat": 33.81297240024869,
+        "lng": -117.92210969080763
+      },
+      {
+        "location": "Barstow, CA",
+        "n": 1,
+        "published": 1,
+        "lat": 34.88455727570343,
+        "lng": -117.0235914889886
+      },
+      {
+        "location": "Beacon, NY",
+        "n": 1,
+        "published": 1,
+        "lat": 41.51290578564428,
+        "lng": -73.95115020015584
+      },
+      {
+        "location": "Berlin, DE",
+        "n": 1,
+        "published": 1,
+        "lat": 52.50054164783842,
+        "lng": 13.422852350472564
+      },
+      {
+        "location": "Big Water, AZ",
+        "n": 1,
+        "published": 1,
+        "lat": 37.07977573853625,
+        "lng": -111.66096813103552
+      },
+      {
+        "location": "Bilbao, ES",
+        "n": 2,
+        "published": 2,
+        "lat": 43.26872,
+        "lng": -2.9730493
+      },
+      {
+        "location": "Blountville, TN",
+        "n": 1,
+        "published": 1,
+        "lat": 36.481485480590585,
+        "lng": -82.40742050500297
+      },
+      {
+        "location": "Brooklyn, NY",
+        "n": 40,
+        "published": 39,
+        "lat": 40.65442300683211,
+        "lng": -74.01425833141828
+      },
+      {
+        "location": "Canoga Park, CA",
+        "n": 1,
+        "published": 1,
+        "lat": 34.20796646890334,
+        "lng": -118.60637231512247
+      },
+      {
+        "location": "Clinton, CT",
+        "n": 1,
+        "published": 1,
+        "lat": 41.27712423698334,
+        "lng": -72.52109988282201
+      },
+      {
+        "location": "Dublin, IE",
+        "n": 1,
+        "published": 1,
+        "lat": 53.336249098246135,
+        "lng": -6.273443813476321
+      },
+      {
+        "location": "Hurricane, UT",
+        "n": 1,
+        "published": 1,
+        "lat": 37.17719514480112,
+        "lng": -113.28737991226842
+      },
+      {
+        "location": "Hyde Park, NY",
+        "n": 1,
+        "published": 1,
+        "lat": 41.79792778903271,
+        "lng": -73.9417603989217
+      },
+      {
+        "location": "Ilwaco, WA",
+        "n": 1,
+        "published": 1,
+        "lat": 46.30566971958163,
+        "lng": -124.04028049362661
+      },
+      {
+        "location": "Istanbul, TR",
+        "n": 2,
+        "published": 2,
+        "lat": 41.029224388902435,
+        "lng": 28.97521025092629
+      },
+      {
+        "location": "La Jolla, CA",
+        "n": 1,
+        "published": 1,
+        "lat": 32.848907523338056,
+        "lng": -117.27112478220923
+      },
+      {
+        "location": "Las Vegas, NV",
+        "n": 1,
+        "published": 1,
+        "lat": 36.01424466371753,
+        "lng": -115.17152831691074
+      },
+      {
+        "location": "Little Rock, AR ",
+        "n": 1,
+        "published": 1,
+        "lat": 34.750789025475726,
+        "lng": -92.30624406896057
+      },
+      {
+        "location": "Logan, UT",
+        "n": 3,
+        "published": 3,
+        "lat": 41.731161525948444,
+        "lng": -111.83587040816715
+      },
+      {
+        "location": "Los Angeles, CA",
+        "n": 2,
+        "published": 2,
+        "lat": 33.99723306778817,
+        "lng": -118.45872242767558
+      },
+      {
+        "location": "Madison, WI",
+        "n": 1,
+        "published": 1,
+        "lat": 43.0773488,
+        "lng": -89.3839318
+      },
+      {
+        "location": "Manhattan, NY",
+        "n": 13,
+        "published": 13,
+        "lat": 40.70339736293903,
+        "lng": -74.01136539963795
+      },
+      {
+        "location": "Media, PA",
+        "n": 1,
+        "published": 1,
+        "lat": 39.918589382898716,
+        "lng": -75.390477171478
+      },
+      {
+        "location": "Mexican Hat, UT",
+        "n": 1,
+        "published": 1,
+        "lat": 37.1746551,
+        "lng": -109.9267216
+      },
+      {
+        "location": "Minneapolis, MN",
+        "n": 1,
+        "published": 0,
+        "lat": 45.01283,
+        "lng": 93.24741
+      },
+      {
+        "location": "Montesano, WA",
+        "n": 1,
+        "published": 1,
+        "lat": 46.97667857925353,
+        "lng": -123.60195283007948
+      },
+      {
+        "location": "Moscow, RU",
+        "n": 2,
+        "published": 0,
+        "lat": 55.514514,
+        "lng": 37.352024
+      },
+      {
+        "location": "Myrtle Beach, NC",
+        "n": 2,
+        "published": 0,
+        "lat": 33.69317041928609,
+        "lng": -78.87804594672984
+      },
+      {
+        "location": "New Castle, CO",
+        "n": 1,
+        "published": 1,
+        "lat": 39.57120964351288,
+        "lng": -107.5336513685473
+      },
+      {
+        "location": "New York City, NY",
+        "n": 1,
+        "published": 1,
+        "lat": 40.7290978,
+        "lng": -73.9991893
+      },
+      {
+        "location": "New York, NY",
+        "n": 4,
+        "published": 3,
+        "lat": 40.699951518464076,
+        "lng": -73.99560044047733
+      },
+      {
+        "location": "Oberlin, OH",
+        "n": 1,
+        "published": 1,
+        "lat": 41.2908694730047,
+        "lng": -82.21768293355534
+      },
+      {
+        "location": "Old Saybrook, CT",
+        "n": 1,
+        "published": 1,
+        "lat": 41.28741376917913,
+        "lng": -72.40696093410992
+      },
+      {
+        "location": "Orem, UT",
+        "n": 1,
+        "published": 1,
+        "lat": 40.29262303631147,
+        "lng": -111.69447106484071
+      },
+      {
+        "location": "Orlando, FL",
+        "n": 1,
+        "published": 1,
+        "lat": 28.559858423671166,
+        "lng": -81.364705862694
+      },
+      {
+        "location": "Oslo, NW",
+        "n": 2,
+        "published": 2,
+        "lat": 59.92174,
+        "lng": 10.71269
+      },
+      {
+        "location": "Paris, FR",
+        "n": 1,
+        "published": 1,
+        "lat": 48.83390264494143,
+        "lng": 2.3324225238592358
+      },
+      {
+        "location": "Philadelphia, PA",
+        "n": 1,
+        "published": 0,
+        "lat": 39.9469485236748,
+        "lng": -75.16205044219299
+      },
+      {
+        "location": "Pittsburgh, PA",
+        "n": 4,
+        "published": 4,
+        "lat": 40.434955,
+        "lng": -80.002656
+      },
+      {
+        "location": "Pleasant Hill, CA",
+        "n": 1,
+        "published": 1,
+        "lat": 37.968248,
+        "lng": -122.072657
+      },
+      {
+        "location": "Pocatello, ID",
+        "n": 1,
+        "published": 1,
+        "lat": 42.87691694835291,
+        "lng": -112.42391973495242
+      },
+      {
+        "location": "Portage, MI",
+        "n": 1,
+        "published": 1,
+        "lat": 42.195333417225385,
+        "lng": -85.56143776160583
+      },
+      {
+        "location": "Portland, ME",
+        "n": 2,
+        "published": 2,
+        "lat": 43.6534,
+        "lng": -70.26259
+      },
+      {
+        "location": "Provo, UT",
+        "n": 4,
+        "published": 4,
+        "lat": 40.23407132809684,
+        "lng": -111.66428324400334
+      },
+      {
+        "location": "Quebec city, QC",
+        "n": 1,
+        "published": 1,
+        "lat": 46.7999178,
+        "lng": -71.2241362
+      },
+      {
+        "location": "Queens, NY",
+        "n": 1,
+        "published": 1,
+        "lat": 40.5900147157807,
+        "lng": -73.79745857738149
+      },
+      {
+        "location": "Rangeley, CO",
+        "n": 1,
+        "published": 1,
+        "lat": 40.0873260820343,
+        "lng": -108.79090475083166
+      },
+      {
+        "location": "Redwood City, CA",
+        "n": 1,
+        "published": 1,
+        "lat": 37.488257566604,
+        "lng": -122.23665867940234
+      },
+      {
+        "location": "Rexburg, ID",
+        "n": 1,
+        "published": 1,
+        "lat": 43.833544269207074,
+        "lng": -111.7775827209651
+      },
+      {
+        "location": "Reykjavík, IS",
+        "n": 1,
+        "published": 1,
+        "lat": 64.1384744,
+        "lng": -21.8904137
+      },
+      {
+        "location": "Rhinebeck, NY",
+        "n": 1,
+        "published": 1,
+        "lat": 41.918100025274626,
+        "lng": -73.90659915696682
+      },
+      {
+        "location": "Roissy-en-France, FR",
+        "n": 1,
+        "published": 1,
+        "lat": 49.00277162771875,
+        "lng": 2.5772151653825395
+      },
+      {
+        "location": "Roosevelt, UT",
+        "n": 1,
+        "published": 1,
+        "lat": 40.300535573547684,
+        "lng": -109.9884377766762
+      },
+      {
+        "location": "Salt Lake City, UT",
+        "n": 9,
+        "published": 9,
+        "lat": 40.73665919122228,
+        "lng": -111.89591032650522
+      },
+      {
+        "location": "San Diego, CA",
+        "n": 3,
+        "published": 3,
+        "lat": 32.79727318968577,
+        "lng": -117.25545270724847
+      },
+      {
+        "location": "Santa Barbara, CA",
+        "n": 1,
+        "published": 1,
+        "lat": 34.40334994562576,
+        "lng": -119.74384538744832
+      },
+      {
+        "location": "Santa Cruz, CA",
+        "n": 1,
+        "published": 1,
+        "lat": 36.9706527,
+        "lng": -122.0254687
+      },
+      {
+        "location": "Savannah, GA",
+        "n": 1,
+        "published": 0,
+        "lat": 32.057,
+        "lng": 81.091
+      },
+      {
+        "location": "Schweich, DE",
+        "n": 1,
+        "published": 1,
+        "lat": 49.81676082397935,
+        "lng": 6.751220788262518
+      },
+      {
+        "location": "Seattle, WA",
+        "n": 2,
+        "published": 1,
+        "lat": 47.558806244231185,
+        "lng": -122.3374355
+      },
+      {
+        "location": "Shanghai, CN",
+        "n": 1,
+        "published": 1,
+        "lat": 31.15138,
+        "lng": 121.258539
+      },
+      {
+        "location": "Springville, UT",
+        "n": 1,
+        "published": 1,
+        "lat": 40.180727673167574,
+        "lng": -111.64749402651566
+      },
+      {
+        "location": "St. George, UT",
+        "n": 1,
+        "published": 1,
+        "lat": 37.1118839341944,
+        "lng": -113.55456321548802
+      },
+      {
+        "location": "St. Paul, MN",
+        "n": 1,
+        "published": 1,
+        "lat": 44.96082382331116,
+        "lng": -93.06776372433423
+      },
+      {
+        "location": "Tarrytown, NY",
+        "n": 1,
+        "published": 1,
+        "lat": 41.08,
+        "lng": -73.86
+      },
+      {
+        "location": "Toronto, ON",
+        "n": 1,
+        "published": 0,
+        "lat": 43.71282,
+        "lng": 79.37787
+      },
+      {
+        "location": "Velikiy Novgorod, RU",
+        "n": 1,
+        "published": 0,
+        "lat": 58.524776,
+        "lng": 31.272058
+      },
+      {
+        "location": "Veyo, Utah",
+        "n": 1,
+        "published": 1,
+        "lat": 37.338322960309654,
+        "lng": -113.69276371349164
+      },
+      {
+        "location": "Vienna, AT",
+        "n": 1,
+        "published": 1,
+        "lat": 48.20934,
+        "lng": 16.35485
+      },
+      {
+        "location": "Washington, UT",
+        "n": 1,
+        "published": 1,
+        "lat": 37.12982887056373,
+        "lng": -113.52728510618662
+      },
+      {
+        "location": "Winnipeg, MB",
+        "n": 1,
+        "published": 0,
+        "lat": 49.8479,
+        "lng": -97.1016
+      },
+      {
+        "location": "Yellowstone National Park, WY",
+        "n": 1,
+        "published": 1,
+        "lat": 44.459898416447565,
+        "lng": -110.83090034970255
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "ENAM",
+      "served_by_colo": "EWR",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 1.0114
+      },
+      "duration": 1.0114,
+      "changes": 0,
+      "last_row_id": 0,
+      "changed_db": false,
+      "size_after": 647168,
+      "rows_read": 312,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  }
+]

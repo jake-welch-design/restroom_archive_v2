@@ -1,6 +1,13 @@
 <script setup lang="ts">
 import type { RestroomSummary } from "~/types/restroom";
 import { formatDayMonthYear } from "~~/shared/utils/formatDate";
+import {
+  COUNTRIES,
+  cityFromLocation,
+  composeLocation,
+  subdivisionFromLocation,
+  subdivisionsFor,
+} from "~~/shared/utils/regions";
 
 type SortKey = "isoDate" | "name" | "location";
 type SortDir = "asc" | "desc";
@@ -89,13 +96,41 @@ onMounted(() => scrollToSelected(props.selectedSlug));
 const editingSlug = ref<string | null>(null);
 const editForm = reactive({
   name: "",
-  location: "",
+  city: "",
+  country: "",
+  subdivision: "",
   isoDate: "",
   lat: "",
   lng: "",
   description: "",
   descriptors: [] as string[],
 });
+
+// Mirrors the submission wizard: the row's `location` is composed from these
+// picks rather than typed, so an edit cannot leave the display string and the
+// stored country disagreeing.
+const editSubdivisions = computed(() => subdivisionsFor(editForm.country));
+
+watch(
+  () => editForm.country,
+  (next, prev) => {
+    // Only on a real change by the user. startEdit sets country and
+    // subdivision together, and clearing on that first assignment would throw
+    // away the state the row already has.
+    if (prev !== "" && next !== prev) editForm.subdivision = "";
+  },
+);
+
+const editLocation = computed(() =>
+  editForm.city.trim() && editForm.country
+    ? composeLocation(editForm.city, editForm.country, editForm.subdivision)
+    : "",
+);
+
+const editValid = computed(
+  () =>
+    !!editLocation.value && (!editSubdivisions.value || !!editForm.subdivision),
+);
 const editLoading = ref(false);
 const editError = ref("");
 
@@ -103,7 +138,15 @@ function startEdit(r: RestroomSummary, e: Event) {
   e.stopPropagation();
   editingSlug.value = r.slug;
   editForm.name = r.name;
-  editForm.location = r.location;
+  editForm.city = cityFromLocation(r.location);
+  editForm.country = r.country ?? "";
+  // The trailing token is only a subdivision where the country collects one.
+  // On a row with no country yet it stays blank and the admin picks both,
+  // which is the point of opening the editor on an unassigned entry.
+  editForm.subdivision =
+    r.country && subdivisionsFor(r.country)
+      ? subdivisionFromLocation(r.location)
+      : "";
   editForm.isoDate = r.isoDate;
   editForm.lat = r.lat != null ? String(r.lat) : "";
   editForm.lng = r.lng != null ? String(r.lng) : "";
@@ -127,7 +170,8 @@ async function saveEdit(slug: string, e: Event) {
       method: "PATCH",
       body: {
         name: editForm.name,
-        location: editForm.location,
+        location: editLocation.value,
+        country: editForm.country,
         isoDate: editForm.isoDate,
         lat: editForm.lat !== "" ? Number(editForm.lat) : null,
         lng: editForm.lng !== "" ? Number(editForm.lng) : null,
@@ -244,14 +288,45 @@ function onNameClick(e: MouseEvent) {
                 />
               </label>
               <label class="edit-field">
-                <span class="edit-label">Location</span>
+                <span class="edit-label">City</span>
                 <input
-                  v-model="editForm.location"
+                  v-model="editForm.city"
                   type="text"
                   required
                   class="edit-input"
                 />
               </label>
+              <label class="edit-field">
+                <span class="edit-label">Country</span>
+                <select v-model="editForm.country" required class="edit-input">
+                  <option value="" disabled>Select a country</option>
+                  <option v-for="c in COUNTRIES" :key="c.code" :value="c.code">
+                    {{ c.name }}
+                  </option>
+                </select>
+              </label>
+              <label v-if="editSubdivisions" class="edit-field">
+                <span class="edit-label">
+                  {{ editForm.country === "CA" ? "Province" : "State" }}
+                </span>
+                <select
+                  v-model="editForm.subdivision"
+                  required
+                  class="edit-input"
+                >
+                  <option value="" disabled>Select</option>
+                  <option
+                    v-for="sub in editSubdivisions"
+                    :key="sub.code"
+                    :value="sub.code"
+                  >
+                    {{ sub.name }}
+                  </option>
+                </select>
+              </label>
+              <p v-if="editLocation" class="edit-location-preview">
+                Listed as "{{ editLocation }}"
+              </p>
               <label class="edit-field">
                 <span class="edit-label">Date</span>
                 <input
@@ -304,7 +379,7 @@ function onNameClick(e: MouseEvent) {
               <button
                 type="submit"
                 class="edit-btn edit-btn-save"
-                :disabled="editLoading"
+                :disabled="editLoading || !editValid"
               >
                 {{ editLoading ? "Saving…" : "Save" }}
               </button>
@@ -545,6 +620,28 @@ function onNameClick(e: MouseEvent) {
   color: #000;
   width: 100%;
 }
+/* Underline-only fields, so the selects drop their native chrome to match and
+   carry a drawn caret instead. */
+select.edit-input {
+  appearance: none;
+  border-radius: 0;
+  padding-right: 16px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='6'%3E%3Cpath d='M1 1l3.5 3.5L8 1' fill='none' stroke='%23000' stroke-width='1.2'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 1px center;
+  cursor: pointer;
+}
+
+/* The composed display string, shown back so an edit that changes a pick shows
+   what the catalog row will read as. Spans the grid: it describes the fields
+   above it rather than sitting beside one of them. */
+.edit-location-preview {
+  grid-column: 1 / -1;
+  margin: -2px 0 0;
+  font-size: 12px;
+  color: #666;
+}
+
 .edit-textarea {
   border: 1px solid #000;
   padding: 4px 6px;

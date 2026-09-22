@@ -25,7 +25,8 @@
     "db:migrate:local": "wrangler d1 migrations apply restroom-archive-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply restroom-archive-db --remote",
     "db:seed:local": "bash scripts/seed-local-db.sh",
-    "thumbs": "tsx scripts/render-thumbs.ts"
+    "thumbs": "tsx scripts/render-thumbs.ts",
+    "db:draft-backfill": "tsx scripts/draft-country-backfill.ts"
   },
   "dependencies": {
     "@nuxtjs/turnstile": "^1.1.2",

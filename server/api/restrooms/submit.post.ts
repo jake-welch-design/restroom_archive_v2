@@ -12,6 +12,7 @@ import {
   MAX_GLB_MB,
   formatFileSize,
 } from "~~/shared/utils/uploadLimits";
+import { isCountryCode } from "~~/shared/utils/regions";
 
 // Where a notification about a new submission sends the admin who taps it.
 // The account page reads tab, group and section off the query string, so this
@@ -45,6 +46,12 @@ function isGlb(bytes: Uint8Array): boolean {
 const MetaSchema = z.object({
   name: z.string().min(1).max(200),
   location: z.string().min(1).max(200),
+  // Checked against the list the wizard's select is built from, so the column
+  // can only ever hold a code the archive recognises. `location` is the display
+  // string composed alongside it and is not parsed back into a country.
+  country: z
+    .string()
+    .refine(isCountryCode, "Please choose a country from the list"),
   isoDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD"),
   lat: z.coerce.number().min(-90).max(90).optional(),
   lng: z.coerce.number().min(-180).max(180).optional(),
@@ -153,8 +160,16 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const { name, location, isoDate, lat, lng, description, descriptors } =
-    meta.data;
+  const {
+    name,
+    location,
+    country,
+    isoDate,
+    lat,
+    lng,
+    description,
+    descriptors,
+  } = meta.data;
   let descriptorTags: string[] = [];
   if (descriptors) {
     try {
@@ -200,6 +215,7 @@ export default defineEventHandler(async (event) => {
       name,
       slug,
       location,
+      country,
       date: formatDisplayDate(isoDate),
       isoDate,
       coords:

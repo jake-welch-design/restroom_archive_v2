@@ -59,6 +59,14 @@ export const restrooms = sqliteTable(
     lat: real("lat"),
     lng: real("lng"),
     location: text("location").notNull(),
+    // ISO 3166-1 alpha-2, picked from shared/utils/regions.ts rather than read
+    // back out of `location`. `location` is a display string whose trailing
+    // token is a state in the US, a province in Canada and a country elsewhere,
+    // so it cannot answer "which country" on its own -- CA is California there
+    // and Canada here. Nullable only for rows predating this column; every
+    // write since sets it, and the stats endpoint declines to publish a country
+    // count while any published row is still NULL.
+    country: text("country"),
     file: text("file").notNull(),
     description: text("description"),
     descriptors: text("descriptors"),

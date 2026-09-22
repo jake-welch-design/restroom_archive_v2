@@ -1,0 +1,21 @@
+-- Gives an entry a country of its own, instead of inferring one from the
+-- trailing token of `location`.
+--
+-- That token is a state in the US, a province in Canada and a country
+-- everywhere else, and the three readings collide: CA is California and Canada,
+-- DE is Delaware and Germany, ON is a province and nothing at all. Coordinates
+-- settle the far-away cases -- a pin in Europe is not Delaware -- but they
+-- cannot settle the near ones, because Toronto and Montreal sit inside any
+-- bounding box loose enough to hold the contiguous US. With scans now in
+-- eleven countries including Canada, that inference had stopped being able to
+-- produce a number the About page could stand behind.
+--
+-- So the country is picked from a list at submission time and stored, and
+-- `location` goes back to being only what it is shown as. Nothing parses it.
+--
+-- Nullable rather than NOT NULL: existing rows have no country until the
+-- backfill in 0028 runs, and a NOT NULL column with a made-up default would
+-- bake the guess this migration exists to remove. /api/stats treats any
+-- published row with a NULL country as "not countable yet" and omits the
+-- country count from the About page entirely rather than printing a low number.
+ALTER TABLE restrooms ADD COLUMN country TEXT;
