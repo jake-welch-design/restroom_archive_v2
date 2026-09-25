@@ -239,6 +239,7 @@ export function useThreeScene(
   const originalBounds = new THREE.Box3();
   const appliedBox = new THREE.Box3();
   const appliedCentre = new THREE.Vector3();
+  const Y_AXIS = new THREE.Vector3(0, 1, 0);
   const clipBox = new THREE.Box3();
   let clipMode: CropMode = "keep";
   let clippingActive = false;
@@ -525,6 +526,7 @@ export function useThreeScene(
       // handles impossible to aim, and the box would appear to drift.
       if (!userInteracted && !cropEditing.value && currentModel) {
         currentModel.rotation.y += 0.001;
+        pinCentre();
       }
       // Skip controls.update() during flyTo. OrbitControls recomputes camera.position
       // from its internal spherical state each update, which overwrites tween values.
@@ -827,6 +829,39 @@ export function useThreeScene(
     currentModel.matrixWorld.copy(currentModel.matrix);
   }
 
+  /**
+   * Keeps the frame's centre on the world origin whatever the model's turn.
+   *
+   * three applies an object's rotation before its position, so a model offset
+   * by a plain −C turns about the GLB's own origin, not about C. For a scan
+   * whose room sits metres from that origin, auto-rotate swings the room round
+   * in a wide circle and leaves the orbit pivot at (0, 0, 0) out in empty air.
+   * Offsetting by −Ry(θ)·C instead gives world = Ry(θ)·(L − C), which turns
+   * about the centre. Must follow every change to `rotation.y`.
+   */
+  function pinCentre() {
+    if (!currentModel) return;
+    currentModel.position
+      .copy(appliedCentre)
+      .applyAxisAngle(Y_AXIS, currentModel.rotation.y)
+      .negate();
+  }
+
+  /**
+   * Where the old transform put the frame's centre at turn θ, relative to
+   * where `pinCentre` puts it: C − Ry(θ)·C.
+   *
+   * Annotation cameras are stored in the old convention, world = Ry(θ)·L − C,
+   * which reframeAnnotation in shared/utils/levelling.ts is written against and
+   * every saved row already uses. Converting at the two edges, saving a
+   * snapshot and flying to one, keeps them valid without a migration.
+   */
+  function storedCameraOffset(theta: number): THREE.Vector3 {
+    return appliedCentre
+      .clone()
+      .sub(appliedCentre.clone().applyAxisAngle(Y_AXIS, theta));
+  }
+
   function applyClippingToMaterials() {
     if (!currentModel) return;
     // Null, not undefined: three's typings take `undefined` on the constructor
@@ -952,7 +987,7 @@ export function useThreeScene(
 
     appliedBox.copy(box);
     appliedCentre.copy(centre);
-    currentModel.position.copy(centre).negate();
+    pinCentre();
     modelRadius = (Math.max(size.x, size.y, size.z) || 1) / 2;
 
     if (!camera || !controls) return;
@@ -1593,14 +1628,18 @@ export function useThreeScene(
       return { cameraMode: "orbit", cameraFov: 70, modelRotationY };
     }
     if (mode.value === "orbit") {
-      const target = controls?.target ?? new THREE.Vector3();
+      const offset = storedCameraOffset(modelRotationY);
+      const position = camera.position.clone().sub(offset);
+      const target = (controls?.target.clone() ?? new THREE.Vector3()).sub(
+        offset,
+      );
       return {
         cameraMode: "orbit",
         cameraFov: camera.fov,
         modelRotationY,
-        orbitPosX: camera.position.x,
-        orbitPosY: camera.position.y,
-        orbitPosZ: camera.position.z,
+        orbitPosX: position.x,
+        orbitPosY: position.y,
+        orbitPosZ: position.z,
         orbitTargetX: target.x,
         orbitTargetY: target.y,
         orbitTargetZ: target.z,
@@ -1672,6 +1711,9 @@ export function useThreeScene(
         snapshot.orbitTargetY ?? 0,
         snapshot.orbitTargetZ ?? 0,
       );
+      const offset = storedCameraOffset(targetModelRotY);
+      targetPos.add(offset);
+      targetTarget.add(offset);
       targetFov = snapshot.cameraFov;
     } else {
       targetPos = povPosition();
@@ -1694,6 +1736,7 @@ export function useThreeScene(
 
       if (currentModel) {
         currentModel.rotation.y = startModelRotY + deltaModelRotY * e;
+        pinCentre();
       }
 
       if (snapshot.cameraMode === "pov") {
@@ -1768,6 +1811,7 @@ export function useThreeScene(
 
       const savedRotY = currentModel.rotation.y;
       currentModel.rotation.y = 0;
+      pinCentre();
       // The planes are refreshed once per animation frame from the model's
       // matrix, so straightening the model here leaves them a rotation behind.
       // Rendering against those would cut the thumbnail on the diagonal.
@@ -1775,6 +1819,7 @@ export function useThreeScene(
       offRenderer.render(scene, thumbCam);
       const dataUrl = offCanvas.toDataURL("image/jpeg", 0.85);
       currentModel.rotation.y = savedRotY;
+      pinCentre();
       updateCropPlanes();
       return dataUrl;
     } finally {

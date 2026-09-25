@@ -16,6 +16,12 @@
  * which is where crop boxes, the POV eye height and annotation points are all
  * stored. θ is the model's turn about Y (auto-rotate, or an annotation's stored
  * turn) and C is the centre of the box the viewer frames on.
+ *
+ * That first line is the convention annotation cameras are stored in, not what
+ * the viewer draws. The viewer turns the scan about C, world = Ry(θ) · (L − C),
+ * so the frame's centre stays on the orbit pivot, and converts cameras by
+ * C − Ry(θ) · C when it saves or flies to one (storedCameraOffset in
+ * composables/useThreeScene.ts). At θ = 0 the two agree.
  */
 
 export interface Vec3 {
