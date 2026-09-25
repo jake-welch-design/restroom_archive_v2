@@ -48,10 +48,33 @@ const POV_HIT_PX = 30;
 const SHAFT_WIDTH_PX = 2;
 
 /**
- * How close the POV dot may get to the frame's floor or ceiling, in model units.
- * An eye flush with the floor would be looking out through it.
+ * How close, in CSS pixels, a press has to land to the guide to take it. Tested
+ * on screen for the same reason as a ring (see ringUnderPointer).
+ */
+const SHAFT_HIT_PX = 8;
+
+/**
+ * Below this |view · up|, in local space, the camera is too close to level for
+ * a horizontal drag plane: the pointer ray grazes it and the hit runs off to
+ * the horizon. The guide is then moved across a plane facing the camera
+ * instead, which follows the pointer sideways but not in depth.
+ */
+const SHAFT_LEVEL_VIEW = 0.2;
+
+/**
+ * How close the POV eye may get to any side of the frame, in model units. An
+ * eye flush with the floor, or a wall, would be looking out through it.
  */
 export const POV_EDGE_MARGIN = 0.05;
+
+/** `v` kept at least POV_EDGE_MARGIN inside [min, max], or centred if it can't be. */
+export function clampInsideEdges(v: number, min: number, max: number): number {
+  const low = min + POV_EDGE_MARGIN;
+  const high = max - POV_EDGE_MARGIN;
+  // A frame shorter than two margins has no room either side; sit in it.
+  if (low > high) return (min + max) / 2;
+  return Math.min(Math.max(v, low), high);
+}
 
 /** Width of the corner brackets and of the full edges, in CSS pixels. */
 const BRACKET_WIDTH_PX = 3;
@@ -133,8 +156,11 @@ interface Face {
   wall: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
 }
 
-/** Anything the pointer can pick up: one of the six faces, or the POV dot. */
-type Grip = Face | "pov";
+/**
+ * Anything the pointer can pick up: one of the six faces, the POV dot, which
+ * sets the eye's height, or the guide it slides on, which sets where it stands.
+ */
+type Grip = Face | "pov" | "shaft";
 
 export interface CropGizmoDeps {
   scene: THREE.Scene;
@@ -146,6 +172,8 @@ export interface CropGizmoDeps {
   onChange: (box: THREE.Box3) => void;
   /** Called when the POV dot is dragged, with its new model-local height. */
   onPovChange: (y: number) => void;
+  /** Called when the POV guide is dragged, with where it now stands, locally. */
+  onShaftMove: (x: number, z: number) => void;
   /**
    * Called once when a face drag is released.
    *
@@ -349,10 +377,10 @@ export function createCropGizmo(deps: CropGizmoDeps) {
 
   const handles = faces.map((f) => f.handle);
 
-  // The guide the POV eye slides along: a vertical line through the centre of
-  // the box the viewer will frame on, from its floor to its ceiling. POV stands
-  // at that centre, so this is where the camera actually is, and only its
-  // height is the admin's to choose.
+  // The guide the POV eye slides along: a vertical line from the floor of the
+  // box the viewer will frame on to its ceiling, standing where POV stands. It
+  // starts at the frame's centre; dragging the line moves it anywhere inside
+  // the frame, and dragging the dot on it sets the eye's height.
   const shaft = createLines(1, SHAFT_WIDTH_PX, 0.75);
   shaft.renderOrder = 3;
   group.add(shaft);
@@ -442,10 +470,22 @@ export function createCropGizmo(deps: CropGizmoDeps) {
     | null = null;
   const rotatePlane = new THREE.Plane();
 
-  /** The POV guide: where it stands, how far it runs, and where the eye is. */
-  const shaftFrame = { x: 0, z: 0, minY: 0, maxY: 0 };
+  /**
+   * The POV guide: where it stands, the frame it has to stay inside (and runs
+   * from floor to ceiling of), and where the eye is on it.
+   */
+  const shaftFrame = {
+    x: 0,
+    z: 0,
+    min: new THREE.Vector3(),
+    max: new THREE.Vector3(),
+  };
   let povY = 0;
   const shaftValues = new Float32Array(6);
+  /** Where a guide drag began: the pointer on the drag plane, and the guide. */
+  const shaftDragStart = new THREE.Vector3();
+  let shaftStartX = 0;
+  let shaftStartZ = 0;
 
   /** Local-space plane the pointer is projected onto for the current drag. */
   const dragPlane = new THREE.Plane();
@@ -568,16 +608,12 @@ export function createCropGizmo(deps: CropGizmoDeps) {
   }
 
   function clampPov(y: number): number {
-    const low = shaftFrame.minY + POV_EDGE_MARGIN;
-    const high = shaftFrame.maxY - POV_EDGE_MARGIN;
-    // A frame shorter than two margins has no room either side; sit in it.
-    if (low > high) return (shaftFrame.minY + shaftFrame.maxY) / 2;
-    return Math.min(Math.max(y, low), high);
+    return clampInsideEdges(y, shaftFrame.min.y, shaftFrame.max.y);
   }
 
   function writeShaft() {
-    const { x, z, minY, maxY } = shaftFrame;
-    shaftValues.set([x, minY, z, x, maxY, z]);
+    const { x, z, min, max } = shaftFrame;
+    shaftValues.set([x, min.y, z, x, max.y, z]);
     writeSegments(shaft, shaftValues);
     povDot.position.set(x, povY, z);
   }
@@ -586,17 +622,19 @@ export function createCropGizmo(deps: CropGizmoDeps) {
     for (const f of faces)
       f.handle.material.color.setHex(f === grip ? ACCENT : WHITE);
     povDot.material.color.setHex(grip === "pov" ? ACCENT : WHITE);
+    shaft.material.color.setHex(grip === "shaft" ? ACCENT : WHITE);
   }
 
-  function gripAxis(grip: Grip): Axis {
+  /** The axis a dot or face drag slides along. The guide has its own drag. */
+  function gripAxis(grip: Face | "pov"): Axis {
     return grip === "pov" ? "y" : grip.axis;
   }
 
-  function gripValue(grip: Grip): number {
+  function gripValue(grip: Face | "pov"): number {
     return grip === "pov" ? povY : faceValue(grip);
   }
 
-  function gripCentre(grip: Grip, out: THREE.Vector3): THREE.Vector3 {
+  function gripCentre(grip: Face | "pov", out: THREE.Vector3): THREE.Vector3 {
     return grip === "pov"
       ? out.set(shaftFrame.x, povY, shaftFrame.z)
       : faceCentre(grip, out);
@@ -687,8 +725,34 @@ export function createCropGizmo(deps: CropGizmoDeps) {
     // Otherwise nearest first, so where two handles overlap on screen the one
     // closer to the camera wins, which is the one drawn on top.
     const hit = hits[0];
-    if (!hit) return null;
-    return faces.find((f) => f.handle === hit.object) ?? null;
+    if (hit) return faces.find((f) => f.handle === hit.object) ?? null;
+    // The guide last: in `keep` mode it runs from the bottom face's handle to
+    // the top one's, and a handle is the smaller, more deliberate target.
+    return shaftUnderPointer(event) ? "shaft" : null;
+  }
+
+  /** Whether the pointer is within SHAFT_HIT_PX of the guide on screen. */
+  function shaftUnderPointer(event: PointerEvent): boolean {
+    const rect = deps.renderer.domElement.getBoundingClientRect();
+    const { x, z, min, max } = shaftFrame;
+    const a = new THREE.Vector3(x, min.y, z)
+      .applyMatrix4(group.matrix)
+      .project(deps.camera);
+    const b = new THREE.Vector3(x, max.y, z)
+      .applyMatrix4(group.matrix)
+      .project(deps.camera);
+    if (a.z > 1 || b.z > 1) return false;
+    const ax = (a.x * 0.5 + 0.5) * rect.width;
+    const ay = (-a.y * 0.5 + 0.5) * rect.height;
+    const dx = (b.x * 0.5 + 0.5) * rect.width - ax;
+    const dy = (-b.y * 0.5 + 0.5) * rect.height - ay;
+    const px = event.clientX - rect.left;
+    const py = event.clientY - rect.top;
+    const t = Math.max(
+      0,
+      Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy || 1)),
+    );
+    return Math.hypot(px - (ax + t * dx), py - (ay + t * dy)) <= SHAFT_HIT_PX;
   }
 
   /**
@@ -709,7 +773,10 @@ export function createCropGizmo(deps: CropGizmoDeps) {
   }
 
   /** How far along the drag axis the pointer currently sits. */
-  function pointerAlongAxis(event: PointerEvent, grip: Grip): number | null {
+  function pointerAlongAxis(
+    event: PointerEvent,
+    grip: Face | "pov",
+  ): number | null {
     const ray = localPointerRay(event);
     if (!ray) return null;
     const point = ray.intersectPlane(dragPlane, scratch);
@@ -889,7 +956,75 @@ export function createCropGizmo(deps: CropGizmoDeps) {
     deps.onRotateEnd();
   }
 
+  /**
+   * Starts moving the POV guide across the floor.
+   *
+   * Across a horizontal plane at the height it was grabbed, so the guide stays
+   * under the pointer from above. Seen from nearly level that plane is grazed
+   * by the pointer ray (see SHAFT_LEVEL_VIEW), so there it is a vertical plane
+   * facing the camera instead, and only the horizontal part of the travel is
+   * used: the guide follows the pointer sideways, and depth is set by orbiting
+   * round to look from another side, or from above.
+   */
+  function beginShaftDrag(event: PointerEvent): boolean {
+    const model = deps.getModel();
+    const ray = localPointerRay(event);
+    if (!model || !ray) return false;
+
+    const { x, z, min, max } = shaftFrame;
+    const grabbed = new THREE.Vector3();
+    ray.distanceSqToSegment(
+      scratch.set(x, min.y, z),
+      new THREE.Vector3(x, max.y, z),
+      undefined,
+      grabbed,
+    );
+
+    inverseModel.copy(model.matrixWorld).invert();
+    deps.camera.getWorldDirection(localViewDir);
+    localViewDir.transformDirection(inverseModel);
+    if (Math.abs(localViewDir.y) >= SHAFT_LEVEL_VIEW) {
+      dragPlane.setFromNormalAndCoplanarPoint(AXIS_VECTORS.y, grabbed);
+    } else {
+      localViewDir.y = 0;
+      if (localViewDir.lengthSq() < 1e-8) return false;
+      dragPlane.setFromNormalAndCoplanarPoint(
+        localViewDir.normalize().negate(),
+        grabbed,
+      );
+    }
+
+    if (!ray.intersectPlane(dragPlane, shaftDragStart)) return false;
+    shaftStartX = x;
+    shaftStartZ = z;
+    dragging = "shaft";
+    setGripHighlight("shaft");
+    deps.renderer.domElement.style.cursor = "grabbing";
+    deps.controls.enabled = false;
+    return true;
+  }
+
+  function moveShaft(event: PointerEvent) {
+    const ray = localPointerRay(event);
+    const hit = ray?.intersectPlane(dragPlane, scratch);
+    if (!hit) return;
+    const { min, max } = shaftFrame;
+    shaftFrame.x = clampInsideEdges(
+      shaftStartX + hit.x - shaftDragStart.x,
+      min.x,
+      max.x,
+    );
+    shaftFrame.z = clampInsideEdges(
+      shaftStartZ + hit.z - shaftDragStart.z,
+      min.z,
+      max.z,
+    );
+    writeShaft();
+    deps.onShaftMove(shaftFrame.x, shaftFrame.z);
+  }
+
   function beginDrag(grip: Grip, event: PointerEvent): boolean {
+    if (grip === "shaft") return beginShaftDrag(event);
     const model = deps.getModel();
     if (!model) return false;
 
@@ -931,6 +1066,10 @@ export function createCropGizmo(deps: CropGizmoDeps) {
 
   function moveDrag(event: PointerEvent) {
     if (!dragging) return;
+    if (dragging === "shaft") {
+      moveShaft(event);
+      return;
+    }
     const along = pointerAlongAxis(event, dragging);
     if (along == null) return;
 
@@ -966,7 +1105,7 @@ export function createCropGizmo(deps: CropGizmoDeps) {
 
   function endDrag() {
     if (!dragging) return;
-    const wasFace = dragging !== "pov";
+    const wasFace = dragging !== "pov" && dragging !== "shaft";
     dragging = null;
     emphasiseWall(null);
     setGripHighlight(hovered);
@@ -1053,22 +1192,21 @@ export function createCropGizmo(deps: CropGizmoDeps) {
     },
 
     /**
-     * Stands the POV guide in `frame` and puts the eye at `y`, clamped inside
-     * it. Returns where the eye ended up.
+     * Stands the POV guide in `frame` at `x`, `z` and puts the eye at `y`, all
+     * clamped inside it. Returns where the eye ended up.
      *
      * Driven by the caller rather than derived here, because the frame is not
      * always the drawn box: in `remove` mode it is whatever geometry survives,
      * which only the scene can measure.
      */
-    setShaft(frame: THREE.Box3, y: number): number {
-      const centre = frame.getCenter(new THREE.Vector3());
-      shaftFrame.x = centre.x;
-      shaftFrame.z = centre.z;
-      shaftFrame.minY = frame.min.y;
-      shaftFrame.maxY = frame.max.y;
-      povY = clampPov(y);
+    setShaft(frame: THREE.Box3, eye: THREE.Vector3): THREE.Vector3 {
+      shaftFrame.min.copy(frame.min);
+      shaftFrame.max.copy(frame.max);
+      shaftFrame.x = clampInsideEdges(eye.x, frame.min.x, frame.max.x);
+      shaftFrame.z = clampInsideEdges(eye.z, frame.min.z, frame.max.z);
+      povY = clampPov(eye.y);
       writeShaft();
-      return povY;
+      return new THREE.Vector3(shaftFrame.x, povY, shaftFrame.z);
     },
 
     /**

@@ -63,12 +63,29 @@ const CropSchema = z
     // The POV eye height, in the same local space as the boxes. Absent means
     // the default.
     povY: Coord.optional(),
+    // Where the POV eye stands on the floor, likewise. Absent means the frame's
+    // centre; always both or neither.
+    povX: Coord.optional(),
+    povZ: Coord.optional(),
     // The rotation that levels the scan. Absent means as exported.
     level: LevelSchema.optional(),
   })
   .refine(
     (c) => c.povY == null || (c.povY >= c.frame.minY && c.povY <= c.frame.maxY),
     { message: "POV height is outside the scan" },
+  )
+  .refine((c) => (c.povX == null) === (c.povZ == null), {
+    message: "POV position needs both X and Z",
+  })
+  .refine(
+    (c) =>
+      c.povX == null ||
+      c.povZ == null ||
+      (c.povX >= c.frame.minX &&
+        c.povX <= c.frame.maxX &&
+        c.povZ >= c.frame.minZ &&
+        c.povZ <= c.frame.maxZ),
+    { message: "POV position is outside the scan" },
   );
 
 const Body = z.object({

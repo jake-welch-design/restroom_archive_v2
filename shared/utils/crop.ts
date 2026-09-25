@@ -55,10 +55,16 @@ export interface Crop {
    * default of a little above the frame's centre.
    *
    * An absolute height rather than an offset from the centre, so re-cropping
-   * later, which moves the centre, leaves the eye where the admin put it. The
-   * camera stands at the frame's centre horizontally; only the height is set.
+   * later, which moves the centre, leaves the eye where the admin put it.
    */
   povY?: number;
+  /**
+   * Where the POV camera stands on the floor, in the GLB's local X and Z, or
+   * absent for the frame's centre. Absolute for the same reason as `povY`, and
+   * always both or neither.
+   */
+  povX?: number;
+  povZ?: number;
   /**
    * The rotation that levels the scan, or absent when it is shown as exported.
    *
@@ -117,12 +123,17 @@ export function parseCrop(value: string | null | undefined): Crop | null {
       typeof parsed.povY === "number" && Number.isFinite(parsed.povY)
         ? parsed.povY
         : undefined;
+    const povXZ =
+      finite(parsed.povX) && finite(parsed.povZ)
+        ? { povX: parsed.povX, povZ: parsed.povZ }
+        : {};
     const level = parseLevel(parsed.level);
     return {
       mode,
       box: parsed.box,
       frame,
       ...(povY == null ? {} : { povY }),
+      ...povXZ,
       ...(level ? { level } : {}),
     };
   } catch {

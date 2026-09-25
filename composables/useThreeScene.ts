@@ -7,8 +7,8 @@ import type { CameraMode } from "~/types/annotation";
 import type { Crop, CropBox, CropMode } from "~~/shared/utils/crop";
 import { isLevelled, type Level, type Vec3 } from "~~/shared/utils/levelling";
 import {
+  clampInsideEdges,
   createCropGizmo,
-  POV_EDGE_MARGIN,
   type CropGizmo,
   type CropGizmoTool,
   type RotateAxis,
@@ -284,6 +284,12 @@ export function useThreeScene(
    * become a fixed height that stays put.
    */
   let draftPovY: number | null = null;
+  /**
+   * Where the POV eye stands, in model-local X and Z, or null while it is still
+   * at the frame's centre. Null follows the centre for the same reason as
+   * `draftPovY`.
+   */
+  let draftPovXZ: { x: number; z: number } | null = null;
 
   /**
    * The box as it was before switching to `remove` shrank it, while that shrunk
@@ -337,15 +343,22 @@ export function useThreeScene(
    * Where POV puts the camera, in world space.
    *
    * Every POV placement goes through here: entering POV, re-framing while in
-   * it, and flying to a POV annotation. The model's centre is the world origin,
-   * so the eye is straight above or below it. Model rotation is about Y only,
-   * which is why a stored local height converts to world height by subtracting
-   * the centre's Y and nothing else.
+   * it, and flying to a POV annotation. World space is Ry(θ) · (L − C) (see
+   * pinCentre), so a stored local eye converts by subtracting the centre and
+   * turning by the model's turn, `theta`. Model rotation is about Y only, which
+   * is why the height needs the subtraction and nothing else.
    */
-  function povPosition(out = new THREE.Vector3()): THREE.Vector3 {
-    const stored = committedCrop?.povY;
-    const y = stored == null ? DEFAULT_POV_RISE : stored - appliedCentre.y;
-    return out.set(0, y, 0);
+  function povPosition(
+    out = new THREE.Vector3(),
+    theta = currentModel?.rotation.y ?? 0,
+  ): THREE.Vector3 {
+    const { povX, povY, povZ } = committedCrop ?? {};
+    out.set(0, povY == null ? DEFAULT_POV_RISE : povY - appliedCentre.y, 0);
+    if (povX != null && povZ != null) {
+      out.x = povX - appliedCentre.x;
+      out.z = povZ - appliedCentre.z;
+    }
+    return out.applyAxisAngle(Y_AXIS, theta);
   }
 
   let gizmo: CropGizmo | null = null;
@@ -462,6 +475,9 @@ export function useThreeScene(
       },
       onPovChange: (y) => {
         draftPovY = y;
+      },
+      onShaftMove: (x, z) => {
+        draftPovXZ = { x, z };
       },
       onRotate: (axis, angle) => {
         draftRotation
@@ -773,10 +789,18 @@ export function useThreeScene(
 
   /** `y` kept inside `frame`, clear of its floor and ceiling. */
   function clampPovTo(frame: THREE.Box3, y: number): number {
-    const low = frame.min.y + POV_EDGE_MARGIN;
-    const high = frame.max.y - POV_EDGE_MARGIN;
-    if (low > high) return (frame.min.y + frame.max.y) / 2;
-    return Math.min(Math.max(y, low), high);
+    return clampInsideEdges(y, frame.min.y, frame.max.y);
+  }
+
+  /** `xz` kept inside `frame`, clear of its walls. */
+  function clampPovXZTo(
+    frame: THREE.Box3,
+    xz: { x: number; z: number },
+  ): { x: number; z: number } {
+    return {
+      x: clampInsideEdges(xz.x, frame.min.x, frame.max.x),
+      z: clampInsideEdges(xz.z, frame.min.z, frame.max.z),
+    };
   }
 
   /**
@@ -797,13 +821,17 @@ export function useThreeScene(
     // panel is already refusing that state, so there is nothing to draw.
     if (draftFrame.isEmpty()) return;
 
-    const wanted =
-      draftPovY ??
-      draftFrame.getCenter(new THREE.Vector3()).y + DEFAULT_POV_RISE;
+    const wanted = draftFrame.getCenter(new THREE.Vector3());
+    wanted.y = draftPovY ?? wanted.y + DEFAULT_POV_RISE;
+    if (draftPovXZ) {
+      wanted.x = draftPovXZ.x;
+      wanted.z = draftPovXZ.z;
+    }
     const seated = gizmo.setShaft(draftFrame, wanted);
-    // A height the admin chose that the resized frame no longer contains is
+    // An eye the admin placed that the resized frame no longer contains is
     // pulled back inside it, so what is saved is what is shown.
-    if (draftPovY != null) draftPovY = seated;
+    if (draftPovY != null) draftPovY = seated.y;
+    if (draftPovXZ) draftPovXZ = { x: seated.x, z: seated.z };
   }
 
   function isFullBounds(box: THREE.Box3): boolean {
@@ -1158,6 +1186,10 @@ export function useThreeScene(
       : originalBounds.clone();
     cropMode.value = committedCrop?.mode ?? "keep";
     draftPovY = committedCrop?.povY ?? null;
+    draftPovXZ =
+      committedCrop?.povX != null && committedCrop.povZ != null
+        ? { x: committedCrop.povX, z: committedCrop.povZ }
+        : null;
     boxBeforeShrink = null;
     setClipBox(initial, cropMode.value);
     gizmo.show(initial, originalBounds);
@@ -1221,6 +1253,7 @@ export function useThreeScene(
     cropEmptiesScan.value = false;
     cropMode.value = committedCrop?.mode ?? "keep";
     draftPovY = null;
+    draftPovXZ = null;
     boxBeforeShrink = null;
     cropTool.value = "box";
     rotateDegrees.value = null;
@@ -1281,6 +1314,7 @@ export function useThreeScene(
     if (!gizmo || !cropReady.value) return;
     cropMode.value = "keep";
     draftPovY = null;
+    draftPovXZ = null;
     boxBeforeShrink = null;
     rotateDegrees.value = null;
 
@@ -1344,11 +1378,15 @@ export function useThreeScene(
 
     const drawn = gizmo.getBox();
     const hadBox =
-      cropMode.value !== "keep" || !isFullBounds(drawn) || draftPovY != null;
+      cropMode.value !== "keep" ||
+      !isFullBounds(drawn) ||
+      draftPovY != null ||
+      draftPovXZ != null;
 
     originalBounds.copy(measureScanBounds({ precise: true }));
     cropMode.value = "keep";
     draftPovY = null;
+    draftPovXZ = null;
     boxBeforeShrink = null;
     gizmo.show(originalBounds.clone(), originalBounds);
     gizmo.setBox(originalBounds.clone());
@@ -1410,7 +1448,8 @@ export function useThreeScene(
       return !(
         cropMode.value === "keep" &&
         isFullBounds(box) &&
-        draftPovY == null
+        draftPovY == null &&
+        draftPovXZ == null
       );
     }
 
@@ -1427,10 +1466,20 @@ export function useThreeScene(
 
     const before = committedCrop.povY ?? null;
     if ((before == null) !== (draftPovY == null)) return true;
-    return (
+    if (
       before != null &&
       draftPovY != null &&
       Math.abs(before - draftPovY) > epsilon
+    )
+      return true;
+
+    const { povX, povZ } = committedCrop;
+    const beforeXZ = povX != null && povZ != null ? { x: povX, z: povZ } : null;
+    if ((beforeXZ == null) !== (draftPovXZ == null)) return true;
+    return (
+      beforeXZ != null &&
+      draftPovXZ != null &&
+      Math.hypot(beforeXZ.x - draftPovXZ.x, beforeXZ.z - draftPovXZ.z) > epsilon
     );
   }
 
@@ -1465,7 +1514,11 @@ export function useThreeScene(
     // not something the gizmo can express. A moved POV eye still needs saving,
     // though, so a full-bounds box with one is kept as a crop that cuts nothing.
     const cleared =
-      mode === "keep" && isFullBounds(box) && draftPovY == null && !level;
+      mode === "keep" &&
+      isFullBounds(box) &&
+      draftPovY == null &&
+      draftPovXZ == null &&
+      !level;
 
     // The frame box is the drawn box in `keep` mode and the surviving geometry
     // in `remove` mode, where the drawn box is the part being deleted.
@@ -1485,6 +1538,7 @@ export function useThreeScene(
     // frame was just measured and can differ from the one the guide last stood
     // in, and the server refuses an eye outside its frame.
     const povY = draftPovY == null ? undefined : clampPovTo(frame, draftPovY);
+    const povXZ = draftPovXZ && clampPovXZTo(frame, draftPovXZ);
 
     return {
       crop: cleared
@@ -1494,6 +1548,7 @@ export function useThreeScene(
             box: cropFromBox(box),
             frame: cropFromBox(frame),
             ...(povY == null ? {} : { povY }),
+            ...(povXZ ? { povX: povXZ.x, povZ: povXZ.z } : {}),
             ...(level ? { level } : {}),
           },
       centreBefore: {
@@ -1526,6 +1581,7 @@ export function useThreeScene(
     cropDraft.value = null;
     cropEmptiesScan.value = false;
     draftPovY = null;
+    draftPovXZ = null;
     boxBeforeShrink = null;
     cropTool.value = "box";
     rotateDegrees.value = null;
@@ -1716,7 +1772,8 @@ export function useThreeScene(
       targetTarget.add(offset);
       targetFov = snapshot.cameraFov;
     } else {
-      targetPos = povPosition();
+      // At the turn the tween ends on: an eye off the centre turns with the model.
+      targetPos = povPosition(new THREE.Vector3(), targetModelRotY);
       targetTarget = new THREE.Vector3(0, 0, 0);
       targetFov = snapshot.cameraFov;
       targetRotX = snapshot.rotationX ?? 0;
