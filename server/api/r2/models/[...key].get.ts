@@ -16,7 +16,8 @@ import { rateLimitByIp } from "~~/server/utils/rateLimit";
  * Per-IP burst limit on scan downloads.
  *
  * Sized to throttle rate, not total volume: a visitor clicking through the
- * catalog never approaches 40 distinct scans in five minutes, and repeat views
+ * catalog never approaches 100 distinct scans in five minutes (even mashing
+ * Random, which pulls a fresh uncached scan every click), and repeat views
  * are served from the browser cache under the immutable Cache-Control below, so
  * they never reach this handler. A scraper pulling the whole archive is the
  * only caller that sustains this rate, and it gets stretched from a ~90 second
@@ -25,7 +26,7 @@ import { rateLimitByIp } from "~~/server/utils/rateLimit";
  * Applies to models only. Thumbnails are excluded on purpose: the grid view
  * requests dozens at once, so the same limit there would 429 ordinary visitors.
  */
-const SCAN_BURST_LIMIT = { max: 40, windowSec: 300 };
+const SCAN_BURST_LIMIT = { max: 100, windowSec: 300 };
 
 export default defineEventHandler(async (event) => {
   const key = getRouterParam(event, "key");

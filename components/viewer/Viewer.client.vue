@@ -40,6 +40,7 @@ function handlePickPoint(point: THREE.Vector3, snapshot: CameraSnapshot) {
 const {
   loading,
   error,
+  rateLimited,
   mode,
   createMode,
   markersVisible,
@@ -832,6 +833,9 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
     <div v-if="loading" class="loading-overlay">
       <img src="/toilet-loader.gif" alt="Loading..." width="200" height="200" />
     </div>
+    <div v-else-if="rateLimited" class="status">
+      <span class="rate-limited">Too many refreshes! Try again in a minute.</span>
+    </div>
     <div v-else-if="error" class="status error">{{ error }}</div>
   </div>
 </template>
@@ -1036,6 +1040,15 @@ canvas {
 }
 .status.error {
   color: #ff6b6b;
+}
+/* Same outlined treatment as .crosshair-hint. */
+.rate-limited {
+  background: none;
+  color: #fff;
+  border: 1px solid #fff;
+  font-size: 12px;
+  padding: 6px 12px;
+  border-radius: 3px;
 }
 .crosshair-hint {
   position: absolute;

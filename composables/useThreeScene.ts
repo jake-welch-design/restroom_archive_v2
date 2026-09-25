@@ -164,6 +164,8 @@ export function useThreeScene(
 ) {
   const loading = ref(false);
   const error = ref<string | null>(null);
+  /** The last load failed on the scan route's per-IP burst limit (a 429). */
+  const rateLimited = ref(false);
   const mode = ref<ViewMode>("orbit");
   const createMode = ref(false);
   const markersVisible = ref(true);
@@ -1052,6 +1054,7 @@ export function useThreeScene(
     if (!scene) return;
     loading.value = true;
     error.value = null;
+    rateLimited.value = false;
     userInteracted = false;
     const myId = ++loadId;
 
@@ -1108,8 +1111,12 @@ export function useThreeScene(
       profile?.total();
       profile?.census(currentModel, renderer);
     } catch (e) {
-      if (myId === loadId)
+      if (myId === loadId) {
+        // three's FileLoader throws an HttpError carrying the fetch Response.
+        rateLimited.value =
+          (e as { response?: Response }).response?.status === 429;
         error.value = (e as Error).message ?? "Failed to load model";
+      }
     } finally {
       if (myId === loadId) loading.value = false;
     }
@@ -2091,6 +2098,7 @@ export function useThreeScene(
   return {
     loading,
     error,
+    rateLimited,
     mode,
     createMode,
     markersVisible,
