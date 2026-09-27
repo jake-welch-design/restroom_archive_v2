@@ -34,18 +34,17 @@ const plural = (n: number, one: string, many: string) =>
 
 const statsSentence = computed(() => {
   const s = stats.value;
-  const verb = s.restrooms === 1 ? "has" : "have";
+  const verb = s.archivists === 1 ? "has" : "have";
   // A null country count means some published entry has no country stored, so
   // the archive cannot stand behind a figure. The clause comes out altogether
   // rather than printing a number that would be quietly too low.
   const where =
     s.countries != null
-      ? `${plural(s.cities, "city", "cities")} and ${plural(s.countries, "country", "countries")}`
+      ? `${plural(s.cities, "city", "cities")} across ${plural(s.countries, "country", "countries")}`
       : plural(s.cities, "city", "cities");
   return (
-    `Currently, ${plural(s.restrooms, "restroom", "restrooms")} ${verb} been ` +
-    `archived in ${where} by ` +
-    `${plural(s.archivists, "archivist", "archivists")}.`
+    `Currently, ${plural(s.archivists, "archivist", "archivists")} ${verb} ` +
+    `documented ${plural(s.restrooms, "restroom", "restrooms")} in ${where}.`
   );
 });
 
@@ -127,6 +126,20 @@ async function submitContact() {
           rarely considered. There is perhaps no space in society that better
           captures the creativity and impertinence of humans when they know that
           nobody else is watching. {{ statsSentence }}
+        </p>
+        <p>
+          Follow us on
+          <a href="https://www.instagram.com/restroomarchive/">Instagram</a>
+          for occasional updates and Archive highlights. The Restroom Archive
+          has been featured on
+          <a
+            href="https://www.404media.co/the-man-on-a-quest-to-digitally-preserve-americas-public-restrooms/"
+            >404 Media</a
+          >
+          and EY Doberman’s
+          <a href="https://doberman.co/3"
+            >“3 Things We’ve Seen and Loved”, 26-030</a
+          >.
         </p>
       </section>
 
