@@ -144,8 +144,12 @@ async function submitContact() {
       </section>
 
       <section>
-        <h1>Navigation controls</h1>
-        <p>Drag to rotate, right click to pan, and scroll to zoom.</p>
+        <h1>Controls</h1>
+        <p>
+          Drag to rotate, right-click to pan, and scroll to zoom. Use the switch
+          to show or hide annotations. Click the cube icon to change the view
+          mode.
+        </p>
       </section>
 
       <section>
