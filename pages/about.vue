@@ -406,6 +406,12 @@ async function submitContact() {
 .field-textarea {
   min-height: 90px;
 }
+/* The interaction-only widget is usually invisible but still a flex item, so
+   it doubles the gap above the button. Pull it up by one gap so the message
+   field and button sit as close as any other pair of fields. */
+.contact-form .turnstile {
+  margin: -16px 0 0;
+}
 .contact-msg p {
   margin: 0 0 8px;
   font-size: 14px;
