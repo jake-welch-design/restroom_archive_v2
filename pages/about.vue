@@ -130,7 +130,8 @@ async function submitContact() {
         <p>
           Follow us on
           <a href="https://www.instagram.com/restroomarchive/">Instagram</a>
-          for occasional updates and Archive highlights. The Restroom Archive
+          for occasional updates and Archive highlights.
+          <!-- The Restroom Archive
           has been featured on
           <a
             href="https://www.404media.co/the-man-on-a-quest-to-digitally-preserve-americas-public-restrooms/"
@@ -139,7 +140,7 @@ async function submitContact() {
           and EY Doberman’s
           <a href="https://doberman.co/3"
             >“3 Things We’ve Seen and Loved”, 26-030</a
-          >.
+          >. -->
         </p>
       </section>
       <!-- 
