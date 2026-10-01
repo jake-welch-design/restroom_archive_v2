@@ -170,16 +170,76 @@ const step2Valid = computed(() => {
 // search, so it is required rather than encouraged.
 const step3Valid = computed(() => !!uploadDescription.value.trim());
 
+/**
+ * Whether the pin has been checked against the typed location, and what came
+ * back.
+ *
+ * The verdict is stored with the exact values it was reached for, so editing
+ * any of them makes it stale rather than leaving a pass (or a refusal) standing
+ * over fields it no longer describes. Null means not checked yet.
+ */
+const coordsCheck = ref<{ key: string; ok: boolean } | null>(null);
+const coordsChecking = ref(false);
+const coordsKey = computed(() =>
+  [
+    uploadLocation.value,
+    uploadCountry.value,
+    uploadLat.value,
+    uploadLng.value,
+  ].join("|"),
+);
+const coordsOk = computed(() =>
+  coordsCheck.value?.key === coordsKey.value ? coordsCheck.value.ok : null,
+);
+
+async function checkCoords() {
+  const key = coordsKey.value;
+  if (coordsCheck.value?.key === key) return;
+  coordsChecking.value = true;
+  // Only a definite mismatch refuses. A check that could not be made -- the
+  // endpoint answers `match: null`, or does not answer -- is let through; see
+  // server/utils/coordsMatchLocation.ts.
+  let ok = true;
+  try {
+    const res = await $fetch<{ match: boolean | null }>(
+      "/api/restrooms/check-location",
+      {
+        method: "POST",
+        body: {
+          city: uploadCity.value,
+          country: uploadCountry.value,
+          subdivision: uploadSubdivision.value,
+          lat: parseFloat(uploadLat.value),
+          lng: parseFloat(uploadLng.value),
+        },
+      },
+    );
+    ok = res.match !== false;
+  } catch {
+    /* let through */
+  }
+  coordsChecking.value = false;
+  coordsCheck.value = { key, ok };
+}
+
 function canAccessStep(n: number) {
   if (n <= 1) return true;
   if (n === 2) return step1Valid.value;
-  if (n === 3) return step1Valid.value && step2Valid.value;
-  return step1Valid.value && step2Valid.value && step3Valid.value;
+  const detailsDone =
+    step1Valid.value && step2Valid.value && coordsOk.value === true;
+  if (n === 3) return detailsDone;
+  return detailsDone && step3Valid.value;
 }
 
-function goNext() {
+async function goNext() {
   if (currentStep.value === 1 && !step1Valid.value) return;
-  if (currentStep.value === 2 && !step2Valid.value) return;
+  if (currentStep.value === 2) {
+    if (!step2Valid.value) return;
+    await checkCoords();
+    // Re-read rather than trust the result of the call: the fields may have
+    // been edited, or another step opened, while the lookup was in flight.
+    if (currentStep.value !== 2 || coordsOk.value !== true) return;
+  }
   if (currentStep.value === 3 && !step3Valid.value) return;
   currentStep.value = Math.min(4, currentStep.value + 1);
 }
@@ -280,6 +340,7 @@ function resetUpload() {
   hasUnsavedSubmission.value = false;
   uploadError.value = "";
   fileError.value = "";
+  coordsCheck.value = null;
   uploadSuccess.value = false;
   // Reset rather than carry over: the next scan is a new attestation, and an
   // admin submitting a run of scans should not tick this once for all of them.
@@ -450,6 +511,9 @@ function resetUpload() {
               />
             </label>
           </div>
+          <p v-if="coordsOk === false" class="form-error">
+            Coordinates don't match the location
+          </p>
         </div>
 
         <label class="field">
@@ -462,10 +526,10 @@ function resetUpload() {
           <button
             type="button"
             class="primary-btn step-next"
-            :disabled="!step2Valid"
+            :disabled="!step2Valid || coordsChecking || coordsOk === false"
             @click="goNext"
           >
-            Next
+            {{ coordsChecking ? "Checking…" : "Next" }}
           </button>
         </div>
       </div>
