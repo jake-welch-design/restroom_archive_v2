@@ -163,7 +163,7 @@ function onKeydown(e: KeyboardEvent) {
         </p>
         <GuideImage
           name="app-options"
-          label="The top two recommended scanning apps: Scaniverse (LiDAR) and KIRI Engine (photogrammetry)"
+          label="The top two recommended scanning apps: Scaniverse for LiDAR and KIRI Engine for photogrammetry. (The Restroom Archive is not sponsored by either app!)"
         />
       </template>
 
