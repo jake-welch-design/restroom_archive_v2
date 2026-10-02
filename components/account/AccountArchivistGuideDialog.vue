@@ -145,21 +145,22 @@ function onKeydown(e: KeyboardEvent) {
           Download a 3D scanning app to your mobile device. The recommended
           option depends on your device:
         </p>
-        <ul>
-          <li>
-            <strong>iPhone with LiDAR</strong> (12 Pro and later Pro and Pro Max
-            models) and LiDAR compatible Android models:
-            <a href="https://scaniverse.com/" target="_blank" rel="noopener"
-              >Scaniverse</a
-            >, using Mesh mode
-          </li>
-          <li>
-            <strong>Android and iPhone without LiDAR:</strong>
-            <a href="https://www.kiriengine.app/" target="_blank" rel="noopener"
-              >KIRI Engine</a
-            >, using its Photo Scan mode
-          </li>
-        </ul>
+
+        <h4>
+          iPhone with LiDAR (12 Pro and later Pro and Pro Max models) and LiDAR
+          compatible Android models:
+        </h4>
+        <p>
+          <a href="https://scaniverse.com/" target="_blank" rel="noopener"
+            >Scaniverse</a
+          >, using Mesh mode
+        </p>
+        <h4>Android and iPhone without LiDAR:</h4>
+        <p>
+          <a href="https://www.kiriengine.app/" target="_blank" rel="noopener"
+            >KIRI Engine</a
+          >, using its Photo Scan mode
+        </p>
         <GuideImage
           name="app-options"
           label="The top two recommended scanning apps: Scaniverse (LiDAR) and KIRI Engine (photogrammetry)"
