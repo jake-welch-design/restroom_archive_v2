@@ -59,7 +59,7 @@ const src = computed(() => `/guide/${props.name}.jpg`);
   max-width: 460px;
   aspect-ratio: 1;
   margin: 0 auto;
-  border: 1px solid #ddd;
+  border: 1px solid #000;
   background: #f7f7f7;
 }
 

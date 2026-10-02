@@ -335,7 +335,7 @@ onBeforeUnmount(() => {
   max-width: 460px;
   aspect-ratio: 1;
   margin: 0 auto;
-  border: 1px solid #ddd;
+  border: 1px solid #000;
   background: #f7f7f7;
   cursor: pointer;
 }
@@ -371,7 +371,7 @@ onBeforeUnmount(() => {
    on screen; switching just this element would make it 2px narrower.
 
    `position: relative` is what keeps the seam a single line. `.gv-frame` is
-   positioned, so it paints above static siblings and its grey video border
+   positioned, so it paints above static siblings and its video border
    would otherwise show through the 1px overlap; positioning the track too puts
    both in the same paint step, where the later one in the tree wins. */
 .gv-track {

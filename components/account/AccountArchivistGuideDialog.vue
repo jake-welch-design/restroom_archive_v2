@@ -284,7 +284,7 @@ function onKeydown(e: KeyboardEvent) {
           that you compress it beforehand.
         </p>
         <GuideVideo
-          name="Export"
+          name="export"
           label="Exporting from Scaniverse: choose GLB under Mesh, then Export."
         />
       </template>

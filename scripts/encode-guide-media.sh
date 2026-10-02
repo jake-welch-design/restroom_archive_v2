@@ -59,7 +59,7 @@ encode() {
 # originals.
 encode "$SRC/2.0/scanning.mp4" scan-demo 28 36 720:720
 encode "$SRC/reprocess.mp4" reprocess 23 32
-encode "$SRC/2.0/exporting.mp4" download 23 32
+encode "$SRC/2.0/exporting.mp4" export 23 32
 encode "$SRC/Upload.mp4" upload 23 32
 encode "$SRC/2.0/Cropping.mp4" crop 23 32
 
