@@ -27,6 +27,7 @@ const ACTION_LABEL: Record<string, string> = {
   "user.promote": "promoted user to admin",
   "user.delete": "deleted user",
   "user.rename": "renamed user",
+  "user.message": "sent note to user",
   "user.revoke-submission": "revoked submission access",
   "restroom.publish": "published restroom",
   "restroom.reject": "rejected restroom",

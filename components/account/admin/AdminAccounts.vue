@@ -416,6 +416,18 @@ const revokeAccess = (a: AccountRow) =>
   runAccountAction(a, "revoke", "revoke-submission");
 const unmute = (a: AccountRow) => runAccountAction(a, "unmute", "unmute");
 
+/**
+ * Sends the note on its own, for when there is something to tell the user and
+ * nothing to change about their account.
+ */
+function sendMessage(a: AccountRow) {
+  if (!noteToUser.value.trim()) {
+    action.error = "Write a note to send.";
+    return;
+  }
+  return runAccountAction(a, "message", "message");
+}
+
 function mute(a: AccountRow) {
   if (!muteDays.value || muteDays.value < 1) {
     action.error = "Enter how many days the suspension should last.";
@@ -683,20 +695,35 @@ async function submitRename(a: AccountRow) {
         </div>
 
         <div v-if="openId === a.id" class="account-options">
-          <label class="field">
-            <span class="field-label">Note to user</span>
-            <textarea
-              v-model="noteToUser"
-              class="field-input field-textarea"
-              rows="2"
-              maxlength="500"
-              placeholder="Optional"
-            />
-            <span class="field-hint">
-              Attached to the next action you take below, rename and delete
-              excepted. Shown at the top of their account in red.
-            </span>
-          </label>
+          <div class="note-block">
+            <label class="field">
+              <span class="field-label">Note to user</span>
+              <textarea
+                v-model="noteToUser"
+                class="field-input field-textarea"
+                rows="2"
+                maxlength="500"
+                placeholder="Optional"
+              />
+              <span class="field-hint">
+                Send it on its own, or take an action below and it goes with
+                that, rename and delete excepted. Shown at the top of their
+                account in red for 24 hours.
+              </span>
+            </label>
+            <button
+              type="button"
+              class="btn"
+              :disabled="
+                !noteToUser.trim() || action.isRunning(`acct-${a.id}-message`)
+              "
+              @click="sendMessage(a)"
+            >
+              {{
+                action.isRunning(`acct-${a.id}-message`) ? "…" : "Send message"
+              }}
+            </button>
+          </div>
 
           <div class="settings-group">
             <span class="settings-group-label">Access</span>
@@ -1117,6 +1144,19 @@ async function submitRename(a: AccountRow) {
   /* Same measure as the account's own settings form: this is a form about one
      account, not a full-width table. */
   max-width: 480px;
+}
+
+/* The note and its own send button, held closer together than the panel's
+   groups so the button reads as belonging to the field above it. */
+.note-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.note-block .field {
+  align-self: stretch;
 }
 
 /* A row whose action needs an input beside the button. */
