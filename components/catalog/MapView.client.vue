@@ -58,8 +58,8 @@ let recenterTimer: ReturnType<typeof setTimeout> | null = null;
 const VIEWED_KEY = "ra:viewedPins";
 const viewedSlugs = new Set<string>();
 
-// Basemap choice ("default" = CARTO light, "satellite" = Esri imagery),
-// persisted so the map opens in whichever mode was last used.
+// Basemap choice ("default" = CARTO light, "satellite" = Esri imagery), persisted
+// so the map opens in whichever mode was last used.
 const BASEMAP_KEY = "ra:basemap";
 type Basemap = "default" | "satellite";
 const basemap = ref<Basemap>("default");
