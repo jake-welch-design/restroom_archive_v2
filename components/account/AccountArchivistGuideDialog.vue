@@ -27,7 +27,7 @@ const STEPS: Step[] = [
   {
     id: "export",
     label: "Export",
-    title: "Export as .GLB/.GLTF",
+    title: "Export as .GLB",
   },
   {
     id: "upload",
@@ -142,12 +142,28 @@ function onKeydown(e: KeyboardEvent) {
 
       <template v-if="step.id === 'app'">
         <p>
-          Download a 3D scanning app to your mobile device.
-          <a href="https://scaniverse.com/" target="_blank" rel="noopener"
-            >Scaniverse</a
-          >
-          is the current recommended option.
+          Download a 3D scanning app to your mobile device. The recommended
+          option depends on your device:
         </p>
+        <ul>
+          <li>
+            <strong>iPhone with LiDAR</strong> (12 Pro and later Pro and Pro Max
+            models) and LiDAR compatible Android models:
+            <a href="https://scaniverse.com/" target="_blank" rel="noopener"
+              >Scaniverse</a
+            >, using Mesh mode
+          </li>
+          <li>
+            <strong>Android and iPhone without LiDAR:</strong>
+            <a href="https://www.kiriengine.app/" target="_blank" rel="noopener"
+              >KIRI Engine</a
+            >, using its Photo Scan mode
+          </li>
+        </ul>
+        <GuideImage
+          name="app-options"
+          label="The two recommended scanning apps: Scaniverse and KIRI Engine"
+        />
       </template>
 
       <template v-else-if="step.id === 'scan'">
@@ -167,6 +183,12 @@ function onKeydown(e: KeyboardEvent) {
           if they're slightly matte and can be captured at a steeper angle, but
           otherwise, it is expected that these will create holes and artifacts
           and that’s okay.
+        </p>
+        <p>
+          If using a photo scan, take many overlapping shots, more than feels
+          necessary. Plain walls and uniform tile give the software little to
+          match between photos, so include edges, fixtures, and corners in each
+          frame wherever you can.
         </p>
         <GuideVideo
           name="scan-demo"
@@ -277,11 +299,11 @@ function onKeydown(e: KeyboardEvent) {
 
       <template v-else-if="step.id === 'export'">
         <p>
-          Once you’re ready to submit, export the model as a .GLB or .GLTF file.
-          This format is important as it saves the 3D mesh together with its
-          texture and is relatively small in file size. Note that the max file
-          size to upload is 25MB, so if your scan is larger, it is recommended
-          that you compress it beforehand.
+          Once you’re ready to submit, export the model as a .GLB file. This
+          format is important as it saves the 3D mesh together with its texture
+          and is relatively small in file size. Note that the max file size to
+          upload is 25MB, so if your scan is larger, it is recommended that you
+          compress it beforehand.
         </p>
         <GuideVideo
           name="export"
