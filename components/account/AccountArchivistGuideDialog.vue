@@ -162,7 +162,7 @@ function onKeydown(e: KeyboardEvent) {
         </ul>
         <GuideImage
           name="app-options"
-          label="The two recommended scanning apps: Scaniverse and KIRI Engine"
+          label="The top two recommended scanning apps: Scaniverse (LiDAR) and KIRI Engine (photogrammetry)"
         />
       </template>
 
