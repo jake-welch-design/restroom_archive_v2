@@ -285,7 +285,7 @@ function onKeydown(e: KeyboardEvent) {
         </p>
         <GuideVideo
           name="export"
-          label="Exporting from Scaniverse: choose GLB under Mesh, then Export."
+          label="Exporting from Scaniverse: Choose Share, then .GLB"
         />
       </template>
 
