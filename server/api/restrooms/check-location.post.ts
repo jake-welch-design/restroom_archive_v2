@@ -16,7 +16,7 @@ const Body = z.object({
 // null when the check could not be made, which the wizard lets through.
 export default defineEventHandler(async (event) => {
   requireApproved(event);
-  // Each call is up to two requests to a free geocoder on the archive's name,
+  // Each call is up to three requests to a free geocoder on the archive's name,
   // so the allowance covers a run of corrections and not much more.
   await rateLimitByUser(event, "check-location", { max: 60, windowSec: 3600 });
 

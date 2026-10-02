@@ -16,18 +16,19 @@ import { publicUrls } from "~~/server/utils/urls";
  * privacy notice go on saying that no other third party receives data.
  */
 
-const SEARCH_URL = "https://nominatim.openstreetmap.org/search";
+const GEOCODER_URL = "https://nominatim.openstreetmap.org";
 
 /**
  * How far outside a place's bounds a pin may fall and still count as there.
  *
- * Generous on purpose. People file a room under the city they think of it as
- * being in, which is often the one next door, and a village comes back as a
- * point with almost no bounds of its own. The mistakes this is for are off by
- * thousands of kilometres, so there is nothing to gain from a tight margin and
- * a refused correct pin to lose.
+ * People file a room under the city they think of it as being in, which is
+ * often the one next door, and a village comes back as a point with almost no
+ * bounds of its own. When this was set, every pin already in the archive sat
+ * within 13 km of its city's bounds -- the furthest being a Las Vegas address
+ * that is formally in the next town -- so 20 passes all of those with room to
+ * spare while still refusing a pin one city over.
  */
-const MARGIN_KM = 50;
+const MARGIN_KM = 20;
 const KM_PER_DEGREE = 111;
 
 interface Place {
@@ -49,16 +50,13 @@ function isNear(lat: number, lng: number, place: Place): boolean {
   );
 }
 
-async function search(
+async function geocoder<T>(
+  path: "search" | "reverse",
   params: Record<string, string>,
   userAgent: string,
-): Promise<Place[]> {
-  const query = new URLSearchParams({
-    ...params,
-    format: "jsonv2",
-    limit: "10",
-  });
-  const res = await fetch(`${SEARCH_URL}?${query}`, {
+): Promise<T> {
+  const query = new URLSearchParams({ ...params, format: "jsonv2" });
+  const res = await fetch(`${GEOCODER_URL}/${path}?${query}`, {
     // Nominatim's usage policy asks for a User-Agent that identifies the
     // application, and answers 403 to a runtime's default one.
     headers: { "User-Agent": userAgent },
@@ -66,6 +64,29 @@ async function search(
   });
   if (!res.ok) throw new Error(`geocoder answered ${res.status}`);
   return res.json();
+}
+
+/**
+ * The state or province a pin is in, as an ISO 3166-2 code ("US-NY"), or null
+ * where the geocoder has none for it -- open water, mostly.
+ *
+ * This is what tells Manhattan from Hoboken. The two are three kilometres
+ * apart, well inside any margin a city lookup can afford, but they are on
+ * opposite sides of a state line that the geocoder knows exactly.
+ */
+async function subdivisionAt(
+  lat: number,
+  lng: number,
+  userAgent: string,
+): Promise<string | null> {
+  const place = await geocoder<{ address?: Record<string, string> }>(
+    "reverse",
+    // Zoom 5 is state level: the answer stops there instead of resolving a
+    // street address nobody asked for.
+    { lat: String(lat), lon: String(lng), zoom: "5" },
+    userAgent,
+  );
+  return place.address?.["ISO3166-2-lvl4"] ?? null;
 }
 
 /**
@@ -94,23 +115,30 @@ export async function coordsMatchLocation(
     (r) => r.code === input.subdivision,
   )?.name;
   const userAgent = `RestroomArchive (+${publicUrls(event).site})`;
+  const search = (params: Record<string, string>) =>
+    geocoder<Place[]>("search", { ...params, limit: "10" }, userAgent);
 
   try {
+    // Where a state or province was picked, the pin has to be in it.
+    if (state) {
+      const pinned = await subdivisionAt(input.lat, input.lng, userAgent);
+      if (pinned && pinned !== `${input.country}-${input.subdivision}`)
+        return false;
+    }
+
     // The structured form only matches settlements, so a misspelt city finds
     // nothing rather than a street that happens to share the misspelling.
     // Every match is kept: there are five Newports in the UK, and a pin in any
     // of them agrees with "Newport".
-    let places = await search(
-      { city: input.city.trim(), ...(state ? { state } : {}), country },
-      userAgent,
-    );
+    let places = await search({
+      city: input.city.trim(),
+      ...(state ? { state } : {}),
+      country,
+    });
     // A city the geocoder does not know still has a state or a country around
     // it, which is enough to catch a pin on the wrong continent.
     if (!places.length)
-      places = await search(
-        { q: [state, country].filter(Boolean).join(", ") },
-        userAgent,
-      );
+      places = await search({ q: [state, country].filter(Boolean).join(", ") });
     if (!places.length) return null;
     return places.some((p) => isNear(input.lat, input.lng, p));
   } catch (err) {

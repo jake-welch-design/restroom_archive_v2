@@ -58,11 +58,11 @@ let recenterTimer: ReturnType<typeof setTimeout> | null = null;
 const VIEWED_KEY = "ra:viewedPins";
 const viewedSlugs = new Set<string>();
 
-// Basemap choice ("map" = CARTO light, "satellite" = Esri imagery), persisted
-// so the map opens in whichever mode was last used.
+// Basemap choice ("default" = CARTO light, "satellite" = Esri imagery),
+// persisted so the map opens in whichever mode was last used.
 const BASEMAP_KEY = "ra:basemap";
-type Basemap = "map" | "satellite";
-const basemap = ref<Basemap>("map");
+type Basemap = "default" | "satellite";
+const basemap = ref<Basemap>("default");
 
 function loadBasemap() {
   try {
@@ -482,7 +482,7 @@ function updateActivePin(slug: string | null) {
 // so turning the whole group back on is safe.
 function applyBasemapVisibility() {
   if (!map || !map.getLayer("satellite-layer")) return;
-  const showMap = basemap.value === "map";
+  const showMap = basemap.value === "default";
   for (const id of basemapLayerIds) {
     map.setLayoutProperty(id, "visibility", showMap ? "visible" : "none");
   }
@@ -616,7 +616,7 @@ onBeforeUnmount(() => {
     <div class="basemap-switch" :class="{ 'panel-open': panelOpen }">
       <button
         v-for="opt in [
-          { key: 'map', label: 'Map' },
+          { key: 'default', label: 'Default' },
           { key: 'satellite', label: 'Satellite' },
         ] as const"
         :key="opt.key"
