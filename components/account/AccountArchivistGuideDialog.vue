@@ -26,7 +26,7 @@ const STEPS: Step[] = [
   { id: "details", label: "Details", title: "Take note of contextual details" },
   {
     id: "export",
-    label: "Download",
+    label: "Export",
     title: "Export as .GLB/.GLTF",
   },
   {
@@ -277,15 +277,15 @@ function onKeydown(e: KeyboardEvent) {
 
       <template v-else-if="step.id === 'export'">
         <p>
-          Once you’re ready to submit, download the model as a .GLB or .GLTF
-          file. This format is important as it saves the 3D mesh together with
-          its texture and is relatively small in file size. Note that the max
-          file size to upload is 25MB, so if your scan is larger, it is
-          recommended that you compress it beforehand.
+          Once you’re ready to submit, export the model as a .GLB or .GLTF file.
+          This format is important as it saves the 3D mesh together with its
+          texture and is relatively small in file size. Note that the max file
+          size to upload is 25MB, so if your scan is larger, it is recommended
+          that you compress it beforehand.
         </p>
         <GuideVideo
-          name="download"
-          label="Exporting from Polycam on desktop: choose GLTF under Mesh, then Export."
+          name="Export"
+          label="Exporting from Scaniverse: choose GLB under Mesh, then Export."
         />
       </template>
 
