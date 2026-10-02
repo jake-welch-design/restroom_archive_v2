@@ -457,7 +457,7 @@ function onKeydown(e: KeyboardEvent) {
   max-width: 100%;
   height: auto;
   margin: 0 0 0.9em;
-  border: 1px solid #ddd;
+  border: 1px solid #000;
 }
 
 .guide-note {
