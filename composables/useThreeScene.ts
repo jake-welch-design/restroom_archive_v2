@@ -4,7 +4,13 @@ import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { Ref } from "vue";
 import type { CameraMode } from "~/types/annotation";
-import type { Crop, CropBox, CropMode } from "~~/shared/utils/crop";
+import {
+  MAX_CROP_REMOVALS,
+  type Crop,
+  type CropBox,
+  type CropMode,
+} from "~~/shared/utils/crop";
+import { patchCropShader } from "~~/shared/utils/cropShader";
 import { isLevelled, type Level, type Vec3 } from "~~/shared/utils/levelling";
 import {
   clampInsideEdges,
@@ -202,6 +208,26 @@ export function useThreeScene(
   const cropReady = ref(false);
   /** Whether the crop tool is resizing the box or turning the scan. */
   const cropTool = ref<CropGizmoTool>("box");
+  /**
+   * The rounds of the edit already confirmed with the tick, mirrored out as
+   * plain numbers: the box being kept, or null for the whole scan, and every
+   * removal box. The panel reads it to count the annotations the edit as a
+   * whole would take away, not just the round on screen.
+   */
+  const cropConfirmed = shallowRef<{
+    keep: CropBox | null;
+    removals: CropBox[];
+  }>({ keep: null, removals: [] });
+  /**
+   * Whether the removal box on screen is part of the edit yet.
+   *
+   * A removal round starts with a box placed as a suggestion, which removes
+   * nothing until one of its faces is dragged. Without this the box offered
+   * after each tick would be saved with the rest, deleting whatever happened
+   * to sit at its default place. Only meaningful in `remove` mode: a `keep`
+   * round is always the box as drawn.
+   */
+  const removalPending = ref(false);
   /** The angle of a ring drag in progress, in degrees, for the note. */
   const rotateDegrees = ref<number | null>(null);
 
@@ -266,6 +292,51 @@ export function useThreeScene(
     rotationY: number;
   } | null = null;
 
+  /**
+   * The confirmed rounds of the edit in progress, in the same local space.
+   *
+   * `draftKeep` is the box being kept, the scan's own bounds when nothing is
+   * trimmed, and `draftRemovals` the boxes whose insides go. The round on
+   * screen is in the gizmo, and is added to these by the tick, by switching
+   * mode, or implicitly by saving.
+   */
+  const draftKeep = new THREE.Box3();
+  let draftRemovals: THREE.Box3[] = [];
+  /** Set while the scene moves the gizmo's box, so onChange can tell it from a drag. */
+  let settingBox = false;
+
+  /**
+   * The confirmed rounds' boxes, drawn faintly while editing so the admin can
+   * see what has already been taken out. In the scene rather than under the
+   * model, so the pointer raycasts that walk the model do not hit them, and
+   * given the model's matrix every frame instead.
+   */
+  const roundOutlines = new THREE.Group();
+  roundOutlines.matrixAutoUpdate = false;
+
+  /* --- Crop shader ---------------------------------------------------------
+   * The crop in force, and the confirmed rounds while editing, are cut by the
+   * scan's own fragment shader (shared/utils/cropShader.ts), because three's
+   * clipping planes can only describe one box. The planes are kept for the one
+   * round being drawn, which they already follow a drag with for free.
+   *
+   * The uniforms are one object shared by every material on the scan, so
+   * moving a box is a write here and not a walk of the materials. How many
+   * boxes there are is compiled into the shader, though, so changing that
+   * rebuilds them, which `shaderCropKey` tracks.
+   */
+  const shaderKeep = new THREE.Box3();
+  let shaderKeepActive = false;
+  let shaderRemovals: THREE.Box3[] = [];
+  let shaderCropKey = "0:0";
+  const cropUniforms = {
+    cropToLocal: { value: new THREE.Matrix4() },
+    cropKeepMin: { value: shaderKeep.min },
+    cropKeepMax: { value: shaderKeep.max },
+    cropRemoveMin: { value: [] as THREE.Vector3[] },
+    cropRemoveMax: { value: [] as THREE.Vector3[] },
+  };
+
   /** Breathing room around the box when the crop tool frames it. */
   const CROP_FRAME_MARGIN = 1.08;
 
@@ -292,18 +363,6 @@ export function useThreeScene(
    * `draftPovY`.
    */
   let draftPovXZ: { x: number; z: number } | null = null;
-
-  /**
-   * The box as it was before switching to `remove` shrank it, while that shrunk
-   * box is still untouched. Null once a face has been dragged, or when no
-   * shrink happened.
-   *
-   * Switching back to `keep` restores it. Without that, flipping the mode to
-   * `remove` and back leaves a quarter-size `keep` box behind, which trims
-   * away most of the scan, and with the crop button saving on its next press
-   * one idle round trip of the toggle would be enough to save it.
-   */
-  let boxBeforeShrink: THREE.Box3 | null = null;
 
   /**
    * The levelling rotation being edited, and the point it turns about.
@@ -441,6 +500,7 @@ export function useThreeScene(
     renderer.localClippingEnabled = true;
 
     scene = new THREE.Scene();
+    scene.add(roundOutlines);
 
     camera = new THREE.PerspectiveCamera(70, 1, 0.01, 1000);
     // Yaw-then-pitch order, matching how POV drives the camera. Fixed once here
@@ -464,16 +524,20 @@ export function useThreeScene(
       controls,
       getModel: () => currentModel,
       onChange: (box) => {
+        // The first drag of a removal box is what makes it part of the edit.
+        if (!settingBox && cropMode.value === "remove")
+          removalPending.value = true;
         // Clip to the draft as the face moves, but leave the model where it is.
         // Re-centring on every drag frame would slide the scan out from under
         // the handle being dragged.
-        setClipBox(box, cropMode.value);
+        setClipBox(roundClipBox(box), cropMode.value);
         cropDraft.value = cropFromBox(box);
-        cropEmptiesScan.value = wouldEmptyScan(box, cropMode.value);
-        // In `keep` mode the frame is the box, so the guide can follow every
-        // drag frame for free. In `remove` mode finding it means walking the
-        // scan's vertices, which waits for the drag to end (see onDragEnd).
-        if (cropMode.value === "keep") syncPovGuide();
+        cropEmptiesScan.value = wouldEmptyScan(box);
+        // In `keep` mode the box stands in for the frame, so the guide can
+        // follow every drag frame for free. Finding the real frame can mean
+        // walking the scan's vertices, which waits for the drag to end (see
+        // onDragEnd).
+        if (cropMode.value === "keep") syncPovGuide(box);
       },
       onPovChange: (y) => {
         draftPovY = y;
@@ -497,9 +561,7 @@ export function useThreeScene(
         if (!floor.isEmpty()) gizmo?.setGridFloor(floor.min.y);
       },
       onDragEnd: () => {
-        // A dragged box is the admin's, so there is no longer a shrink to undo.
-        boxBeforeShrink = null;
-        if (cropMode.value === "remove") syncPovGuide();
+        if (cropMode.value === "remove" || draftRemovals.length) syncPovGuide();
       },
     });
 
@@ -553,6 +615,7 @@ export function useThreeScene(
     // After the model's transform has settled for this frame and before the
     // render that reads them.
     updateCropPlanes();
+    syncRoundOutlines();
     gizmo?.update();
     if (renderer && scene && camera) renderer.render(scene, camera);
   }
@@ -586,6 +649,12 @@ export function useThreeScene(
       // without the other. See there for why.
       clipIntersection: clipMode === "remove",
     });
+    // The confirmed rounds and the crop in force; see "Crop shader" above.
+    flat.onBeforeCompile = (shader) => {
+      Object.assign(shader.uniforms, cropUniforms);
+      patchCropShader(shader, shaderKeepActive, shaderRemovals.length);
+    };
+    flat.customProgramCacheKey = () => shaderCropKey;
     // Textures are handed to the new material, so only the material shell is
     // released here, since disposeMaterial() would take the maps down with it.
     src.dispose();
@@ -628,15 +697,26 @@ export function useThreeScene(
    * as a box that happens to match, so Reset genuinely clears the columns.
    */
   /**
-   * Whether this box, cropped this way, would leave nothing behind.
+   * Whether the removal box on screen would leave nothing behind.
    *
-   * Only `remove` can do that, and only by covering the scan's whole extent,
-   * which is exactly the state that toggling to `remove` with an untouched box
-   * would produce. A box test rather than a vertex count so it can run on every
+   * Only a removal can do that, and only by covering everything the confirmed
+   * rounds keep. A box test rather than a vertex count so it can run on every
    * drag frame; `survivingBounds` is the exact answer, once, at save.
    */
-  function wouldEmptyScan(box: THREE.Box3, mode: CropMode): boolean {
-    return mode === "remove" && box.containsBox(originalBounds);
+  function wouldEmptyScan(box: THREE.Box3): boolean {
+    return (
+      cropMode.value === "remove" &&
+      removalPending.value &&
+      box.containsBox(draftKeep)
+    );
+  }
+
+  /** Two boxes the same to within rounding, for boxes read back, not measured. */
+  function sameBox(a: THREE.Box3, b: THREE.Box3): boolean {
+    const epsilon = 1e-4;
+    return (
+      a.min.distanceTo(b.min) <= epsilon && a.max.distanceTo(b.max) <= epsilon
+    );
   }
 
   /**
@@ -713,11 +793,26 @@ export function useThreeScene(
       : bounds.getCenter(new THREE.Vector3());
   }
 
-  function survivingBounds(box: THREE.Box3): THREE.Box3 {
+  function survivingBounds(removals: THREE.Box3[]): THREE.Box3 {
     return measureScanBounds({
-      exclude: box,
+      exclude: removals,
       precise: isLevelled(draftLevel()),
     });
+  }
+
+  /**
+   * What a crop keeping `keep` and deleting `removals` centres and frames on.
+   *
+   * A trimmed scan frames on its kept box, which is cheap and what it always
+   * did; the removals inside it are fragments, and leaving them out of the
+   * frame would hardly move it. A scan that only has things removed has no box
+   * to frame on, because the boxes are what is gone, so what survives them is
+   * measured instead.
+   */
+  function frameOf(keep: THREE.Box3, removals: THREE.Box3[]): THREE.Box3 {
+    return isFullBounds(keep) && removals.length
+      ? survivingBounds(removals)
+      : keep.clone();
   }
 
   /**
@@ -731,9 +826,9 @@ export function useThreeScene(
    * frame a levelled scan from further back than it needs.
    */
   function measureScanBounds(
-    options: { exclude?: THREE.Box3; precise?: boolean } = {},
+    options: { exclude?: THREE.Box3[]; precise?: boolean } = {},
   ): THREE.Box3 {
-    const { exclude, precise = false } = options;
+    const { exclude = [], precise = false } = options;
     const result = new THREE.Box3().makeEmpty();
     if (!currentModel) return result;
 
@@ -760,14 +855,16 @@ export function useThreeScene(
       // be skipped. Scans are usually a single mesh, so for a remove crop this
       // rarely fires, but it costs one box test.
       meshBox.copy(mesh.geometry.boundingBox).applyMatrix4(toModel);
-      if (!precise && (!exclude || !meshBox.intersectsBox(exclude))) {
+      // Only the boxes that reach this mesh can take anything from it.
+      const near = exclude.filter((box) => meshBox.intersectsBox(box));
+      if (!precise && !near.length) {
         result.union(meshBox);
         return;
       }
 
       for (let i = 0; i < position.count; i++) {
         vertex.fromBufferAttribute(position, i).applyMatrix4(toModel);
-        if (!exclude || !exclude.containsPoint(vertex))
+        if (!near.some((box) => box.containsPoint(vertex)))
           result.expandByPoint(vertex);
       }
     });
@@ -776,17 +873,34 @@ export function useThreeScene(
   }
 
   /**
-   * The box to clip against for a stored crop, or null when it cuts nothing.
+   * A stored crop as rounds: the box it keeps, or null for the whole scan, and
+   * the boxes it removes, oldest first.
    *
    * A crop saved only to move the POV eye keeps a `keep` box at the scan's full
-   * bounds, which hides nothing. Treating that as no clipping keeps the scan off
-   * the clipping shader, which every fragment would otherwise pay for.
+   * bounds, which hides nothing. Reading that as null keeps the scan off the
+   * crop shader, which every fragment would otherwise pay for.
    */
-  function clipBoxOf(crop: Crop | null): THREE.Box3 | null {
-    if (!crop) return null;
-    const box = boxFromCrop(crop.box);
-    if (crop.mode === "keep" && isFullBounds(box)) return null;
-    return box;
+  function roundsOf(crop: Crop | null): {
+    keep: THREE.Box3 | null;
+    removals: THREE.Box3[];
+  } {
+    if (!crop) return { keep: null, removals: [] };
+    const removals = (crop.removed ?? []).map(boxFromCrop);
+    if (crop.mode === "remove")
+      return { keep: null, removals: [...removals, boxFromCrop(crop.box)] };
+    const keep = boxFromCrop(crop.box);
+    return { keep: isFullBounds(keep) ? null : keep, removals };
+  }
+
+  /** The edit in progress as rounds, the one on screen included if it counts. */
+  function draftRounds(): { keep: THREE.Box3; removals: THREE.Box3[] } {
+    const box = gizmo?.getBox() ?? draftKeep.clone();
+    if (cropMode.value === "keep")
+      return { keep: box, removals: draftRemovals };
+    return {
+      keep: draftKeep.clone(),
+      removals: removalPending.value ? [...draftRemovals, box] : draftRemovals,
+    };
   }
 
   /** `y` kept inside `frame`, clear of its floor and ceiling. */
@@ -809,15 +923,15 @@ export function useThreeScene(
    * Stands the POV guide in the frame the current draft would save with, and
    * seats the eye on it.
    *
-   * Pass `frame` when it is already known, as it is for a stored `remove` crop
+   * Pass `frame` when it is already known, as it is for a stored crop
    * reopened for editing, to skip measuring the surviving geometry again.
    */
   function syncPovGuide(frame?: THREE.Box3) {
     if (!gizmo) return;
     if (frame) draftFrame.copy(frame);
     else {
-      const box = gizmo.getBox();
-      draftFrame.copy(cropMode.value === "keep" ? box : survivingBounds(box));
+      const { keep, removals } = draftRounds();
+      draftFrame.copy(frameOf(keep, removals));
     }
     // A `remove` box covering the whole scan leaves no frame to stand in. The
     // panel is already refusing that state, so there is nothing to draw.
@@ -892,27 +1006,142 @@ export function useThreeScene(
       .sub(appliedCentre.clone().applyAxisAngle(Y_AXIS, theta));
   }
 
+  function forEachScanMaterial(fn: (material: THREE.Material) => void) {
+    currentModel?.traverse((child) => {
+      const mesh = child as THREE.Mesh;
+      if (!mesh.isMesh || !mesh.material) return;
+      if (Array.isArray(mesh.material)) mesh.material.forEach(fn);
+      else fn(mesh.material);
+    });
+  }
+
   function applyClippingToMaterials() {
-    if (!currentModel) return;
     // Null, not undefined: three's typings take `undefined` on the constructor
     // options and `null` on the property, and they are not interchangeable.
     const planes = clippingActive ? cropWorldPlanes : null;
     const intersection = clipMode === "remove";
-    currentModel.traverse((child) => {
-      const mesh = child as THREE.Mesh;
-      if (!mesh.isMesh || !mesh.material) return;
-      const materials = Array.isArray(mesh.material)
-        ? mesh.material
-        : [mesh.material];
-      for (const material of materials) {
-        material.clippingPlanes = planes;
-        material.clipIntersection = intersection;
-        // Going between no planes and six changes the shader, not just a
-        // uniform, so the program has to be rebuilt. Moving a plane does not,
-        // which is why this only runs when clipping is switched on or off.
-        material.needsUpdate = true;
-      }
+    forEachScanMaterial((material) => {
+      material.clippingPlanes = planes;
+      material.clipIntersection = intersection;
+      // Going between no planes and six changes the shader, not just a
+      // uniform, so the program has to be rebuilt. Moving a plane does not,
+      // which is why this only runs when clipping is switched on or off.
+      material.needsUpdate = true;
     });
+  }
+
+  /**
+   * Points the crop shader at a kept box, or null for the whole scan, and a
+   * list of removal boxes. See "Crop shader" above.
+   */
+  function setShaderCrop(keep: THREE.Box3 | null, removals: THREE.Box3[]) {
+    shaderKeepActive = keep !== null;
+    if (keep) shaderKeep.copy(keep);
+    shaderRemovals = removals.map((box) => box.clone());
+    cropUniforms.cropRemoveMin.value = shaderRemovals.map((box) => box.min);
+    cropUniforms.cropRemoveMax.value = shaderRemovals.map((box) => box.max);
+    updateCropPlanes();
+
+    const key = `${shaderKeepActive ? 1 : 0}:${shaderRemovals.length}`;
+    if (key === shaderCropKey) return;
+    shaderCropKey = key;
+    forEachScanMaterial((material) => {
+      material.needsUpdate = true;
+    });
+  }
+
+  /** The crop in force, cut by the shader alone, with the planes off. */
+  function applyCommittedClip() {
+    const { keep, removals } = roundsOf(committedCrop);
+    setClipBox(null);
+    setShaderCrop(keep, removals);
+  }
+
+  /**
+   * A box that contains none of the scan, for the planes to hold while a
+   * removal round has not started, so they stay compiled but cut nothing.
+   */
+  function inertBox(): THREE.Box3 {
+    const size = originalBounds.getSize(new THREE.Vector3());
+    const step = Math.max(size.x, size.y, size.z, 1);
+    const min = originalBounds.max.clone().addScalar(step);
+    return new THREE.Box3(min, min.clone().addScalar(step));
+  }
+
+  /** What the planes cut for the round on screen drawn as `box`. */
+  function roundClipBox(box: THREE.Box3): THREE.Box3 {
+    return cropMode.value === "remove" && !removalPending.value
+      ? inertBox()
+      : box;
+  }
+
+  /**
+   * Clips to the edit in progress: the confirmed rounds through the shader,
+   * the round on screen through the planes.
+   *
+   * A `keep` round's box replaces the confirmed kept box rather than cutting
+   * inside it, so the shader leaves the kept box to the planes then, and the
+   * box can be dragged back out past where it was.
+   */
+  function applyEditingClip() {
+    if (!gizmo) return;
+    const keeping = cropMode.value === "keep";
+    setShaderCrop(
+      keeping || isFullBounds(draftKeep) ? null : draftKeep,
+      draftRemovals,
+    );
+    setClipBox(roundClipBox(gizmo.getBox()), cropMode.value);
+  }
+
+  /** Moves the gizmo's box from here, which a drag would not have done. */
+  function setGizmoBox(box: THREE.Box3) {
+    settingBox = true;
+    try {
+      gizmo?.setBox(box);
+    } finally {
+      settingBox = false;
+    }
+  }
+
+  /** Mirrors the confirmed rounds out, and redraws their outlines. */
+  function syncConfirmed() {
+    cropConfirmed.value = {
+      keep: isFullBounds(draftKeep) ? null : cropFromBox(draftKeep),
+      removals: draftRemovals.map(cropFromBox),
+    };
+    for (const child of [...roundOutlines.children]) {
+      const helper = child as THREE.Box3Helper;
+      roundOutlines.remove(helper);
+      helper.geometry.dispose();
+      (helper.material as THREE.Material).dispose();
+    }
+    if (!cropEditing.value || cropTool.value !== "box") return;
+    for (const box of draftRemovals) {
+      const helper = new THREE.Box3Helper(box.clone(), 0xffffff);
+      const material = helper.material as THREE.LineBasicMaterial;
+      material.transparent = true;
+      material.opacity = 0.45;
+      material.toneMapped = false;
+      roundOutlines.add(helper);
+    }
+  }
+
+  function syncRoundOutlines() {
+    if (!currentModel || !roundOutlines.children.length) return;
+    roundOutlines.matrix.copy(currentModel.matrixWorld);
+    roundOutlines.matrixWorldNeedsUpdate = true;
+  }
+
+  /**
+   * A fresh removal round: a box a quarter of the kept box's size on each axis
+   * around its centre, a visible starting size to drag onto whatever is being
+   * deleted, which removes nothing until it is dragged.
+   */
+  function startRemovalRound() {
+    removalPending.value = false;
+    const centre = draftKeep.getCenter(new THREE.Vector3());
+    const size = draftKeep.getSize(new THREE.Vector3()).multiplyScalar(0.25);
+    setGizmoBox(new THREE.Box3().setFromCenterAndSize(centre, size));
   }
 
   /**
@@ -969,8 +1198,10 @@ export function useThreeScene(
    * in world space would stay put and slice through a turning scan.
    */
   function updateCropPlanes() {
-    if (!clippingActive || !currentModel) return;
+    if (!currentModel || (!clippingActive && shaderCropKey === "0:0")) return;
     syncModelMatrix();
+    cropUniforms.cropToLocal.value.copy(currentModel.matrixWorld).invert();
+    if (!clippingActive) return;
     for (let i = 0; i < 6; i++) {
       cropWorldPlanes[i]
         .copy(cropLocalPlanes[i])
@@ -986,19 +1217,26 @@ export function useThreeScene(
    * could be placed on invisible geometry, and the orbit pivot could anchor
    * itself to a fragment the admin cropped out precisely because it was
    * nowhere near the room. Hits arrive sorted by distance, so the first one
-   * inside the box is the nearest visible surface.
+   * that neither the planes nor the shader cut is the nearest visible surface.
    */
   function firstVisibleHit(
     hits: THREE.Intersection[],
   ): THREE.Intersection | undefined {
-    if (!clippingActive || !currentModel) return hits[0];
+    if (!currentModel || (!clippingActive && shaderCropKey === "0:0"))
+      return hits[0];
     const local = new THREE.Vector3();
     return hits.find((hit) => {
       local.copy(hit.point);
       currentModel!.worldToLocal(local);
       // Inside the box is what survives in `keep` mode and what is gone in
       // `remove` mode, so the same test answers both, negated.
-      return clipBox.containsPoint(local) === (clipMode === "keep");
+      if (
+        clippingActive &&
+        clipBox.containsPoint(local) !== (clipMode === "keep")
+      )
+        return false;
+      if (shaderKeepActive && !shaderKeep.containsPoint(local)) return false;
+      return !shaderRemovals.some((box) => box.containsPoint(local));
     });
   }
 
@@ -1101,7 +1339,7 @@ export function useThreeScene(
       // Before the materials are built, so they are created with the right
       // number of clipping planes, and the right clipping mode, instead of
       // being rebuilt a moment later.
-      setClipBox(clipBoxOf(stored), stored?.mode ?? "keep");
+      applyCommittedClip();
       applyFlatMaterials(currentModel);
       // The frame box, not the drawn one: in `remove` mode they are different
       // boxes and the drawn one is the part that is gone.
@@ -1188,28 +1426,31 @@ export function useThreeScene(
     rotateDegrees.value = null;
     if (level) originalBounds.copy(measureScanBounds({ precise: true }));
 
-    const initial = committedCrop
-      ? boxFromCrop(committedCrop.box)
-      : originalBounds.clone();
-    cropMode.value = committedCrop?.mode ?? "keep";
+    // The crop in force becomes the confirmed rounds. One whose newest round
+    // removed something puts that box back under the gizmo, ready to adjust,
+    // as reopening a one-box `remove` crop always has.
+    const { keep, removals } = roundsOf(committedCrop);
+    draftKeep.copy(keep ?? originalBounds);
+    draftRemovals = removals;
+    const reopened = committedCrop?.mode === "remove" ? removals.pop() : null;
+    cropMode.value = reopened ? "remove" : "keep";
+    removalPending.value = Boolean(reopened);
+    const initial = reopened ?? draftKeep.clone();
+
     draftPovY = committedCrop?.povY ?? null;
     draftPovXZ =
       committedCrop?.povX != null && committedCrop.povZ != null
         ? { x: committedCrop.povX, z: committedCrop.povZ }
         : null;
-    boxBeforeShrink = null;
-    setClipBox(initial, cropMode.value);
     gizmo.show(initial, originalBounds);
-    // A stored `remove` crop already knows its frame, so reopening one does not
-    // walk the scan's vertices just to stand the guide back where it was.
-    syncPovGuide(
-      committedCrop?.mode === "remove"
-        ? boxFromCrop(committedCrop.frame)
-        : undefined,
-    );
-    frameWholeBox(initial);
+    applyEditingClip();
+    syncConfirmed();
+    // A stored crop already knows its frame, so reopening one does not walk
+    // the scan's vertices just to stand the guide back where it was.
+    syncPovGuide(committedCrop ? boxFromCrop(committedCrop.frame) : undefined);
+    frameWholeBox(draftKeep);
     cropDraft.value = cropFromBox(initial);
-    cropEmptiesScan.value = wouldEmptyScan(initial, cropMode.value);
+    cropEmptiesScan.value = wouldEmptyScan(initial);
     cropReady.value = true;
   }
 
@@ -1256,14 +1497,7 @@ export function useThreeScene(
     cropReady.value = false;
     cropEditing.value = false;
     gizmo.hide();
-    cropDraft.value = null;
-    cropEmptiesScan.value = false;
-    cropMode.value = committedCrop?.mode ?? "keep";
-    draftPovY = null;
-    draftPovXZ = null;
-    boxBeforeShrink = null;
-    cropTool.value = "box";
-    rotateDegrees.value = null;
+    clearDraft();
     // Turn the scan back if a rotation was being tried, and re-measure against
     // the rotation that is actually in force.
     const committedRotation = rotationOf(committedCrop);
@@ -1278,8 +1512,23 @@ export function useThreeScene(
         measureScanBounds({ precise: Boolean(committedCrop?.level) }),
       );
     }
-    setClipBox(clipBoxOf(committedCrop), committedCrop?.mode ?? "keep");
+    applyCommittedClip();
     restoreViewBeforeCrop();
+  }
+
+  /** Forgets the edit's draft state, for closing the tool either way. */
+  function clearDraft() {
+    cropDraft.value = null;
+    cropEmptiesScan.value = false;
+    cropMode.value = "keep";
+    removalPending.value = false;
+    draftRemovals = [];
+    draftPovY = null;
+    draftPovXZ = null;
+    cropTool.value = "box";
+    rotateDegrees.value = null;
+    // After cropEditing has gone false, so this also clears the outlines.
+    syncConfirmed();
   }
 
   /**
@@ -1311,18 +1560,14 @@ export function useThreeScene(
 
   /**
    * Back to an untouched scan: the box at full bounds, keeping what is inside,
-   * with the POV eye back at its default height.
-   *
-   * Resetting the mode as well as the box matters, because full bounds means
-   * opposite things either way round. Left on `remove` it would read as "delete
-   * everything" rather than "no crop", which is not what a reset should offer.
+   * every confirmed round gone, and the POV eye back at its default height.
    */
   function resetCropBox() {
     if (!gizmo || !cropReady.value) return;
     cropMode.value = "keep";
+    removalPending.value = false;
     draftPovY = null;
     draftPovXZ = null;
-    boxBeforeShrink = null;
     rotateDegrees.value = null;
 
     // Reset means an untouched scan, so the levelling goes too.
@@ -1337,9 +1582,13 @@ export function useThreeScene(
     }
 
     cropTool.value = "box";
+    draftKeep.copy(originalBounds);
+    draftRemovals = [];
     gizmo.show(originalBounds.clone(), originalBounds);
     // Redraws, re-clips and re-seats the POV guide through the gizmo's onChange.
-    gizmo.setBox(originalBounds.clone());
+    setGizmoBox(originalBounds.clone());
+    applyEditingClip();
+    syncConfirmed();
     if (wasTurned) frameWholeBox(originalBounds);
   }
 
@@ -1348,11 +1597,12 @@ export function useThreeScene(
    *
    * Turning a scan changes its bounds and tips any box drawn against the old
    * ones out of true, so coming back from a rotation that changed anything
-   * fits the box to the newly levelled scan, in `keep` mode, with the eye back
-   * at its default. Rather than try to carry a removal box through a rotation,
-   * which could only grow it and delete more than was meant, levelling is
-   * treated as the step before cropping. `boxReset` says whether a box that was
-   * already drawn was lost to it, so the viewer can say so.
+   * fits the box to the newly levelled scan, in `keep` mode, with no confirmed
+   * rounds and the eye back at its default. Rather than try to carry removal
+   * boxes through a rotation, which could only grow them and delete more than
+   * was meant, levelling is treated as the step before cropping. `boxReset`
+   * says whether anything already drawn was lost to it, so the viewer can say
+   * so.
    */
   function setCropTool(next: CropGizmoTool): { boxReset: boolean } {
     const unchanged = { boxReset: false };
@@ -1362,10 +1612,12 @@ export function useThreeScene(
       rotationAtToolStart.copy(draftRotation);
       rotationAtDragStart.copy(draftRotation);
       cropTool.value = "rotate";
-      // The box stays fixed in levelled space while the scan turns through it,
-      // which would cut the scan apart mid-turn, so the whole scan shows while
-      // rotating and the box's clipping comes back afterwards.
+      // The boxes stay fixed in levelled space while the scan turns through
+      // them, which would cut the scan apart mid-turn, so the whole scan shows
+      // while rotating and the clipping comes back afterwards.
       setClipBox(null);
+      setShaderCrop(null, []);
+      syncConfirmed();
       const size = originalBounds.getSize(new THREE.Vector3());
       gizmo.setTool("rotate", {
         centre: draftPivot,
@@ -1379,62 +1631,131 @@ export function useThreeScene(
     rotateDegrees.value = null;
     if (rotationAtToolStart.angleTo(draftRotation) <= ROTATION_EPSILON) {
       gizmo.setTool("box");
-      setClipBox(gizmo.getBox(), cropMode.value);
+      applyEditingClip();
+      syncConfirmed();
       return unchanged;
     }
 
     const drawn = gizmo.getBox();
     const hadBox =
-      cropMode.value !== "keep" ||
-      !isFullBounds(drawn) ||
+      (cropMode.value === "remove" && removalPending.value) ||
+      (cropMode.value === "keep" && !isFullBounds(drawn)) ||
+      !isFullBounds(draftKeep) ||
+      draftRemovals.length > 0 ||
       draftPovY != null ||
       draftPovXZ != null;
 
     originalBounds.copy(measureScanBounds({ precise: true }));
     cropMode.value = "keep";
+    removalPending.value = false;
     draftPovY = null;
     draftPovXZ = null;
-    boxBeforeShrink = null;
+    draftKeep.copy(originalBounds);
+    draftRemovals = [];
     gizmo.show(originalBounds.clone(), originalBounds);
-    gizmo.setBox(originalBounds.clone());
+    setGizmoBox(originalBounds.clone());
+    applyEditingClip();
+    syncConfirmed();
     frameWholeBox(originalBounds);
     return { boxReset: hadBox };
   }
 
   /**
-   * Switches which side of the box survives.
+   * Switches which side of the box survives, finishing the round on the side
+   * being left.
    *
-   * Toggling to `remove` with the box still at full bounds would black the
-   * viewer out, since everything is inside it. Rather than let that happen the
-   * box is pulled in to a quarter of each axis around its own centre, which is
-   * a visible starting size to drag onto whatever is being deleted.
+   * Going to `remove`, the box as drawn becomes the kept box and a fresh
+   * removal round starts inside it. Going back to `keep`, a removal that has
+   * been dragged is confirmed, as the tick would, and the gizmo goes back to
+   * the kept box. Either way nothing drawn is lost to the switch. Returns false
+   * when it declined, which is only when there is no room for another removal.
    */
-  function setCropMode(next: CropMode) {
-    if (!gizmo || !cropReady.value || cropMode.value === next) return;
-    cropMode.value = next;
+  function setCropMode(next: CropMode): boolean {
+    if (!gizmo || !cropReady.value || cropMode.value === next) return true;
 
-    let box = gizmo.getBox();
-    if (next === "keep" && boxBeforeShrink) {
-      // Back to `keep` without the shrunk box having been touched: put back
-      // the box it replaced. Through onChange, like the shrink itself.
-      const restored = boxBeforeShrink;
-      boxBeforeShrink = null;
-      gizmo.setBox(restored);
-    } else if (wouldEmptyScan(box, next)) {
-      boxBeforeShrink = box.clone();
-      const centre = box.getCenter(new THREE.Vector3());
-      const size = box.getSize(new THREE.Vector3()).multiplyScalar(0.25);
-      box = new THREE.Box3().setFromCenterAndSize(centre, size);
-      // Redraws, re-clips and refreshes the draft through the gizmo's onChange.
-      gizmo.setBox(box);
+    if (next === "remove") {
+      draftKeep.copy(gizmo.getBox());
+      cropMode.value = "remove";
+      startRemovalRound();
     } else {
-      setClipBox(box, next);
-      cropEmptiesScan.value = wouldEmptyScan(box, next);
+      if (removalPending.value && !cropEmptiesScan.value) {
+        if (draftRemovals.length >= MAX_CROP_REMOVALS - 1) return false;
+        draftRemovals = [...draftRemovals, gizmo.getBox()];
+      }
+      removalPending.value = false;
+      cropMode.value = "keep";
+      setGizmoBox(draftKeep.clone());
     }
+    applyEditingClip();
+    syncConfirmed();
+    cropEmptiesScan.value = wouldEmptyScan(gizmo.getBox());
     // The frame changes meaning with the mode, and onChange only re-seats the
     // guide for `keep`, so it is re-stood here whichever way the switch went.
     syncPovGuide();
+    return true;
   }
+
+  /**
+   * The tick: adds the round on screen to the edit and starts the next.
+   *
+   * A `keep` round sets the kept box and stays on it. A `remove` round adds its
+   * box to the removals and offers a fresh one. Nothing is saved until the crop
+   * button is pressed; this only builds up what it will save.
+   *
+   * One fewer than the maximum may be confirmed, leaving room for the round
+   * on screen, which saving takes as it stands.
+   */
+  function confirmCropRound(): "confirmed" | "unchanged" | "empties" | "full" {
+    if (!gizmo || !cropReady.value || cropTool.value !== "box")
+      return "unchanged";
+    const box = gizmo.getBox();
+
+    if (cropMode.value === "keep") {
+      if (sameBox(box, draftKeep)) return "unchanged";
+      draftKeep.copy(box);
+    } else {
+      if (!removalPending.value) return "unchanged";
+      if (cropEmptiesScan.value) return "empties";
+      if (draftRemovals.length >= MAX_CROP_REMOVALS - 1) return "full";
+      draftRemovals = [...draftRemovals, box];
+      startRemovalRound();
+    }
+    applyEditingClip();
+    syncConfirmed();
+    cropEmptiesScan.value = false;
+    syncPovGuide();
+    return "confirmed";
+  }
+
+  /**
+   * The cross: drops the round on screen, back to the kept box in `keep` mode
+   * or to a fresh removal box in `remove` mode. Returns whether there was
+   * anything to drop.
+   */
+  function discardCropRound(): boolean {
+    if (!gizmo || !cropReady.value || cropTool.value !== "box") return false;
+    if (!cropRoundPending.value) return false;
+    if (cropMode.value === "keep") setGizmoBox(draftKeep.clone());
+    else startRemovalRound();
+    applyEditingClip();
+    cropEmptiesScan.value = false;
+    syncPovGuide();
+    return true;
+  }
+
+  /**
+   * Whether the round on screen has anything the tick would add or the cross
+   * would drop.
+   */
+  const cropRoundPending = computed(() => {
+    if (!cropReady.value || cropTool.value !== "box") return false;
+    if (cropMode.value === "remove") return removalPending.value;
+    const draft = cropDraft.value;
+    if (!draft) return false;
+    const keep = cropConfirmed.value.keep;
+    const box = boxFromCrop(draft);
+    return keep ? !sameBox(box, boxFromCrop(keep)) : !isFullBounds(box);
+  });
 
   /**
    * Whether the draft differs from the crop already in force.
@@ -1446,32 +1767,23 @@ export function useThreeScene(
    */
   function cropHasChanges(): boolean {
     if (!gizmo || !cropReady.value) return false;
-    const box = gizmo.getBox();
 
     if (rotationOf(committedCrop).angleTo(draftRotation) > ROTATION_EPSILON)
       return true;
 
-    if (!committedCrop) {
-      return !(
-        cropMode.value === "keep" &&
-        isFullBounds(box) &&
-        draftPovY == null &&
-        draftPovXZ == null
-      );
-    }
-
-    // Tighter than isFullBounds' millimetre, since this compares a box against
-    // the same box read back, not against a measurement.
-    const epsilon = 1e-4;
-    if (committedCrop.mode !== cropMode.value) return true;
-    const stored = boxFromCrop(committedCrop.box);
+    const draft = draftRounds();
+    const stored = roundsOf(committedCrop);
+    if (!sameBox(draft.keep, stored.keep ?? originalBounds)) return true;
     if (
-      stored.min.distanceTo(box.min) > epsilon ||
-      stored.max.distanceTo(box.max) > epsilon
+      draft.removals.length !== stored.removals.length ||
+      draft.removals.some((box, i) => !sameBox(box, stored.removals[i]))
     )
       return true;
 
-    const before = committedCrop.povY ?? null;
+    // Tighter than isFullBounds' millimetre, since this compares against the
+    // same values read back, not against a measurement.
+    const epsilon = 1e-4;
+    const before = committedCrop?.povY ?? null;
     if ((before == null) !== (draftPovY == null)) return true;
     if (
       before != null &&
@@ -1480,7 +1792,8 @@ export function useThreeScene(
     )
       return true;
 
-    const { povX, povZ } = committedCrop;
+    const povX = committedCrop?.povX;
+    const povZ = committedCrop?.povZ;
     const beforeXZ = povX != null && povZ != null ? { x: povX, z: povZ } : null;
     if ((beforeXZ == null) !== (draftPovXZ == null)) return true;
     return (
@@ -1491,7 +1804,7 @@ export function useThreeScene(
   }
 
   /**
-   * What the drawn box would save as, computed without changing anything.
+   * What the edit would save as, computed without changing anything.
    *
    * Separate from applying it so the caller can put the request first and only
    * move the viewer once the save has landed. Re-framing optimistically and
@@ -1504,6 +1817,10 @@ export function useThreeScene(
    * coordinate recorded against this entry. Annotation points are model-local
    * and ride along untouched; annotation cameras are not, which is what the
    * delta is for.
+   *
+   * The round on screen is saved as it stands, along with the confirmed ones,
+   * so a crop drawn in one round needs no tick. A removal box that was never
+   * dragged is not part of it.
    */
   function pendingCrop(): CropResult | null {
     // A rotate session has to be closed first, which fits the box to the new
@@ -1511,29 +1828,22 @@ export function useThreeScene(
     if (!gizmo || !currentModel || !cropReady.value || cropTool.value !== "box")
       return null;
 
-    const box = gizmo.getBox();
-    const mode = cropMode.value;
+    const { keep, removals } = draftRounds();
     const level = draftLevel();
+    const keepsAll = isFullBounds(keep);
 
-    // A `keep` box at the scan's own bounds keeps everything, which is stored
-    // as no crop rather than as a box that happens to match. That is what Reset
-    // then Confirm does. `remove` has no such state: an empty removal box is
-    // not something the gizmo can express. A moved POV eye still needs saving,
-    // though, so a full-bounds box with one is kept as a crop that cuts nothing.
+    // A crop that keeps the whole scan and removes nothing is stored as no
+    // crop rather than as a box that happens to match. That is what Reset then
+    // Confirm does. A moved POV eye or a level still needs saving, though, so
+    // a full-bounds box with one is kept as a crop that cuts nothing.
     const cleared =
-      mode === "keep" &&
-      isFullBounds(box) &&
+      keepsAll &&
+      !removals.length &&
       draftPovY == null &&
       draftPovXZ == null &&
       !level;
 
-    // The frame box is the drawn box in `keep` mode and the surviving geometry
-    // in `remove` mode, where the drawn box is the part being deleted.
-    const frame = cleared
-      ? originalBounds
-      : mode === "keep"
-        ? box
-        : survivingBounds(box);
+    const frame = cleared ? originalBounds : frameOf(keep, removals);
 
     // Nothing survived, so there is no scan left to frame or look at. The panel
     // stops this being reachable, and this is the backstop behind it.
@@ -1541,18 +1851,34 @@ export function useThreeScene(
 
     const centreAfter = frame.getCenter(new THREE.Vector3());
 
-    // Re-seated against the frame actually being saved. In `remove` mode that
-    // frame was just measured and can differ from the one the guide last stood
-    // in, and the server refuses an eye outside its frame.
+    // Re-seated against the frame actually being saved. It can have just been
+    // measured and differ from the one the guide last stood in, and the server
+    // refuses an eye outside its frame.
     const povY = draftPovY == null ? undefined : clampPovTo(frame, draftPovY);
     const povXZ = draftPovXZ && clampPovXZTo(frame, draftPovXZ);
+
+    // Stored in the shape a one-box crop always had, with any further removals
+    // alongside: a crop that only removes keeps its newest removal as `box`.
+    const boxes: Pick<Crop, "mode" | "box" | "removed"> =
+      keepsAll && removals.length
+        ? {
+            mode: "remove",
+            box: cropFromBox(removals[removals.length - 1]),
+            ...(removals.length > 1
+              ? { removed: removals.slice(0, -1).map(cropFromBox) }
+              : {}),
+          }
+        : {
+            mode: "keep",
+            box: cropFromBox(keep),
+            ...(removals.length ? { removed: removals.map(cropFromBox) } : {}),
+          };
 
     return {
       crop: cleared
         ? null
         : {
-            mode,
-            box: cropFromBox(box),
+            ...boxes,
             frame: cropFromBox(frame),
             ...(povY == null ? {} : { povY }),
             ...(povXZ ? { povX: povXZ.x, povZ: povXZ.z } : {}),
@@ -1570,28 +1896,22 @@ export function useThreeScene(
   /**
    * Applies a crop and closes the editor. For use once the save has landed.
    *
-   * Takes the result rather than recomputing it, so a `remove` crop walks the
-   * scan's vertices once per save instead of twice.
+   * Takes the result rather than recomputing it, so a crop that only removes
+   * walks the scan's vertices once per save instead of twice.
    */
   function applyPendingCrop(result: CropResult) {
     if (!gizmo || !currentModel) return;
 
     committedCrop = result.crop;
     committedRotation.copy(rotationOf(result.crop));
-    setClipBox(clipBoxOf(result.crop), result.crop?.mode ?? "keep");
+    applyCommittedClip();
     viewBeforeCrop = null;
     frameOn(result.crop ? boxFromCrop(result.crop.frame) : originalBounds);
 
     cropEditing.value = false;
     cropReady.value = false;
     gizmo.hide();
-    cropDraft.value = null;
-    cropEmptiesScan.value = false;
-    draftPovY = null;
-    draftPovXZ = null;
-    boxBeforeShrink = null;
-    cropTool.value = "box";
-    rotateDegrees.value = null;
+    clearDraft();
   }
 
   function setMode(next: ViewMode) {
@@ -2109,6 +2429,8 @@ export function useThreeScene(
     cropMode,
     cropDraft,
     cropEmptiesScan,
+    cropConfirmed,
+    cropRoundPending,
     loadModel,
     setMode,
     pickPoint,
@@ -2121,6 +2443,8 @@ export function useThreeScene(
     resetCropBox,
     setCropMode,
     setCropTool,
+    confirmCropRound,
+    discardCropRound,
     cropHasChanges,
     toDraftSpace,
     pendingCrop,

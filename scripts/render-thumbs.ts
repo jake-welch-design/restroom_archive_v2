@@ -15,6 +15,12 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import http from "node:http";
 import net from "node:net";
+import {
+  CROP_VERTEX_MAIN,
+  CROP_VERTEX_PARS,
+  cropFragmentMain,
+  cropFragmentPars,
+} from "../shared/utils/cropShader";
 
 // ---------------------------------------------------------------------------
 // CLI args
@@ -49,7 +55,11 @@ function cropOf(row: DbRow): Crop | null {
   try {
     const parsed = JSON.parse(row.crop) as Crop;
     if (!parsed?.box || !parsed?.frame) return null;
-    return { ...parsed, mode: parsed.mode === "remove" ? "remove" : "keep" };
+    return {
+      ...parsed,
+      mode: parsed.mode === "remove" ? "remove" : "keep",
+      removed: Array.isArray(parsed.removed) ? parsed.removed : undefined,
+    };
   } catch {
     return null;
   }
@@ -67,6 +77,7 @@ type Crop = {
   mode: "keep" | "remove";
   box: CropBox;
   frame: CropBox;
+  removed?: CropBox[];
   level?: {
     rotation: { x: number; y: number; z: number; w: number };
     pivot: { x: number; y: number; z: number };
@@ -123,6 +134,22 @@ function getFreePort(): Promise<number> {
   });
 }
 
+/**
+ * The shader splices that cut a crop's further removal boxes, which clipping
+ * planes cannot (see shared/utils/cropShader.ts). Worked out here, where the
+ * count is known, so the page only has to paste them in.
+ */
+function removalShader(crop: Crop | null) {
+  const count = crop?.removed?.length ?? 0;
+  return {
+    count,
+    vertexPars: CROP_VERTEX_PARS,
+    vertexMain: CROP_VERTEX_MAIN,
+    fragmentPars: cropFragmentPars(false, count),
+    fragmentMain: cropFragmentMain(false, count),
+  };
+}
+
 const viewerHtml = (crop: Crop | null) => `<!DOCTYPE html>
 <html>
 <head>
@@ -175,6 +202,26 @@ const clipPlanes = CROP
 const CLIP_INTERSECTION = CROP?.mode === 'remove'
 if (clipPlanes && CLIP_INTERSECTION) for (const plane of clipPlanes) plane.negate()
 
+// The crop's further removal boxes, cut by the scan's own shader as the live
+// viewer does, since six planes only describe the one box above. The boxes are
+// in the same local space; cropToLocal is set once the model's offset is known.
+const REMOVAL = ${JSON.stringify(removalShader(crop))}
+const removalUniforms = {
+  cropToLocal: { value: new THREE.Matrix4() },
+  cropRemoveMin: { value: (CROP?.removed ?? []).map((b) => new THREE.Vector3(b.minX, b.minY, b.minZ)) },
+  cropRemoveMax: { value: (CROP?.removed ?? []).map((b) => new THREE.Vector3(b.maxX, b.maxY, b.maxZ)) },
+}
+function cutRemovals(shader) {
+  if (!REMOVAL.count) return
+  Object.assign(shader.uniforms, removalUniforms)
+  shader.vertexShader = shader.vertexShader
+    .replace('#include <common>', '#include <common>\n' + REMOVAL.vertexPars)
+    .replace('#include <project_vertex>', '#include <project_vertex>\n' + REMOVAL.vertexMain)
+  shader.fragmentShader = shader.fragmentShader
+    .replace('#include <common>', '#include <common>\n' + REMOVAL.fragmentPars)
+    .replace('#include <clipping_planes_fragment>', REMOVAL.fragmentMain + '\n#include <clipping_planes_fragment>')
+}
+
 // Unlit, matching the site viewer (composables/useThreeScene.ts): scans have
 // their lighting baked into the base color texture, so no lights or environment.
 function toUnlit(src) {
@@ -193,6 +240,7 @@ function toUnlit(src) {
     clippingPlanes: clipPlanes ?? undefined,
     clipIntersection: CLIP_INTERSECTION,
   })
+  flat.onBeforeCompile = cutRemovals
   src.dispose()
   return flat
 }
@@ -252,10 +300,11 @@ loader.load('/model.glb', (gltf) => {
   // Clipping planes are world-space while the crop is defined against the
   // geometry, so they have to follow the model's offset. Applied once because
   // nothing moves the model after this point.
+  model.updateMatrixWorld(true)
   if (clipPlanes) {
-    model.updateMatrixWorld(true)
     for (const plane of clipPlanes) plane.applyMatrix4(model.matrixWorld)
   }
+  removalUniforms.cropToLocal.value.copy(model.matrixWorld).invert()
 
   const maxDim = Math.max(size.x, size.y, size.z) || 1
   const fovRad = (70 * Math.PI) / 180

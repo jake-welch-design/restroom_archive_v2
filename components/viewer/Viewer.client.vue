@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { useThreeScene } from "~/composables/useThreeScene";
 import type { CameraSnapshot } from "~/composables/useThreeScene";
 import { apiErrorMessage } from "~~/shared/utils/apiError";
-import type { Crop } from "~~/shared/utils/crop";
+import type { Crop, CropBox } from "~~/shared/utils/crop";
 
 const props = defineProps<{
   modelUrl?: string | null;
@@ -51,6 +51,8 @@ const {
   cropMode,
   cropDraft,
   cropEmptiesScan,
+  cropConfirmed,
+  cropRoundPending,
   setMode,
   flyTo,
   project,
@@ -60,6 +62,8 @@ const {
   resetCropBox,
   setCropMode,
   setCropTool,
+  confirmCropRound,
+  discardCropRound,
   cropHasChanges,
   toDraftSpace,
   pendingCrop,
@@ -170,31 +174,40 @@ const canCrop = computed(
 const cropSaving = ref(false);
 
 /**
- * How many annotations sit on geometry the box as drawn would take away.
+ * How many annotations sit on geometry the edit as it stands would take away:
+ * the confirmed rounds, and the round on screen if it counts yet.
  *
- * Which side that is depends on the mode, so the same test answers both.
- * Annotation points are stored in model-local space, the same space the box is
- * in, so it is a direct comparison with nothing to transform. Shown on the crop
- * note as a warning rather than stopping the save: cropping away an annotated
- * surface is a legitimate thing to do, and only the marker loses its surface.
+ * Annotation points are stored in model-local space, the same space the boxes
+ * are in, so it is a direct comparison with nothing to transform. Shown on the
+ * crop note as a warning rather than stopping the save: cropping away an
+ * annotated surface is a legitimate thing to do, and only the marker loses its
+ * surface.
  */
 const strandedCount = computed(() => {
   const d = cropDraft.value;
   const list = annotations.value;
   if (!d || !list?.length) return 0;
+  const { keep, removals } = cropConfirmed.value;
+  const removing = cropMode.value === "remove";
+  const pending = cropRoundPending.value;
   const point = new THREE.Vector3();
+  const inside = (b: CropBox) =>
+    point.x >= b.minX &&
+    point.x <= b.maxX &&
+    point.y >= b.minY &&
+    point.y <= b.maxY &&
+    point.z >= b.minZ &&
+    point.z <= b.maxZ;
   return list.filter((a) => {
     // Where the point will be under any rotation being edited, since the box
     // is drawn against that rotation, not the one the point was stored with.
     toDraftSpace(point.set(a.pointX, a.pointY, a.pointZ), point);
-    const inside =
-      point.x >= d.minX &&
-      point.x <= d.maxX &&
-      point.y >= d.minY &&
-      point.y <= d.maxY &&
-      point.z >= d.minZ &&
-      point.z <= d.maxZ;
-    return cropMode.value === "keep" ? !inside : inside;
+    if (removals.some(inside)) return true;
+    // A `keep` round's box replaces the confirmed kept box; a `remove` round
+    // cuts inside it.
+    if (!removing) return !inside(d);
+    if (keep && !inside(keep)) return true;
+    return pending && inside(d);
   }).length;
 });
 
@@ -237,8 +250,36 @@ function toggleCropMode() {
   // it keeps.
   if (!cropReady.value || cropTool.value === "rotate") return;
   const next = cropMode.value === "keep" ? "remove" : "keep";
-  setCropMode(next);
+  if (!setCropMode(next)) {
+    showToast("No room for another removal box", 2500);
+    return;
+  }
   showToast(next === "keep" ? "Keep inside box" : "Remove inside box");
+}
+
+/**
+ * The tick beside the mode button: confirms the round on screen, so another
+ * can be drawn on top of it. Several removal boxes, one per round, is how
+ * fragments scattered through a room are picked off.
+ */
+function onConfirmRound() {
+  const removing = cropMode.value === "remove";
+  switch (confirmCropRound()) {
+    case "confirmed":
+      showToast(removing ? "Box removed · draw the next" : "Kept box set");
+      break;
+    case "empties":
+      showToast("That box covers the whole scan", 2500);
+      break;
+    case "full":
+      showToast("No room for another removal box", 2500);
+      break;
+  }
+}
+
+/** The cross beside the mode button: drops the round on screen. */
+function onDiscardRound() {
+  if (discardCropRound()) showToast("Box discarded");
 }
 
 function onResetCrop() {
@@ -667,6 +708,57 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
                   <path v-if="cropMode === 'keep'" d="M8 3v10" />
                 </svg>
               </button>
+              <!-- The round on screen: drop it, or confirm it and draw another
+              on top. Off until there is something to drop or confirm. -->
+              <button
+                class="ctrl-btn"
+                :disabled="!cropRoundPending"
+                title="Discard this box"
+                aria-label="Discard this box"
+                @click="onDiscardRound"
+              >
+                <svg
+                  viewBox="0 0 16 16"
+                  width="16"
+                  height="16"
+                  fill="none"
+                  stroke="#ffffff"
+                  stroke-width="1.6"
+                  stroke-linecap="round"
+                  aria-hidden="true"
+                >
+                  <path d="M4 4l8 8M12 4l-8 8" />
+                </svg>
+              </button>
+              <button
+                class="ctrl-btn"
+                :disabled="!cropRoundPending"
+                :title="
+                  cropMode === 'remove'
+                    ? 'Confirm this box and draw another'
+                    : 'Confirm this box'
+                "
+                :aria-label="
+                  cropMode === 'remove'
+                    ? 'Confirm this box and draw another'
+                    : 'Confirm this box'
+                "
+                @click="onConfirmRound"
+              >
+                <svg
+                  viewBox="0 0 16 16"
+                  width="16"
+                  height="16"
+                  fill="none"
+                  stroke="#ffffff"
+                  stroke-width="1.6"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M3 8.5l3.2 3L13 4.5" />
+                </svg>
+              </button>
             </div>
           </Transition>
 
@@ -776,6 +868,13 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
       {{
         cropSaving ? "Saving" : cropTool === "rotate" ? "Rotating" : "Cropping"
       }}
+      <span
+        v-if="
+          !cropSaving && cropTool === 'box' && cropConfirmed.removals.length
+        "
+      >
+        · {{ cropConfirmed.removals.length }} removed
+      </span>
       <span v-if="!cropSaving && rotateReading" class="crop-note-reading">
         · {{ rotateReading }}
       </span>

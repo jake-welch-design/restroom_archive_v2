@@ -51,6 +51,18 @@ export interface Crop {
    */
   frame: CropBox;
   /**
+   * Earlier removal boxes, each deleting what is inside it, applied on top of
+   * `box` whichever mode that is in.
+   *
+   * One box per round the admin confirmed in the crop tool, oldest first. The
+   * single box above was enough for trimming a scan down to the room, but not
+   * for picking off several floating fragments inside it, which is what these
+   * are for. Absent when there are none, so a crop drawn in one round is stored
+   * exactly as it was before rounds existed. When the crop keeps everything and
+   * only removes, `box` is the newest removal and these are the ones before it.
+   */
+  removed?: CropBox[];
+  /**
    * The POV camera's eye height, in the GLB's local Y, or absent for the
    * default of a little above the frame's centre.
    *
@@ -91,6 +103,15 @@ export interface CropDelta {
  */
 export const MIN_CROP_SIZE = 0.05;
 
+/**
+ * Most removal boxes one crop may hold, `box` included when it is one.
+ *
+ * Each is a pair of vec3 uniforms in the scan's fragment shader (see
+ * shared/utils/cropShader.ts), so the count is bounded by uniform space rather
+ * than by anything an admin would plausibly need.
+ */
+export const MAX_CROP_REMOVALS = 32;
+
 const AXES = ["minX", "minY", "minZ", "maxX", "maxY", "maxZ"] as const;
 
 function isBox(value: unknown): value is CropBox {
@@ -128,10 +149,14 @@ export function parseCrop(value: string | null | undefined): Crop | null {
         ? { povX: parsed.povX, povZ: parsed.povZ }
         : {};
     const level = parseLevel(parsed.level);
+    const removed = Array.isArray(parsed.removed)
+      ? parsed.removed.filter(isBox)
+      : [];
     return {
       mode,
       box: parsed.box,
       frame,
+      ...(removed.length ? { removed } : {}),
       ...(povY == null ? {} : { povY }),
       ...povXZ,
       ...(level ? { level } : {}),

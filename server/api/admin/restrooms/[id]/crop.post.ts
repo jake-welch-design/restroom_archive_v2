@@ -6,6 +6,7 @@ import { recordAdminAction } from "~~/server/utils/auditLog";
 import { getRouterId } from "~~/server/utils/routeParams";
 import { now } from "~~/server/utils/sqlTime";
 import {
+  MAX_CROP_REMOVALS,
   MIN_CROP_SIZE,
   parseCrop,
   serializeCrop,
@@ -60,6 +61,9 @@ const CropSchema = z
     // mode it is the surviving geometry's bounds, which only the client can
     // measure, since the server would have to parse the GLB to find them.
     frame: BoxSchema,
+    // Earlier removal rounds, each deleting what is inside it. Absent when
+    // there are none.
+    removed: z.array(BoxSchema).optional(),
     // The POV eye height, in the same local space as the boxes. Absent means
     // the default.
     povY: Coord.optional(),
@@ -73,6 +77,12 @@ const CropSchema = z
   .refine(
     (c) => c.povY == null || (c.povY >= c.frame.minY && c.povY <= c.frame.maxY),
     { message: "POV height is outside the scan" },
+  )
+  .refine(
+    (c) =>
+      (c.removed?.length ?? 0) + (c.mode === "remove" ? 1 : 0) <=
+      MAX_CROP_REMOVALS,
+    { message: "Too many removal boxes" },
   )
   .refine((c) => (c.povX == null) === (c.povZ == null), {
     message: "POV position needs both X and Z",
