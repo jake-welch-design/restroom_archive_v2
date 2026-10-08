@@ -946,6 +946,12 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
   height: 100%;
   background: #000;
   overflow: hidden;
+  /* A long- or force-press on iOS otherwise selects the whole viewport and
+  opens the callout menu. Nothing in here is text you'd want to copy. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
 }
 canvas {
   display: block;
