@@ -128,16 +128,25 @@ async function submitContact() {
           nobody else is watching. {{ statsSentence }}
         </p>
         <p>
-          Follow us on
-          <a href="https://www.instagram.com/restroomarchive/">Instagram</a>
-          for occasional updates and Archive highlights.
-          <!-- The Restroom Archive
-          has been featured on
+          The Restroom Archive has been featured on
           <a
             href="https://www.404media.co/the-man-on-a-quest-to-digitally-preserve-americas-public-restrooms/"
             >404 Media</a
+          >,
+          <a href="https://visla.kr/feature/352064/?ckattempt=1"
+            >VISLA Magazine</a
+          >,
+          <a
+            href="https://www.pap-magazine.com/article/jake-welch-the-restroom-archive-3d-scan"
+            >PAP Magazine</a
           >
-          and EY Doberman’s
+          and
+          <a href="https://toiletgamestudies.org/interview_jake_welch"
+            >Toilet Game Studies</a
+          >. Follow us on
+          <a href="https://www.instagram.com/restroomarchive/">Instagram</a>
+          for occasional updates and Archive highlights.
+          <!-- and EY Doberman’s
           <a href="https://doberman.co/3"
             >“3 Things We’ve Seen and Loved”, 26-030</a
           >. -->
