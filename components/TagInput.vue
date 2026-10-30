@@ -259,4 +259,12 @@ function onBlur() {
   background: #000;
   color: #fff;
 }
+
+/* iOS zooms the page when a field under 16px takes focus; see `.field-input` in
+   forms.css. */
+@media (max-width: 750px) {
+  .tag-inner {
+    font-size: 16px;
+  }
+}
 </style>
