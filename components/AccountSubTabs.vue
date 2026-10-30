@@ -88,6 +88,9 @@ defineEmits<{ (e: "update:modelValue", id: string): void }>();
    apart, including on a phone where `gap-before` gives way to a line break. */
 :slotted(.subtab-btn) {
   margin: 0 0 -1px 11px;
+  /* A slotted control can be a link, such as the Admin tab's way out to the
+     video studio. */
+  text-decoration: none;
 }
 .row-break {
   display: none;
@@ -189,10 +192,26 @@ defineEmits<{ (e: "update:modelValue", id: string): void }>();
        would fight the gap the break element just opened. */
     margin-bottom: 0;
   }
+  /* Level with the buttons above, whose bottom overlap is off here too. */
+  :slotted(.subtab-btn) {
+    margin-bottom: 0;
+  }
   .subtab-btn.gap-before {
     /* The break already separates the groups; an indent here would push the
        second row off the left edge. */
     margin-left: 0;
+  }
+}
+
+/* The smallest phones, where the Admin tab's four groups and the studio icon
+   only share a line with the padding taken in. */
+@media (max-width: 374px) {
+  .subtab-btn,
+  :slotted(.subtab-btn) {
+    padding: 5px 6px;
+  }
+  :slotted(.subtab-btn) {
+    margin-left: 4px;
   }
 }
 </style>

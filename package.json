@@ -33,6 +33,7 @@
     "drizzle-orm": "^0.45.2",
     "fuse.js": "^7.0.0",
     "maplibre-gl": "^4.7.1",
+    "mediabunny": "^1.61.6",
     "nuxt": "^3.13.2",
     "nuxt-auth-utils": "^0.5.29",
     "pmtiles": "^3.2.0",

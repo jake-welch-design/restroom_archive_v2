@@ -496,6 +496,32 @@ function setAdminSection(value: string) {
         :tabs="primarySubTabs"
       >
         <AccountArchivistGuide v-if="accountTab === 'submissions'" />
+        <!-- A tool rather than a list, so a link out to its own page rather
+             than a group: see pages/studio.vue. -->
+        <NuxtLink
+          v-if="accountTab === 'admin' && isAdmin"
+          to="/studio"
+          class="subtab-btn"
+          aria-label="Video studio"
+          title="Video studio"
+        >
+          <!-- An icon rather than a label, so the row fits on one line on a
+               phone instead of wrapping this onto a second. -->
+          <svg
+            viewBox="0 0 16 16"
+            width="16"
+            height="16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.25"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <rect x="1" y="4" width="9.5" height="8" rx="1" />
+            <path d="M10.5 7 15 4.5v7L10.5 9" />
+          </svg>
+        </NuxtLink>
       </AccountSubTabs>
 
       <!-- The Admin tab's second row: the sections inside the chosen group.

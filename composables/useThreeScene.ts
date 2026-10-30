@@ -1,6 +1,5 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { Ref } from "vue";
 import type { CameraMode } from "~/types/annotation";
@@ -10,7 +9,16 @@ import {
   type CropBox,
   type CropMode,
 } from "~~/shared/utils/crop";
-import { patchCropShader } from "~~/shared/utils/cropShader";
+import {
+  applyFlatMaterials as applySharedFlatMaterials,
+  boxFromCrop,
+  cropRounds,
+  disposeObject,
+  getDracoLoader,
+  isFullBounds as isWithinBounds,
+  measureScanBounds as measureBounds,
+  type ScanShading,
+} from "~/composables/scanModel";
 import { isLevelled, type Level, type Vec3 } from "~~/shared/utils/levelling";
 import {
   clampInsideEdges,
@@ -130,37 +138,6 @@ function createLoadProfiler(url: string) {
   };
 }
 /* eslint-enable no-console */
-
-/**
- * The shared Draco decoder, created once and reused by every model load.
- *
- * Scans submitted with Draco compression carry `KHR_draco_mesh_compression`,
- * and `GLTFLoader` refuses to read one without a decoder attached -- the
- * failure is the flat "No DRACOLoader instance provided." with no model. An
- * uncompressed scan never touches this, so attaching it costs nothing for the
- * archive's existing entries; the decoder itself is only fetched the first time
- * a compressed one is actually opened.
- *
- * Shared rather than per-load because `DRACOLoader` spins up a Web Worker and
- * caches the compiled decoder on the instance. `loadModel` builds a fresh
- * `GLTFLoader` for every model, so a decoder built alongside it would start a
- * new worker per scan viewed and leave the old ones running.
- *
- * Built lazily rather than at module scope: this module is imported during SSR
- * even though the scene itself is client-only, and construction should not
- * happen on the server.
- */
-let dracoLoader: DRACOLoader | null = null;
-
-function getDracoLoader(): DRACOLoader {
-  if (!dracoLoader) {
-    dracoLoader = new DRACOLoader();
-    // Served from public/draco/ -- same-origin, so it satisfies
-    // `connect-src 'self'` without a CSP exception. See public/draco/README.md.
-    dracoLoader.setDecoderPath("/draco/");
-  }
-  return dracoLoader;
-}
 
 export function useThreeScene(
   canvasRef: Ref<HTMLCanvasElement | null>,
@@ -620,65 +597,23 @@ export function useThreeScene(
     if (renderer && scene && camera) renderer.render(scene, camera);
   }
 
-  // Scans are photographed, not lit: the base color texture already contains the
-  // real-world lighting. Rendering them with a PBR material means three re-lights
-  // an already-lit image: dark surfaces pick up ambient and environment fill, and the
-  // whole model reads faded. MeshBasicMaterial shows the texture exactly as
-  // authored, and sidesteps the metallicFactor-defaults-to-1 black-model problem
-  // entirely since metalness/roughness no longer participate.
-  function toUnlitMaterial(src: THREE.Material): THREE.MeshBasicMaterial {
-    const pbr = src as THREE.MeshStandardMaterial;
-    const flat = new THREE.MeshBasicMaterial({
-      name: src.name,
-      map: pbr.map ?? null,
-      color: pbr.color ? pbr.color.clone() : new THREE.Color(0xffffff),
-      vertexColors: pbr.vertexColors ?? false,
-      transparent: src.transparent,
-      opacity: src.opacity,
-      alphaMap: pbr.alphaMap ?? null,
-      alphaTest: src.alphaTest,
-      side: src.side,
-      depthWrite: src.depthWrite,
-      toneMapped: false,
-      // Left unset rather than given six inert planes on an uncropped scan.
-      // The number of clipping planes is part of the shader's cache key, so
-      // handing every model a full set would cost a per-fragment test on scans
-      // that have nothing to clip.
-      clippingPlanes: clippingActive ? cropWorldPlanes : undefined,
-      // Paired with the planes' orientation in `setClipBox`; neither works
-      // without the other. See there for why.
-      clipIntersection: clipMode === "remove",
-    });
-    // The confirmed rounds and the crop in force; see "Crop shader" above.
-    flat.onBeforeCompile = (shader) => {
-      Object.assign(shader.uniforms, cropUniforms);
-      patchCropShader(shader, shaderKeepActive, shaderRemovals.length);
-    };
-    flat.customProgramCacheKey = () => shaderCropKey;
-    // Textures are handed to the new material, so only the material shell is
-    // released here, since disposeMaterial() would take the maps down with it.
-    src.dispose();
-    return flat;
-  }
+  /** What the scan's materials read; see ScanShading in scanModel.ts. */
+  const shading: ScanShading = {
+    uniforms: cropUniforms,
+    keepActive: () => shaderKeepActive,
+    removalCount: () => shaderRemovals.length,
+    cacheKey: () => shaderCropKey,
+    clippingPlanes: () => (clippingActive ? cropWorldPlanes : undefined),
+    // Paired with the planes' orientation in `setClipBox`; neither works
+    // without the other. See there for why.
+    clipIntersection: () => clipMode === "remove",
+  };
 
   function applyFlatMaterials(root: THREE.Object3D) {
-    root.traverse((child) => {
-      const mesh = child as THREE.Mesh;
-      if (!mesh.isMesh || !mesh.material) return;
-      mesh.material = Array.isArray(mesh.material)
-        ? mesh.material.map(toUnlitMaterial)
-        : toUnlitMaterial(mesh.material);
-    });
+    applySharedFlatMaterials(root, shading);
   }
 
   /* --- Crop ---------------------------------------------------------------- */
-
-  function boxFromCrop(crop: CropBox): THREE.Box3 {
-    return new THREE.Box3(
-      new THREE.Vector3(crop.minX, crop.minY, crop.minZ),
-      new THREE.Vector3(crop.maxX, crop.maxY, crop.maxZ),
-    );
-  }
 
   function cropFromBox(box: THREE.Box3): CropBox {
     return {
@@ -828,48 +763,7 @@ export function useThreeScene(
   function measureScanBounds(
     options: { exclude?: THREE.Box3[]; precise?: boolean } = {},
   ): THREE.Box3 {
-    const { exclude = [], precise = false } = options;
-    const result = new THREE.Box3().makeEmpty();
-    if (!currentModel) return result;
-
-    currentModel.updateMatrixWorld(true);
-    const modelInverse = new THREE.Matrix4()
-      .copy(currentModel.matrixWorld)
-      .invert();
-    const toModel = new THREE.Matrix4();
-    const vertex = new THREE.Vector3();
-    const meshBox = new THREE.Box3();
-
-    currentModel.traverse((child) => {
-      const mesh = child as THREE.Mesh;
-      if (!mesh.isMesh || !mesh.geometry) return;
-      const position = mesh.geometry.attributes.position;
-      if (!position) return;
-
-      toModel.multiplyMatrices(modelInverse, mesh.matrixWorld);
-      mesh.geometry.computeBoundingBox();
-      if (!mesh.geometry.boundingBox) return;
-
-      // A mesh nothing is excluded from keeps all of its geometry, so unless
-      // precision is asked for its own bounds are enough and its vertices can
-      // be skipped. Scans are usually a single mesh, so for a remove crop this
-      // rarely fires, but it costs one box test.
-      meshBox.copy(mesh.geometry.boundingBox).applyMatrix4(toModel);
-      // Only the boxes that reach this mesh can take anything from it.
-      const near = exclude.filter((box) => meshBox.intersectsBox(box));
-      if (!precise && !near.length) {
-        result.union(meshBox);
-        return;
-      }
-
-      for (let i = 0; i < position.count; i++) {
-        vertex.fromBufferAttribute(position, i).applyMatrix4(toModel);
-        if (!near.some((box) => box.containsPoint(vertex)))
-          result.expandByPoint(vertex);
-      }
-    });
-
-    return result;
+    return measureBounds(currentModel, options);
   }
 
   /**
@@ -884,12 +778,7 @@ export function useThreeScene(
     keep: THREE.Box3 | null;
     removals: THREE.Box3[];
   } {
-    if (!crop) return { keep: null, removals: [] };
-    const removals = (crop.removed ?? []).map(boxFromCrop);
-    if (crop.mode === "remove")
-      return { keep: null, removals: [...removals, boxFromCrop(crop.box)] };
-    const keep = boxFromCrop(crop.box);
-    return { keep: isFullBounds(keep) ? null : keep, removals };
+    return cropRounds(crop, originalBounds);
   }
 
   /** The edit in progress as rounds, the one on screen included if it counts. */
@@ -951,11 +840,7 @@ export function useThreeScene(
   }
 
   function isFullBounds(box: THREE.Box3): boolean {
-    const epsilon = 1e-3;
-    return (
-      box.min.distanceTo(originalBounds.min) < epsilon &&
-      box.max.distanceTo(originalBounds.max) < epsilon
-    );
+    return isWithinBounds(box, originalBounds);
   }
 
   /**
@@ -2350,35 +2235,6 @@ export function useThreeScene(
     povState.fov = Math.max(30, Math.min(110, povState.fov + e.deltaY * 0.05));
     camera.fov = povState.fov;
     camera.updateProjectionMatrix();
-  }
-
-  function disposeMaterial(material: THREE.Material) {
-    // material.dispose() does NOT cascade to textures, so they are released
-    // manually. Skipping this leaves photogrammetry-sized textures resident
-    // on the GPU after a model swap, which tanks interactive perf.
-    for (const key of Object.keys(material)) {
-      const value = (material as unknown as Record<string, unknown>)[key];
-      if (
-        value &&
-        typeof value === "object" &&
-        (value as { isTexture?: boolean }).isTexture
-      ) {
-        (value as THREE.Texture).dispose();
-      }
-    }
-    material.dispose();
-  }
-
-  function disposeObject(obj: THREE.Object3D) {
-    obj.traverse((child) => {
-      const mesh = child as THREE.Mesh;
-      if (mesh.isMesh) {
-        mesh.geometry?.dispose();
-        const mat = mesh.material as THREE.Material | THREE.Material[];
-        if (Array.isArray(mat)) mat.forEach(disposeMaterial);
-        else if (mat) disposeMaterial(mat);
-      }
-    });
   }
 
   function dispose() {
