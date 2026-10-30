@@ -83,6 +83,8 @@ export interface StudioCaption {
   name: string;
   date: string;
   location: string;
+  /** Text size, in pixels of the 900px viewport a frame stands for. */
+  size: number;
 }
 
 export interface StudioFrame {
@@ -120,17 +122,12 @@ const DEFAULT_POV_RISE = 0.2;
  * every format.
  */
 const VIEWPORT_HEIGHT = 900;
-const CAPTION_FONT = 14;
-const CAPTION_LINE = 16;
-/** How far a line's baseline sits above the bottom of its 16px line box. */
-const CAPTION_DESCENT = 3;
-/**
- * The caption box's bottom edge above the viewer's: `.bottom-nav` sits 12px up,
- * and the caption rides above the nav buttons (36px) and their 10px gap. The
- * buttons are not drawn, but the caption keeps their room so it lands where it
- * does on screen.
- */
-const CAPTION_BOTTOM = 58;
+/** Arial's line box at `line-height: normal`, as a multiple of its font size. */
+const CAPTION_LINE = 16 / 14;
+/** How far a baseline sits above the bottom of that box, as the same multiple. */
+const CAPTION_DESCENT = 3 / 14;
+/** The caption box's bottom edge above the frame's. */
+const CAPTION_BOTTOM = 10;
 /** As far in from each edge as `.bottom-nav-info`'s phone max-width allows. */
 const CAPTION_INSET = 40;
 const GRADIENT_HEIGHT = 150;
@@ -321,10 +318,10 @@ export function createTurntableStage(output: HTMLCanvasElement) {
     ctx.fillStyle = gradient;
     ctx.fillRect(0, gradientTop, width, height - gradientTop);
 
-    const fontSize = CAPTION_FONT * s;
-    const lineHeight = CAPTION_LINE * s;
+    const fontSize = caption.size * s;
+    const lineHeight = CAPTION_LINE * fontSize;
     // The last line's baseline: the box's bottom edge, raised by the descent.
-    const baseline = height - (CAPTION_BOTTOM + CAPTION_DESCENT) * s;
+    const baseline = height - CAPTION_BOTTOM * s - CAPTION_DESCENT * fontSize;
     const maxWidth = width - 2 * CAPTION_INSET * s;
     const lines = [caption.name, caption.date, caption.location].filter(
       Boolean,

@@ -53,6 +53,8 @@ const { data: restrooms } = await useRestrooms();
 
 const SECONDS_MIN = 1;
 const SECONDS_MAX = 12;
+const CAPTION_SIZE_MIN = 10;
+const CAPTION_SIZE_MAX = 60;
 const ZOOM_MIN = 0.5;
 const ZOOM_MAX = 3;
 
@@ -67,6 +69,7 @@ interface StudioSettings {
   zoom: number;
   seconds: number;
   caption: boolean;
+  captionSize: number;
 }
 
 /**
@@ -85,6 +88,7 @@ const DEFAULT_SETTINGS: StudioSettings = {
   zoom: 1,
   seconds: 8,
   caption: true,
+  captionSize: 22,
 };
 
 const SETTINGS_KEY = "studio:settings";
@@ -127,6 +131,7 @@ function restoreSettings(stored: Partial<StudioSettings>): StudioSettings {
       : STUDIO_RATIOS[orientation][0];
   const seconds = Number(stored.seconds);
   const zoom = Number(stored.zoom);
+  const captionSize = Number(stored.captionSize);
   return {
     orientation,
     aspect,
@@ -137,6 +142,10 @@ function restoreSettings(stored: Partial<StudioSettings>): StudioSettings {
     seconds:
       seconds >= SECONDS_MIN && seconds <= SECONDS_MAX ? seconds : d.seconds,
     caption: typeof stored.caption === "boolean" ? stored.caption : d.caption,
+    captionSize:
+      captionSize >= CAPTION_SIZE_MIN && captionSize <= CAPTION_SIZE_MAX
+        ? captionSize
+        : d.captionSize,
   };
 }
 
@@ -189,7 +198,12 @@ function frameFor(entry: RestroomSummary): StudioFrame {
     zoom: s.zoom * a.zoom,
     startAngle: a.startAngle,
     caption: s.caption
-      ? { name: entry.name, date: entry.date, location: entry.location }
+      ? {
+          name: entry.name,
+          date: entry.date,
+          location: entry.location,
+          size: s.captionSize,
+        }
       : null,
   };
 }
@@ -679,6 +693,25 @@ const zoomPercent = computed(() => Math.round(settings.value.zoom * 100));
                 </button>
               </div>
               <span class="settings-note">Name, date and location.</span>
+            </div>
+
+            <div v-if="settings.caption" class="settings-row">
+              <label class="settings-label" for="studio-caption-size">
+                Text size
+              </label>
+              <div class="range-row">
+                <input
+                  id="studio-caption-size"
+                  v-model.number="settings.captionSize"
+                  class="range"
+                  type="range"
+                  :min="CAPTION_SIZE_MIN"
+                  :max="CAPTION_SIZE_MAX"
+                  step="1"
+                  :disabled="exporting"
+                />
+                <span class="range-value">{{ settings.captionSize }}</span>
+              </div>
             </div>
           </section>
 
