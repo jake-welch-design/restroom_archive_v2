@@ -111,17 +111,19 @@ const POV_FOV = 80;
 const DEFAULT_POV_RISE = 0.2;
 
 /**
- * The full-screen viewer's caption, in CSS pixels on a phone-width screen
- * (layouts/default.vue: `.bottom-nav-info` and `.bottom-gradient`). Scaled by
- * the frame's short side over a 390-point phone, so on Instagram the caption
- * reads at the size it does on the site, portrait or landscape.
+ * The full-screen viewer's caption (layouts/default.vue: `.bottom-nav-info` and
+ * `.bottom-gradient`), as measured in the browser, in CSS pixels. The site draws
+ * these at a fixed size whatever the window, so the frame has to stand in for
+ * some window for them to mean anything: every frame is treated as a full-screen
+ * viewport this tall, and everything scales by frame height over it. The caption
+ * then fills the same share of the frame as it does on a laptop screen, in
+ * every format.
  */
-const PHONE_WIDTH = 390;
+const VIEWPORT_HEIGHT = 900;
 const CAPTION_FONT = 14;
-/** Arial's `line-height: normal`, which the caption inherits on the site. */
-const CAPTION_LINE = 1.15;
-/** Arial's descent: how far a line's box runs below its baseline. */
-const ARIAL_DESCENT = 0.212;
+const CAPTION_LINE = 16;
+/** How far a line's baseline sits above the bottom of its 16px line box. */
+const CAPTION_DESCENT = 3;
 /**
  * The caption box's bottom edge above the viewer's: `.bottom-nav` sits 12px up,
  * and the caption rides above the nav buttons (36px) and their 10px gap. The
@@ -309,7 +311,7 @@ export function createTurntableStage(output: HTMLCanvasElement) {
 
   function drawCaption(caption: StudioCaption) {
     const { width, height } = output;
-    const s = Math.min(width, height) / PHONE_WIDTH;
+    const s = height / VIEWPORT_HEIGHT;
 
     // The viewer's bottom gradient: transparent to 20% black.
     const gradientTop = height - GRADIENT_HEIGHT * s;
@@ -320,9 +322,9 @@ export function createTurntableStage(output: HTMLCanvasElement) {
     ctx.fillRect(0, gradientTop, width, height - gradientTop);
 
     const fontSize = CAPTION_FONT * s;
-    const lineHeight = fontSize * CAPTION_LINE;
+    const lineHeight = CAPTION_LINE * s;
     // The last line's baseline: the box's bottom edge, raised by the descent.
-    const baseline = height - CAPTION_BOTTOM * s - ARIAL_DESCENT * fontSize;
+    const baseline = height - (CAPTION_BOTTOM + CAPTION_DESCENT) * s;
     const maxWidth = width - 2 * CAPTION_INSET * s;
     const lines = [caption.name, caption.date, caption.location].filter(
       Boolean,
