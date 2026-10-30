@@ -420,8 +420,9 @@ function resetUpload() {
           <span class="field-label-row">
             <span class="field-label">City <span class="req">*</span></span>
             <InfoTooltip>
-              The town, city or borough. The Archive adds the state, province or
-              country from your picks below.
+              The town or city as it would appear in a mailing address (in
+              Manhattan, that's New York). The Archive adds the state, province
+              or country from your picks below.
             </InfoTooltip>
           </span>
           <input
