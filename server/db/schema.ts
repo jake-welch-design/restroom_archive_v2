@@ -230,7 +230,79 @@ export const adminAuditLog = sqliteTable(
   }),
 );
 
+export const apiTokens = sqliteTable(
+  "api_tokens",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull(),
+    label: text("label"),
+    expiresAt: text("expires_at").notNull(),
+    lastUsedAt: text("last_used_at"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+  (t) => ({
+    tokenHashIdx: uniqueIndex("idx_api_tokens_hash").on(t.tokenHash),
+    userIdIdx: index("idx_api_tokens_user_id").on(t.userId),
+  }),
+);
+
+export const userBlocks = sqliteTable(
+  "user_blocks",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    blockerId: integer("blocker_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    blockedId: integer("blocked_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+  (t) => ({
+    pairIdx: uniqueIndex("idx_user_blocks_pair").on(t.blockerId, t.blockedId),
+    blockerIdx: index("idx_user_blocks_blocker").on(t.blockerId),
+  }),
+);
+
+export const restroomReports = sqliteTable(
+  "restroom_reports",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    restroomId: integer("restroom_id")
+      .notNull()
+      .references(() => restrooms.id, { onDelete: "cascade" }),
+    reporterId: integer("reporter_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    reason: text("reason"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+    resolvedAt: text("resolved_at"),
+    resolvedBy: integer("resolved_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+  },
+  (t) => ({
+    uniquePerUser: uniqueIndex("restroom_reports_unique_per_user").on(
+      t.restroomId,
+      t.reporterId,
+    ),
+    openIdx: index("idx_restroom_reports_open").on(t.resolvedAt),
+  }),
+);
+
 export type User = typeof users.$inferSelect;
 export type Restroom = typeof restrooms.$inferSelect;
 export type Annotation = typeof annotations.$inferSelect;
 export type AnnotationReport = typeof annotationReports.$inferSelect;
+export type ApiToken = typeof apiTokens.$inferSelect;
+export type UserBlock = typeof userBlocks.$inferSelect;
+export type RestroomReport = typeof restroomReports.$inferSelect;

@@ -131,25 +131,44 @@ async function submitContact() {
           The Restroom Archive has been featured on
           <a
             href="https://www.404media.co/the-man-on-a-quest-to-digitally-preserve-americas-public-restrooms/"
+            target="_blank"
             >404 Media</a
           >,
-          <a href="https://visla.kr/feature/352064/?ckattempt=1"
-            >VISLA Magazine</a
+          <a
+            href="https://www.creativeapplications.net/news/the-restroom-archive/"
+            target="_blank"
+          >
+            Creative Applications Network </a
+          >, EY Doberman’s
+          <a href="https://doberman.co/3" target="_blank">
+            “Three Things We've Seen and Loved Lately” 26-030 </a
+          >,
+          <a href="https://visla.kr/feature/352064/?ckattempt=1" target="_blank"
+            >VISLA Magazine </a
+          >,
+          <a
+            href="https://www.asyncmuseum.com/works/the-restroom-archive"
+            target="_blank"
+          >
+            Async Museum </a
           >,
           <a
             href="https://www.pap-magazine.com/article/jake-welch-the-restroom-archive-3d-scan"
-            >PAP Magazine</a
+            target="_blank"
           >
-          and
-          <a href="https://toiletgamestudies.org/interview_jake_welch"
-            >Toilet Game Studies</a
-          >. Follow us on
-          <a href="https://www.instagram.com/restroomarchive/">Instagram</a>
+            PAP Magazine </a
+          >,
+          <a
+            href="https://toiletgamestudies.org/interview_jake_welch"
+            target="_blank"
+          >
+            and Toilet Game Studies </a
+          >. <br /><br />
+          Follow us on
+          <a href="https://www.instagram.com/restroomarchive/" target="_blank">
+            Instagram
+          </a>
           for occasional updates and Archive highlights.
-          <!-- and EY Doberman’s
-          <a href="https://doberman.co/3"
-            >“3 Things We’ve Seen and Loved”, 26-030</a
-          >. -->
         </p>
       </section>
       <!-- 

@@ -1,0 +1,15 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["TEAMID.com.restroomarchive.app"],
+        "components": [
+          { "/": "/r/*" },
+          { "/": "/submit" },
+          { "/": "/account" },
+          { "/": "/reset-password*" }
+        ]
+      }
+    ]
+  }
+}

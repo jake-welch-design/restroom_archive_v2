@@ -933,7 +933,9 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
       <img src="/toilet-loader.gif" alt="Loading..." width="200" height="200" />
     </div>
     <div v-else-if="rateLimited" class="status">
-      <span class="rate-limited">Too many refreshes! Try again in a minute.</span>
+      <span class="rate-limited"
+        >Too many refreshes! Try again in a minute.</span
+      >
     </div>
     <div v-else-if="error" class="status error">{{ error }}</div>
   </div>
