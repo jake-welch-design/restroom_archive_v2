@@ -20,6 +20,7 @@ export default defineEventHandler(async (event) => {
       name: schema.restrooms.name,
       location: schema.restrooms.location,
       country: schema.restrooms.country,
+      establishment: schema.restrooms.establishment,
       lat: schema.restrooms.lat,
       lng: schema.restrooms.lng,
       date: schema.restrooms.date,
@@ -46,6 +47,9 @@ export default defineEventHandler(async (event) => {
     name: r.name,
     location: r.location,
     country: r.country,
+    // Falls back to the row's own slug, which is what 0031 backfilled: a row
+    // with no key is a place with one scan.
+    establishment: r.establishment ?? r.slug,
     lat: r.lat,
     lng: r.lng,
     date: r.date,

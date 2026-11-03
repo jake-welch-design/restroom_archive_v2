@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import Fuse from "fuse.js";
-import type { RestroomSummary } from "~/types/restroom";
+import type { CatalogRow } from "~/types/restroom";
 import { formatDayMonthYear } from "~~/shared/utils/formatDate";
+import { groupEntries } from "~~/shared/utils/versions";
 
 type SortKey = "isoDate" | "name" | "location";
 type SortDir = "asc" | "desc";
@@ -48,22 +49,38 @@ function removeTag(tag: string) {
   activeTags.value = computeRemove(tag, activeTags.value);
 }
 
+// One group per place, oldest scan first. Admins get pending entries in `data`
+// so /r/<slug> can resolve them, but they shouldn't clutter the visible
+// directory, and an unpublished scan is not yet one anyone can switch to.
+const entryGroups = computed(() =>
+  groupEntries((data.value ?? []).filter((r) => r.status !== "pending")),
+);
+
+// Every published scan is its own row in the list and the grid, as before
+// entries could be combined. What combining adds is the link between them:
+// each scan carries its entry's archive dates, so the date on any of them is a
+// picker for the others.
+const scanRows = computed<CatalogRow[]>(() => {
+  const out: CatalogRow[] = [];
+  for (const [groupKey, scans] of entryGroups.value) {
+    const dates = scans.map((s) => ({ slug: s.slug, isoDate: s.isoDate }));
+    for (const s of scans) out.push({ ...s, groupKey, scans: dates });
+  }
+  return out;
+});
+
 const fuse = computed(() => {
-  const list = data.value ?? [];
-  return new Fuse(list, {
+  return new Fuse(scanRows.value, {
     keys: ["name", "location", "date", "isoDate"],
     threshold: 0.3,
   });
 });
 
-const rows = computed<RestroomSummary[]>(() => {
-  // Admins get pending entries in `data` so /r/<slug> can resolve them, but
-  // they shouldn't clutter the visible directory.
-  const list = (data.value ?? []).filter((r) => r.status !== "pending");
+const rows = computed<CatalogRow[]>(() => {
   const q = query.value.trim();
   const base = q
     ? fuse.value.search(q).map((r) => r.item)
-    : [...list].sort((a, b) => {
+    : [...scanRows.value].sort((a, b) => {
         const key = sortKey.value;
         const dir = sortDir.value === "asc" ? 1 : -1;
         const av = a[key] ?? "";
@@ -84,15 +101,35 @@ watchEffect(() => {
   catalogRows.value = rows.value;
 });
 
-const mapRows = computed<RestroomSummary[]>(() => {
-  const base = rows.value;
-  if (!dateFrom.value && !dateTo.value) return base;
-  return base.filter((r) => {
+/** The selected scan's row, for its entry's archive dates. */
+const selectedRow = computed(() =>
+  scanRows.value.find((r) => r.slug === selectedSlug.value),
+);
+
+// The map is one pin per place, not per scan: a combined entry's scans share
+// a location, and stacked pins would hide each other. The pin stands for the
+// selected scan when it is one of the place's, and otherwise for the latest
+// scan the map's other filters let through, so a date range shows the place
+// as it was in that range. The panel's date picker reaches the rest.
+const mapRows = computed<CatalogRow[]>(() => {
+  const inRange = rows.value.filter((r) => {
+    if (!dateFrom.value && !dateTo.value) return true;
     if (!r.isoDate) return false;
     if (dateFrom.value && r.isoDate < dateFrom.value) return false;
     if (dateTo.value && r.isoDate > dateTo.value) return false;
     return true;
   });
+  const byPlace = new Map<string, CatalogRow>();
+  for (const r of inRange) {
+    const held = byPlace.get(r.groupKey);
+    if (
+      !held ||
+      (held.slug !== selectedSlug.value &&
+        (r.slug === selectedSlug.value || r.isoDate > held.isoDate))
+    )
+      byPlace.set(r.groupKey, r);
+  }
+  return [...byPlace.values()];
 });
 
 function toggleSort(key: SortKey) {
@@ -395,8 +432,10 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
         <MapPanel
           v-if="mapPanelVisible && selected"
           :restroom="selected"
+          :scans="selectedRow?.scans"
           :active-tags="activeTags"
           @close="mapPanelVisible = false"
+          @select="select"
           @toggle-tag="toggleTag"
         />
       </Transition>

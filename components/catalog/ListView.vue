@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import type { RestroomSummary } from "~/types/restroom";
-import { formatDayMonthYear } from "~~/shared/utils/formatDate";
+import type { CatalogRow, RestroomSummary } from "~/types/restroom";
 
 type SortKey = "isoDate" | "name" | "location";
 type SortDir = "asc" | "desc";
 
 const props = defineProps<{
-  rows: RestroomSummary[];
+  rows: CatalogRow[];
   selectedSlug: string | null;
   sortKey: SortKey;
   sortDir: SortDir;
@@ -120,14 +119,6 @@ function onNameClick(e: MouseEvent) {
     <div class="thead">
       <button
         type="button"
-        class="th col-date"
-        :aria-pressed="sortKey === 'isoDate'"
-        @click="emit('toggleSort', 'isoDate')"
-      >
-        Date <span class="arrow">{{ sortArrow("isoDate") }}</span>
-      </button>
-      <button
-        type="button"
         class="th col-name"
         :aria-pressed="sortKey === 'name'"
         @click="emit('toggleSort', 'name')"
@@ -142,6 +133,14 @@ function onNameClick(e: MouseEvent) {
       >
         Location <span class="arrow">{{ sortArrow("location") }}</span>
       </button>
+      <button
+        type="button"
+        class="th col-date"
+        :aria-pressed="sortKey === 'isoDate'"
+        @click="emit('toggleSort', 'isoDate')"
+      >
+        Date <span class="arrow">{{ sortArrow("isoDate") }}</span>
+      </button>
     </div>
 
     <ul ref="tbodyRef" class="tbody thin-scroll">
@@ -154,16 +153,24 @@ function onNameClick(e: MouseEvent) {
         @click="emit('select', r.slug)"
       >
         <div class="row-main">
-          <div class="col-date">{{ formatDayMonthYear(r.isoDate) }}</div>
           <div class="col-name">
             <a class="name-link" :href="`/r/${r.slug}`" @click="onNameClick">{{
               r.name
             }}</a>
           </div>
-          <div class="col-loc">
-            <span class="col-loc-text">{{ r.location }}</span>
-            <!-- Sits on the row's own line, baseline-aligned with the location
-                 it shares the column with, rather than down in the description. -->
+          <div class="col-loc">{{ r.location }}</div>
+          <div class="col-date">
+            <!-- A combined entry's date is a picker for its other scans. -->
+            <ArchiveDate
+              class="col-date-text"
+              :scans="r.scans"
+              :slug="r.slug"
+              :iso-date="r.isoDate"
+              @select="emit('select', $event)"
+            />
+            <!-- Sits on the row's own line, baseline-aligned with the date it
+                 shares the last column with, rather than down in the
+                 description. -->
             <button
               v-if="
                 canEdit(r) && r.slug === selectedSlug && editingSlug !== r.slug
@@ -264,30 +271,21 @@ function onNameClick(e: MouseEvent) {
   line-height: 1;
   color: #000;
 }
-.col-name {
-  order: 1;
-}
 /* Inherits everything so the cell reads exactly as the bare text it replaced;
    the row above it still owns the hover and cursor. */
 .name-link {
   color: inherit;
   text-decoration: none;
 }
-.col-date {
-  order: 2;
-}
-.col-loc {
-  order: 3;
-}
-/* Row cells only. `.col-loc` is also the `.thead` sort button, which must keep
+/* Row cells only. `.col-date` is also the `.thead` sort button, which must keep
    its arrow next to the label rather than pushed to the far edge. */
-.row-main .col-loc {
+.row-main .col-date {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
 }
-.col-loc-text {
+.col-date-text {
   min-width: 0;
 }
 .tbody {

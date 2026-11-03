@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { RestroomSummary } from "~/types/restroom";
+import type { CatalogRow } from "~/types/restroom";
 import { formatDayMonthYear } from "~~/shared/utils/formatDate";
 
 /**
@@ -14,7 +14,7 @@ import { formatDayMonthYear } from "~~/shared/utils/formatDate";
  * panel still received three columns while a 700px one dropped to two.
  */
 const props = defineProps<{
-  rows: RestroomSummary[];
+  rows: CatalogRow[];
   selectedSlug: string | null;
   activeTags: string[];
 }>();
@@ -89,9 +89,13 @@ function onTileClick(slug: string, e: MouseEvent) {
             <div class="expanded thin-scroll" @click.stop>
               <div class="tile-info selected">
                 <span class="tile-name">{{ r.name }}</span>
-                <span class="tile-date">{{
-                  formatDayMonthYear(r.isoDate)
-                }}</span>
+                <ArchiveDate
+                  class="tile-date"
+                  :scans="r.scans"
+                  :slug="r.slug"
+                  :iso-date="r.isoDate"
+                  @select="emit('select', $event)"
+                />
                 <span class="tile-location">{{ r.location }}</span>
               </div>
 

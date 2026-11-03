@@ -16,7 +16,10 @@ export default defineEventHandler(async (event) => {
 
   const row = await db
     .select({
-      n: sql<number>`count(*)`,
+      // Restrooms, not scans: a merged entry is one restroom however many
+      // archive dates it holds. `establishment` is NULL only on a row predating
+      // migration 0031, which is then an entry of its own, keyed by its slug.
+      n: sql<number>`count(distinct coalesce(${schema.restrooms.establishment}, ${schema.restrooms.slug}))`,
       cities: sql<number>`count(distinct ${schema.restrooms.location})`,
       countries: sql<number>`count(distinct ${schema.restrooms.country})`,
       archivists: sql<number>`count(distinct ${schema.restrooms.submittedBy})`,

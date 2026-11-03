@@ -33,6 +33,8 @@ const ACTION_LABEL: Record<string, string> = {
   "restroom.reject": "rejected restroom",
   "restroom.remove": "removed restroom on request",
   "restroom.dismiss-removal": "dismissed removal request",
+  "restroom.merge": "merged restroom into another entry",
+  "restroom.separate": "separated restroom from its entry",
   "annotation.hide": "hid annotation",
   "annotation.unhide": "unhid annotation",
   "annotation.dismiss-reports": "dismissed annotation reports",

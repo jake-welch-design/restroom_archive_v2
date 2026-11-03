@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import type { RestroomSummary } from "~/types/restroom";
-import { formatDayMonthYear } from "~~/shared/utils/formatDate";
+import type {
+  ArchiveDate as ArchiveDateEntry,
+  RestroomSummary,
+} from "~/types/restroom";
 
 /**
  * Detail panel for the pin selected on the map.
@@ -12,11 +14,14 @@ import { formatDayMonthYear } from "~~/shared/utils/formatDate";
  */
 defineProps<{
   restroom: RestroomSummary;
+  /** Every scan of the restroom's catalog entry, oldest first. */
+  scans?: ArchiveDateEntry[];
   activeTags: string[];
 }>();
 
 const emit = defineEmits<{
   close: [];
+  select: [slug: string];
   toggleTag: [tag: string];
 }>();
 </script>
@@ -29,7 +34,12 @@ const emit = defineEmits<{
         <span class="panel-meta">
           <span>{{ restroom.location }}</span>
           <span class="panel-meta-sep"> · </span>
-          <span>{{ formatDayMonthYear(restroom.isoDate) }}</span>
+          <ArchiveDate
+            :scans="scans ?? []"
+            :slug="restroom.slug"
+            :iso-date="restroom.isoDate"
+            @select="emit('select', $event)"
+          />
         </span>
       </div>
       <button class="panel-close" aria-label="Close" @click="emit('close')">

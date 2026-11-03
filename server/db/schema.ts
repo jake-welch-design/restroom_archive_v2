@@ -67,6 +67,13 @@ export const restrooms = sqliteTable(
     // write since sets it, and the stats endpoint declines to publish a country
     // count while any published row is still NULL.
     country: text("country"),
+    // The catalog entry this scan belongs to, shared by every scan of one
+    // place. Opaque: each row is created with its own slug here, and joins
+    // another entry only when an admin combines it with that entry. Nullable
+    // only because SQLite cannot add a NOT NULL column without a default; 0031
+    // backfilled every row. See that migration for why it is not a
+    // name-derived slug.
+    establishment: text("establishment"),
     file: text("file").notNull(),
     description: text("description"),
     descriptors: text("descriptors"),
@@ -117,6 +124,7 @@ export const restrooms = sqliteTable(
     isoDateIdx: index("idx_restrooms_iso_date").on(t.isoDate),
     statusIdx: index("idx_restrooms_status").on(t.status),
     rejectedAtIdx: index("idx_restrooms_rejected_at").on(t.rejectedAt),
+    establishmentIdx: index("idx_restrooms_establishment").on(t.establishment),
   }),
 );
 

@@ -216,6 +216,9 @@ export default defineEventHandler(async (event) => {
       slug,
       location,
       country,
+      // A place of its own until an admin files it as a version of another.
+      // The slug is unique, so a submission never joins a group by accident.
+      establishment: slug,
       date: formatDisplayDate(isoDate),
       isoDate,
       coords:

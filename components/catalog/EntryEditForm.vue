@@ -19,6 +19,7 @@ import {
   subdivisionFromLocation,
   subdivisionsFor,
 } from "~~/shared/utils/regions";
+import { formatDayMonthYear } from "~~/shared/utils/formatDate";
 
 const props = defineProps<{
   entry: RestroomSummary;
@@ -48,6 +49,59 @@ const form = reactive({
   description: entry.description ?? "",
   descriptors: [...(entry.descriptors ?? [])],
 });
+
+// Merging is an admin decision: which place a scan belongs to is the
+// archive's call, not the submitter's, and the endpoints behind it are
+// admin-only.
+const { isAdmin } = useAuth();
+const { data: allRestrooms } = useRestrooms();
+
+/** This scan's entry's archive dates, newest first. */
+const entryDates = computed(() =>
+  (allRestrooms.value ?? [])
+    .filter(
+      (r) =>
+        r.status === "published" && r.establishment === entry.establishment,
+    )
+    .map((r) => r.isoDate)
+    .sort()
+    .reverse(),
+);
+
+const combined = computed(() => entryDates.value.length > 1);
+const mergeOpen = ref(false);
+const separating = ref(false);
+
+// Both change data the form was opened with (a merge rewrites the entry's tags
+// and coordinates), so the form closes rather than offering stale fields.
+function onMerged() {
+  mergeOpen.value = false;
+  emit("close");
+}
+
+async function separate() {
+  if (
+    !window.confirm(
+      `Separate the ${formatDayMonthYear(entry.isoDate)} scan into an entry of its own?`,
+    )
+  )
+    return;
+  separating.value = true;
+  error.value = "";
+  try {
+    await $fetch(`/api/admin/restrooms/${entry.id}/separate`, {
+      method: "POST",
+    });
+    // Closed before the refresh, which can unmount this form; see MergeDialog.
+    emit("close");
+    await refreshNuxtData("restrooms");
+  } catch (err: unknown) {
+    const e = err as { data?: { statusMessage?: string } };
+    error.value = e.data?.statusMessage ?? "Separate failed.";
+  } finally {
+    separating.value = false;
+  }
+}
 
 // Mirrors the submission wizard: the row's `location` is composed from these
 // picks rather than typed, so an edit cannot leave the display string and the
@@ -224,6 +278,32 @@ onMounted(() => {
             <span class="edit-label">Descriptors</span>
             <TagInput v-model="form.descriptors" :suggestions="suggestions" />
           </div>
+          <!-- Admin only: which entry this scan is part of. Merging and
+               separating save straight away, separately from Save below. -->
+          <div v-if="isAdmin" class="edit-field edit-field-full">
+            <span class="edit-label">Archive dates</span>
+            <div class="merge-row">
+              <span class="merge-status">
+                {{
+                  combined
+                    ? entryDates.map(formatDayMonthYear).join(", ")
+                    : "Only this date"
+                }}
+              </span>
+              <button type="button" class="edit-btn" @click="mergeOpen = true">
+                Merge…
+              </button>
+              <button
+                v-if="combined"
+                type="button"
+                class="edit-btn"
+                :disabled="separating"
+                @click="separate"
+              >
+                {{ separating ? "Separating…" : "Separate" }}
+              </button>
+            </div>
+          </div>
         </div>
 
         <template v-if="!fullscreen">
@@ -247,6 +327,16 @@ onMounted(() => {
         </template>
       </div>
     </form>
+
+    <!-- Outside the <form>, so Enter in the dialog's search cannot submit
+         the edit. -->
+    <MergeDialog
+      v-if="isAdmin"
+      :open="mergeOpen"
+      :entry="entry"
+      @close="mergeOpen = false"
+      @merged="onMerged"
+    />
   </component>
 </template>
 
@@ -339,6 +429,20 @@ select.edit-input {
   margin: -2px 0 0;
   font-size: 12px;
   color: #666;
+}
+
+.merge-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  min-height: 26px;
+}
+
+.merge-status {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 14px;
 }
 
 .edit-textarea {

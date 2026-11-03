@@ -16,6 +16,11 @@ export interface RestroomSummary {
    * archive counts by.
    */
   country: string | null;
+  /**
+   * The catalog entry this scan belongs to, shared by every scan of one place.
+   * Opaque, not a URL; see shared/utils/versions.ts.
+   */
+  establishment: string;
   lat: number | null;
   lng: number | null;
   date: string;
@@ -28,4 +33,22 @@ export interface RestroomSummary {
   crop: Crop | null;
   modelUrl: string;
   thumbUrl: string | null;
+}
+
+/** One of a combined entry's archive dates, as its date picker lists it. */
+export interface ArchiveDate {
+  slug: string;
+  isoDate: string;
+}
+
+/**
+ * A catalog row: one scan, plus the archive dates of the entry it belongs to.
+ * Every scan is its own row in the list and grid; the dates are what link a
+ * combined entry's rows, and what the map collapses its pins by.
+ */
+export interface CatalogRow extends RestroomSummary {
+  /** The entry this scan belongs to; shared by its other dates' rows. */
+  groupKey: string;
+  /** Every published scan of the entry, oldest first. One for most. */
+  scans: ArchiveDate[];
 }
