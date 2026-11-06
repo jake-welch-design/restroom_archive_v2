@@ -43,8 +43,11 @@ const emit = defineEmits<{ select: [slug: string] }>();
 // Newest first, the order someone reaching for "another year" scans in.
 const options = computed(() => [...props.scans].reverse());
 
+// Every pick is passed on, the label's own date included. In the list, a row
+// that isn't open still shows its picker, and there its own date is the one
+// to open; selecting the scan already open is a no-op upstream anyway.
 function choose(slug: string) {
-  if (slug && slug !== props.slug) emit("select", slug);
+  if (slug) emit("select", slug);
 }
 
 function onNativeChange(e: Event) {
@@ -193,7 +196,12 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <span v-if="scans.length > 1" class="archive-date" @click.stop>
+  <span
+    v-if="scans.length > 1"
+    class="archive-date"
+    :title="open ? undefined : 'See the different versions of this restroom'"
+    @click.stop
+  >
     <button
       v-if="useMenu"
       ref="trigger"
