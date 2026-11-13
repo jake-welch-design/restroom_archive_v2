@@ -189,6 +189,21 @@ function setAdjustment(slug: string, patch: Partial<Adjustment>) {
     next.startAngle === 0 && next.zoom === 1 ? rest : { ...rest, [slug]: next };
 }
 
+const adjustedCount = computed(() => Object.keys(adjustments.value).length);
+
+/** Puts every entry back on the batch's framing. */
+function resetAllAdjustments() {
+  const n = adjustedCount.value;
+  if (!n) return;
+  if (
+    !window.confirm(
+      `Reset the start angle and zoom of ${n} ${n === 1 ? "restroom" : "restrooms"}?`,
+    )
+  )
+    return;
+  adjustments.value = {};
+}
+
 function frameFor(entry: RestroomSummary): StudioFrame {
   const s = settings.value;
   const a = adjustmentFor(entry.slug);
@@ -405,15 +420,32 @@ async function loadForExport(entry: RestroomSummary, signal: AbortSignal) {
   }
 }
 
+/**
+ * The folder chosen ahead of an export, kept for the rest of the visit so a
+ * second batch lands in the same place without asking again. Not stored: a
+ * folder handle cannot go in localStorage, and the browser would ask for
+ * permission again on the next visit anyway.
+ */
+const chosenSink = shallowRef<StudioSink | null>(null);
+
+async function chooseFolder() {
+  try {
+    chosenSink.value = await pickFolderSink();
+  } catch {
+    // The admin closed the picker; keep whatever was chosen before.
+  }
+}
+
 async function startExport() {
   if (!stage || exporting.value || !batch.value.length) return;
 
   // The folder picker has to open straight from the click, before anything
   // else is awaited, or the browser refuses it as not user-initiated.
-  let sink: StudioSink = downloadSink;
-  if (canPickFolder()) {
+  let sink: StudioSink = chosenSink.value ?? downloadSink;
+  if (!chosenSink.value && canPickFolder()) {
     try {
       sink = await pickFolderSink();
+      chosenSink.value = sink;
     } catch {
       return; // The admin closed the picker.
     }
@@ -750,6 +782,15 @@ const zoomPercent = computed(() => Math.round(settings.value.zoom * 100));
                           : "Select all"
                     }}
                   </button>
+                  <button
+                    v-if="adjustedCount"
+                    type="button"
+                    class="link-btn"
+                    :disabled="exporting"
+                    @click="resetAllAdjustments"
+                  >
+                    Reset adjustments ({{ adjustedCount }})
+                  </button>
                 </div>
               </template>
             </AdminListControls>
@@ -846,14 +887,24 @@ const zoomPercent = computed(() => Math.round(settings.value.zoom * 100));
                 {{ batch.length || "" }}
                 {{ batch.length === 1 ? "video" : "videos" }}
               </button>
+              <button
+                v-if="folderAccess"
+                type="button"
+                class="btn folder-btn"
+                @click="chooseFolder"
+              >
+                {{ chosenSink ? "Change folder…" : "Choose folder…" }}
+              </button>
               <span v-if="!exportSupported" class="field-hint field-hint-warn">
                 This browser can't encode H.264 video. Use Chrome or Safari.
               </span>
               <span v-else class="field-hint">
                 {{
-                  folderAccess
-                    ? "MP4s are written to a folder you choose."
-                    : "MP4s go to your downloads."
+                  chosenSink
+                    ? `Saving to ${chosenSink.label}.`
+                    : folderAccess
+                      ? "MP4s are written to a folder you choose."
+                      : "MP4s go to your downloads."
                 }}
               </span>
             </div>
@@ -1222,8 +1273,14 @@ const zoomPercent = computed(() => Math.round(settings.value.zoom * 100));
   flex-wrap: wrap;
 }
 
-.foot-row .primary-btn {
+.foot-row .primary-btn,
+.foot-row .folder-btn {
   flex-shrink: 0;
+}
+
+/* As tall as the export button beside it. */
+.foot-row .folder-btn {
+  align-self: stretch;
 }
 
 .foot-row .field-hint {
