@@ -33,9 +33,12 @@ import {
   canPickFolder,
   downloadSink,
   encodeTurntable,
+  openTurntableVideo,
   pickFolderSink,
   studioFileName,
+  studioReelFileName,
   type StudioSink,
+  type TurntableVideo,
 } from "~/composables/studioExport";
 
 definePageMeta({ layout: false });
@@ -70,7 +73,15 @@ interface StudioSettings {
   seconds: number;
   caption: boolean;
   captionSize: number;
+  /** A file per restroom, or the whole batch back to back in one MP4. */
+  output: StudioOutput;
 }
+
+type StudioOutput = "clips" | "video";
+const STUDIO_OUTPUTS: { id: StudioOutput; label: string }[] = [
+  { id: "clips", label: "Individual clips" },
+  { id: "video", label: "One video" },
+];
 
 /**
  * One entry's departure from the batch: which way it faces at the start, and
@@ -89,6 +100,7 @@ const DEFAULT_SETTINGS: StudioSettings = {
   seconds: 8,
   caption: true,
   captionSize: 22,
+  output: "clips",
 };
 
 const SETTINGS_KEY = "studio:settings";
@@ -146,6 +158,9 @@ function restoreSettings(stored: Partial<StudioSettings>): StudioSettings {
       captionSize >= CAPTION_SIZE_MIN && captionSize <= CAPTION_SIZE_MAX
         ? captionSize
         : d.captionSize,
+    output: STUDIO_OUTPUTS.some((o) => o.id === stored.output)
+      ? stored.output!
+      : d.output,
   };
 }
 
@@ -386,6 +401,12 @@ const exportTotal = ref(0);
 const exportProgress = ref(0);
 const exportNote = ref<string | null>(null);
 const results = ref<ExportResult[]>([]);
+/** Set when the batch went out as one video and that video was saved. */
+const reelFile = ref<string | null>(null);
+/** Why the one video could not be finished or saved, when it could not. */
+const reelError = ref<string | null>(null);
+/** The mode the last export ran in, which the toggle may have moved on from. */
+const exportedAsVideo = ref(false);
 const sinkLabel = ref<string | null>(null);
 let abort: AbortController | null = null;
 
@@ -457,46 +478,13 @@ async function startExport() {
   exporting.value = true;
   exportTotal.value = entries.length;
   results.value = [];
+  reelFile.value = null;
+  reelError.value = null;
+  exportedAsVideo.value = settings.value.output === "video";
   sinkLabel.value = sink.label;
 
-  for (const [i, entry] of entries.entries()) {
-    exportIndex.value = i;
-    exportProgress.value = 0;
-    exportNote.value = null;
-    if (signal.aborted) {
-      results.value.push({
-        slug: entry.slug,
-        name: entry.name,
-        status: "cancelled",
-      });
-      continue;
-    }
-    try {
-      await loadForExport(entry, signal);
-      const frame = frameFor(entry);
-      const blob = await encodeTurntable(stage, canvasEl.value!, frame, {
-        seconds: settings.value.seconds,
-        signal,
-        onProgress: (p) => (exportProgress.value = p),
-      });
-      const file = studioFileName(entry.slug, frame);
-      await sink.save(file, blob);
-      results.value.push({
-        slug: entry.slug,
-        name: entry.name,
-        status: "done",
-        file,
-      });
-    } catch (e) {
-      const cancelled = (e as Error).name === "AbortError";
-      results.value.push({
-        slug: entry.slug,
-        name: entry.name,
-        status: cancelled ? "cancelled" : "failed",
-        error: cancelled ? undefined : (e as Error).message,
-      });
-    }
-  }
+  if (exportedAsVideo.value) await exportOneVideo(entries, sink, signal);
+  else await exportClips(entries, sink, signal);
 
   exporting.value = false;
   exportNote.value = null;
@@ -504,6 +492,122 @@ async function startExport() {
   // The stage holds the last entry exported; put the preview back.
   turnOrigin = performance.now();
   await loadFocus();
+}
+
+function beginEntry(i: number) {
+  exportIndex.value = i;
+  exportProgress.value = 0;
+  exportNote.value = null;
+}
+
+function record(entry: RestroomSummary, status: ResultStatus, extra = {}) {
+  results.value.push({ slug: entry.slug, name: entry.name, status, ...extra });
+}
+
+function recordError(entry: RestroomSummary, e: unknown) {
+  const cancelled = (e as Error).name === "AbortError";
+  record(entry, cancelled ? "cancelled" : "failed", {
+    error: cancelled ? undefined : (e as Error).message,
+  });
+}
+
+/** A file per restroom. One that fails is reported and the rest carry on. */
+async function exportClips(
+  entries: RestroomSummary[],
+  sink: StudioSink,
+  signal: AbortSignal,
+) {
+  for (const [i, entry] of entries.entries()) {
+    beginEntry(i);
+    if (signal.aborted) {
+      record(entry, "cancelled");
+      continue;
+    }
+    try {
+      await loadForExport(entry, signal);
+      const frame = frameFor(entry);
+      const blob = await encodeTurntable(stage!, canvasEl.value!, frame, {
+        seconds: settings.value.seconds,
+        signal,
+        onProgress: (p) => (exportProgress.value = p),
+      });
+      const file = studioFileName(entry.slug, frame);
+      await sink.save(file, blob);
+      record(entry, "done", { file });
+    } catch (e) {
+      recordError(entry, e);
+    }
+  }
+}
+
+/**
+ * The whole batch as one MP4, each turn cut straight onto the next. A scan
+ * that will not load is left out and the video carries on without it. Cancel
+ * drops the file, since half a reel is no use; so does an encoder failure,
+ * which leaves the file in no state to finish.
+ */
+async function exportOneVideo(
+  entries: RestroomSummary[],
+  sink: StudioSink,
+  signal: AbortSignal,
+) {
+  let video: TurntableVideo | null = null;
+  let firstFrame: StudioFrame | null = null;
+  let encodeError: unknown = null;
+
+  for (const [i, entry] of entries.entries()) {
+    beginEntry(i);
+    if (signal.aborted || encodeError) {
+      record(entry, "cancelled");
+      continue;
+    }
+    try {
+      await loadForExport(entry, signal);
+    } catch (e) {
+      recordError(entry, e);
+      continue;
+    }
+    const frame = frameFor(entry);
+    try {
+      if (!video) {
+        // Opened at the first scan that loads, since the encoder sizes itself
+        // from the canvas as it stands.
+        video = await openTurntableVideo(stage!, canvasEl.value!, frame);
+        firstFrame = frame;
+      }
+      await video.addTurn(frame, {
+        seconds: settings.value.seconds,
+        signal,
+        onProgress: (p) => (exportProgress.value = p),
+      });
+      record(entry, "done");
+    } catch (e) {
+      recordError(entry, e);
+      if ((e as Error).name !== "AbortError") encodeError = e;
+    }
+  }
+
+  const dropFile = () => {
+    for (const r of results.value)
+      if (r.status === "done") r.status = "cancelled";
+  };
+
+  if (!video) return;
+  if (signal.aborted || encodeError) {
+    await video.cancel();
+    dropFile();
+    return;
+  }
+  try {
+    const count = results.value.filter((r) => r.status === "done").length;
+    const blob = await video.finish();
+    const file = studioReelFileName(count, firstFrame!);
+    await sink.save(file, blob);
+    reelFile.value = file;
+  } catch (e) {
+    dropFile();
+    reelError.value = (e as Error).message;
+  }
 }
 
 function cancelExport() {
@@ -516,6 +620,14 @@ const doneCount = computed(
 const failed = computed(() =>
   results.value.filter((r) => r.status === "failed"),
 );
+
+/** How long the one video will run, for weighing it against Instagram's limits. */
+const videoLength = computed(() => {
+  const total = batch.value.length * settings.value.seconds;
+  const m = Math.floor(total / 60);
+  const sec = total % 60;
+  return m ? `${m}:${String(sec).padStart(2, "0")}` : `${sec}s`;
+});
 
 const exportingName = computed(() =>
   exporting.value ? batch.value[exportIndex.value]?.name : null,
@@ -699,6 +811,32 @@ const zoomPercent = computed(() => Math.round(settings.value.zoom * 100));
             </div>
 
             <div class="settings-row">
+              <span class="settings-label">Export as</span>
+              <div class="seg" role="radiogroup" aria-label="Export as">
+                <button
+                  v-for="o in STUDIO_OUTPUTS"
+                  :key="o.id"
+                  type="button"
+                  class="seg-btn"
+                  role="radio"
+                  :aria-checked="settings.output === o.id"
+                  :class="{ active: settings.output === o.id }"
+                  :disabled="exporting"
+                  @click="settings.output = o.id"
+                >
+                  {{ o.label }}
+                </button>
+              </div>
+              <span class="settings-note">
+                {{
+                  settings.output === "video"
+                    ? `Every turn back to back${batch.length ? `, ${videoLength} in all` : ""}.`
+                    : "A file per restroom."
+                }}
+              </span>
+            </div>
+
+            <div class="settings-row">
               <span class="settings-label">Caption</span>
               <div class="seg" role="radiogroup" aria-label="Caption">
                 <button
@@ -868,7 +1006,15 @@ const zoomPercent = computed(() => Math.round(settings.value.zoom * 100));
 
           <template v-else>
             <div v-if="results.length" class="foot-results" role="status">
-              <span>
+              <span v-if="reelFile">
+                {{ doneCount }} of {{ results.length }} in one video, saved to
+                {{ sinkLabel }} as {{ reelFile }}.
+              </span>
+              <span v-else-if="reelError" class="form-error">
+                The video could not be saved: {{ reelError }}
+              </span>
+              <span v-else-if="exportedAsVideo"> No video saved. </span>
+              <span v-else>
                 {{ doneCount }} of {{ results.length }} saved to
                 {{ sinkLabel }}.
               </span>
@@ -883,9 +1029,16 @@ const zoomPercent = computed(() => Math.round(settings.value.zoom * 100));
                 :disabled="!batch.length || !exportSupported"
                 @click="startExport"
               >
-                Export
-                {{ batch.length || "" }}
-                {{ batch.length === 1 ? "video" : "videos" }}
+                <template
+                  v-if="settings.output === 'video' && batch.length > 1"
+                >
+                  Export {{ batch.length }} as one video
+                </template>
+                <template v-else>
+                  Export
+                  {{ batch.length || "" }}
+                  {{ batch.length === 1 ? "video" : "videos" }}
+                </template>
               </button>
               <button
                 v-if="folderAccess"

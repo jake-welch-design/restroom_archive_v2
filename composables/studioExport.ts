@@ -45,23 +45,35 @@ export async function canExport(aspect: StudioAspect): Promise<boolean> {
 }
 
 /**
- * Renders one full rotation of whatever the stage has loaded and returns it as
- * an MP4.
+ * An MP4 being written, one turntable rotation after another.
  *
- * Frame i is `i / frames` of the way round and the last frame stops one step
- * short of the first, so played on a loop the turn never stutters at the seam.
+ * Each turn follows straight on from the last, a hard cut, so a batch can go
+ * out as one video as easily as one clip each. Every turn has to share the
+ * first one's output size, which the batch's single aspect ratio guarantees.
  */
-export async function encodeTurntable(
+export interface TurntableVideo {
+  /** Renders one full rotation of whatever the stage has loaded. */
+  addTurn(
+    frame: StudioFrame,
+    options: {
+      seconds: number;
+      signal?: AbortSignal;
+      onProgress?: (fraction: number) => void;
+    },
+  ): Promise<void>;
+  finish(): Promise<Blob>;
+  cancel(): Promise<void>;
+}
+
+/**
+ * Starts an MP4 at `frame`'s size. The stage should already hold the first
+ * scan to be added.
+ */
+export async function openTurntableVideo(
   stage: TurntableStage,
   canvas: HTMLCanvasElement,
   frame: StudioFrame,
-  options: {
-    seconds: number;
-    signal?: AbortSignal;
-    onProgress?: (fraction: number) => void;
-  },
-): Promise<Blob> {
-  const frames = Math.round(options.seconds * STUDIO_FPS);
+): Promise<TurntableVideo> {
   const step = 1 / STUDIO_FPS;
 
   // The canvas has to be at the output size before the source is built, since
@@ -80,25 +92,59 @@ export async function encodeTurntable(
   output.addVideoTrack(source, { frameRate: STUDIO_FPS });
   await output.start();
 
+  /** Frames written so far, so the next turn's timestamps carry on from them. */
+  let written = 0;
+
+  return {
+    async addTurn(frame, options) {
+      const frames = Math.round(options.seconds * STUDIO_FPS);
+      // Frame i is `i / frames` of the way round and the last frame stops one
+      // step short of the first, so played on a loop the turn never stutters
+      // at the seam.
+      for (let i = 0; i < frames; i++) {
+        if (options.signal?.aborted)
+          throw new DOMException("Aborted", "AbortError");
+        stage.render(frame, i / frames);
+        // Awaited for backpressure: the encoder runs behind the renderer, and
+        // without the wait every frame would queue at once.
+        await source.add((written + i) * step, step);
+        options.onProgress?.((i + 1) / frames);
+      }
+      written += frames;
+    },
+
+    async finish() {
+      await output.finalize();
+      const buffer = (output.target as BufferTarget).buffer;
+      if (!buffer) throw new Error("The encoder produced no file.");
+      return new Blob([buffer], { type: "video/mp4" });
+    },
+
+    async cancel() {
+      await output.cancel().catch(() => {});
+    },
+  };
+}
+
+/** One full rotation of whatever the stage has loaded, as its own MP4. */
+export async function encodeTurntable(
+  stage: TurntableStage,
+  canvas: HTMLCanvasElement,
+  frame: StudioFrame,
+  options: {
+    seconds: number;
+    signal?: AbortSignal;
+    onProgress?: (fraction: number) => void;
+  },
+): Promise<Blob> {
+  const video = await openTurntableVideo(stage, canvas, frame);
   try {
-    for (let i = 0; i < frames; i++) {
-      if (options.signal?.aborted)
-        throw new DOMException("Aborted", "AbortError");
-      stage.render(frame, i / frames);
-      // Awaited for backpressure: the encoder runs behind the renderer, and
-      // without the wait every frame would queue at once.
-      await source.add(i * step, step);
-      options.onProgress?.((i + 1) / frames);
-    }
-    await output.finalize();
+    await video.addTurn(frame, options);
+    return await video.finish();
   } catch (e) {
-    await output.cancel().catch(() => {});
+    await video.cancel();
     throw e;
   }
-
-  const buffer = (output.target as BufferTarget).buffer;
-  if (!buffer) throw new Error("The encoder produced no file.");
-  return new Blob([buffer], { type: "video/mp4" });
 }
 
 /* --- Saving ----------------------------------------------------------------- */
@@ -157,6 +203,11 @@ export const downloadSink: StudioSink = {
     setTimeout(() => URL.revokeObjectURL(url), 10_000);
   },
 };
+
+/** `turntable-12-three-quarter-9x16.mp4`, for a batch exported as one video. */
+export function studioReelFileName(count: number, frame: StudioFrame): string {
+  return `turntable-${count}-${frame.view}-${frame.aspect.replace(":", "x")}.mp4`;
+}
 
 /** `good-fork-three-quarter-9x16.mp4` */
 export function studioFileName(slug: string, frame: StudioFrame): string {
