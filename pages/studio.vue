@@ -635,14 +635,14 @@ const zoomPercent = computed(() => Math.round(settings.value.zoom * 100));
                   :disabled="exporting"
                   @click="settings.zoom = 1"
                 >
-                  Fit
+                  Reset
                 </button>
               </div>
               <span class="settings-note">
                 {{
                   settings.view === "inside"
                     ? "100% is the viewer's POV field of view."
-                    : "100% keeps the whole scan in frame as it turns."
+                    : "100% draws every scan at the same scale, fitting a 4 × 4 m room."
                 }}
               </span>
             </div>

@@ -90,7 +90,10 @@ export interface StudioCaption {
 export interface StudioFrame {
   aspect: StudioAspect;
   view: StudioView;
-  /** 1 fits the whole scan, turning, inside the frame. Higher is closer. */
+  /**
+   * 1 fits a reference room (REFERENCE_ROOM), turning, inside the frame, so
+   * every scan is drawn at the same scale. Higher is closer.
+   */
   zoom: number;
   /** Degrees. Which way the scan faces on the first and last frame. */
   startAngle: number;
@@ -111,6 +114,13 @@ const ORBIT_FOV = 45;
 const POV_FOV = 80;
 /** How far above the frame's centre POV stands by default; as in the viewer. */
 const DEFAULT_POV_RISE = 0.2;
+/**
+ * The room that zoom 1 fits, in metres. The camera is placed for this rather
+ * than for each scan's own bounds, so at the same zoom a metre is the same
+ * size on screen in every clip: a cubicle reads as small beside a hall, as it
+ * is. A scan larger than this overflows at 100% and needs a lower zoom.
+ */
+const REFERENCE_ROOM = { width: 4, depth: 4, height: 2.7 };
 
 /**
  * The full-screen viewer's caption (layouts/default.vue: `.bottom-nav-info` and
@@ -259,8 +269,10 @@ export function createTurntableStage(output: HTMLCanvasElement) {
   }
 
   /**
-   * Stands the camera back far enough that the scan, turning, never leaves the
-   * frame at zoom 1.
+   * Stands the camera back far enough that the reference room, turning, never
+   * leaves the frame at zoom 1. The distance depends only on the view, the
+   * aspect and the zoom, never on the scan, which is what keeps every scan at
+   * one scale.
    *
    * Turning sweeps the scan through a cylinder about Y, so it is the cylinder
    * that is fitted: its radius across, and its height plus the tilt of its top
@@ -273,8 +285,8 @@ export function createTurntableStage(output: HTMLCanvasElement) {
     aspect: number,
   ) {
     const e = THREE.MathUtils.degToRad(elevationDeg);
-    const radius = Math.hypot(frameSize.x, frameSize.z) / 2 || 1;
-    const halfHeight = frameSize.y / 2;
+    const radius = Math.hypot(REFERENCE_ROOM.width, REFERENCE_ROOM.depth) / 2;
+    const halfHeight = REFERENCE_ROOM.height / 2;
     const halfAcross = radius;
     const halfUp = halfHeight * Math.cos(e) + radius * Math.sin(e);
     const depth = radius * Math.cos(e) + halfHeight * Math.sin(e);
