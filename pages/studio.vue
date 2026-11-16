@@ -240,12 +240,13 @@ function frameFor(entry: RestroomSummary): StudioFrame {
 
 /* --- The checklist ---------------------------------------------------------- */
 
-type SortKey = "name" | "location" | "isoDate";
+type SortKey = "name" | "location" | "isoDate" | "createdAt";
 
 const SORT_OPTIONS: SortOption<SortKey>[] = [
   { key: "name", label: "Name" },
   { key: "location", label: "Location" },
   { key: "isoDate", label: "Scan date" },
+  { key: "createdAt", label: "Submission date" },
 ];
 
 const { query, sortKey, sortDir, visible, isEmptyFromSearch } = useListControls<
@@ -261,6 +262,8 @@ const { query, sortKey, sortDir, visible, isEmptyFromSearch } = useListControls<
     if (key === "location") return a.location.localeCompare(b.location);
     if (key === "isoDate")
       return a.isoDate.localeCompare(b.isoDate) || a.id - b.id;
+    if (key === "createdAt")
+      return a.createdAt.localeCompare(b.createdAt) || a.id - b.id;
     return a.name.localeCompare(b.name) || a.id - b.id;
   },
 });

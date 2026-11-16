@@ -29,6 +29,11 @@ export interface RestroomSummary {
   descriptors: string[];
   submitter: PublicUserRef | null;
   status: string;
+  /**
+   * When the scan was submitted (SQLite `datetime('now')`, UTC, sortable as a
+   * string). Distinct from `isoDate`, which is when the scan was taken.
+   */
+  createdAt: string;
   /** The admin's crop, or null for a scan framed on its own bounds. */
   crop: Crop | null;
   modelUrl: string;

@@ -30,6 +30,7 @@ export default defineEventHandler(async (event) => {
       file: schema.restrooms.file,
       thumbKey: schema.restrooms.thumbKey,
       status: schema.restrooms.status,
+      createdAt: schema.restrooms.createdAt,
       updatedAt: schema.restrooms.updatedAt,
       crop: schema.restrooms.crop,
       submitterUsername: schema.users.username,
@@ -60,6 +61,7 @@ export default defineEventHandler(async (event) => {
       ? { username: r.submitterUsername, displayName: r.submitterDisplayName }
       : null,
     status: r.status,
+    createdAt: r.createdAt,
     // The admin's crop, or null for a scan shown at its own measured bounds.
     crop: parseCrop(r.crop),
     // Relative URLs, resolved against document.baseURI on the client.
