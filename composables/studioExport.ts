@@ -44,6 +44,16 @@ export async function canExport(aspect: StudioAspect): Promise<boolean> {
   }
 }
 
+export interface TurnOptions {
+  seconds: number;
+  /** Where the clip starts, as a fraction of a rotation. 0 by default. */
+  from?: number;
+  /** How much of a rotation the clip covers. 1, a full turn, by default. */
+  span?: number;
+  signal?: AbortSignal;
+  onProgress?: (fraction: number) => void;
+}
+
 /**
  * An MP4 being written, one turntable rotation after another.
  *
@@ -52,15 +62,12 @@ export async function canExport(aspect: StudioAspect): Promise<boolean> {
  * first one's output size, which the batch's single aspect ratio guarantees.
  */
 export interface TurntableVideo {
-  /** Renders one full rotation of whatever the stage has loaded. */
-  addTurn(
-    frame: StudioFrame,
-    options: {
-      seconds: number;
-      signal?: AbortSignal;
-      onProgress?: (fraction: number) => void;
-    },
-  ): Promise<void>;
+  /**
+   * Renders `seconds` of whatever the stage has loaded: one full rotation by
+   * default, or, given `from` and `span`, the stretch of the rotation starting
+   * `from` of the way round and covering `span` of it.
+   */
+  addTurn(frame: StudioFrame, options: TurnOptions): Promise<void>;
   finish(): Promise<Blob>;
   cancel(): Promise<void>;
 }
@@ -98,13 +105,16 @@ export async function openTurntableVideo(
   return {
     async addTurn(frame, options) {
       const frames = Math.round(options.seconds * STUDIO_FPS);
-      // Frame i is `i / frames` of the way round and the last frame stops one
-      // step short of the first, so played on a loop the turn never stutters
-      // at the seam.
+      const from = options.from ?? 0;
+      const span = options.span ?? 1;
+      // Frame i is `i / frames` of the way through the span and the last frame
+      // stops one step short of its end. A full turn played on a loop never
+      // stutters at the seam, and a partial one hands over to a clip starting
+      // at `from + span` without a repeated frame.
       for (let i = 0; i < frames; i++) {
         if (options.signal?.aborted)
           throw new DOMException("Aborted", "AbortError");
-        stage.render(frame, i / frames);
+        stage.render(frame, from + (span * i) / frames);
         // Awaited for backpressure: the encoder runs behind the renderer, and
         // without the wait every frame would queue at once.
         await source.add((written + i) * step, step);
@@ -126,16 +136,12 @@ export async function openTurntableVideo(
   };
 }
 
-/** One full rotation of whatever the stage has loaded, as its own MP4. */
+/** One turn, or part of one, of whatever the stage has loaded, as its own MP4. */
 export async function encodeTurntable(
   stage: TurntableStage,
   canvas: HTMLCanvasElement,
   frame: StudioFrame,
-  options: {
-    seconds: number;
-    signal?: AbortSignal;
-    onProgress?: (fraction: number) => void;
-  },
+  options: TurnOptions,
 ): Promise<Blob> {
   const video = await openTurntableVideo(stage, canvas, frame);
   try {
@@ -210,6 +216,12 @@ export function studioReelFileName(count: number, frame: StudioFrame): string {
 }
 
 /** `good-fork-three-quarter-9x16.mp4` */
-export function studioFileName(slug: string, frame: StudioFrame): string {
-  return `${slug}-${frame.view}-${frame.aspect.replace(":", "x")}.mp4`;
+export function studioFileName(
+  slug: string,
+  frame: StudioFrame,
+  /** 1-based place in a continuous sequence, so the files sort in order. */
+  sequence?: number,
+): string {
+  const prefix = sequence ? `${String(sequence).padStart(2, "0")}-` : "";
+  return `${prefix}${slug}-${frame.view}-${frame.aspect.replace(":", "x")}.mp4`;
 }

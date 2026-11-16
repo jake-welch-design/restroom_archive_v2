@@ -30,6 +30,7 @@ import {
 } from "~/composables/turntableStage";
 import {
   canExport,
+  STUDIO_FPS,
   canPickFolder,
   downloadSink,
   encodeTurntable,
@@ -56,6 +57,8 @@ const { data: restrooms } = await useRestrooms();
 
 const SECONDS_MIN = 1;
 const SECONDS_MAX = 12;
+const CUT_MIN = 0.5;
+const CUT_MAX = 12;
 const CAPTION_SIZE_MIN = 10;
 const CAPTION_SIZE_MAX = 60;
 const ZOOM_MIN = 0.5;
@@ -70,12 +73,27 @@ interface StudioSettings {
   aspect: StudioAspect;
   view: StudioView;
   zoom: number;
+  /** One full rotation's length, which in continuous motion sets the rate. */
   seconds: number;
+  motion: StudioMotion;
+  /** How long each restroom's cut runs in continuous motion. */
+  cutSeconds: number;
   caption: boolean;
   captionSize: number;
   /** A file per restroom, or the whole batch back to back in one MP4. */
   output: StudioOutput;
 }
+
+/**
+ * A full turn per restroom, or one turn carried across the batch: each cut
+ * picks up at the angle the previous one stopped at, so played in sequence the
+ * rooms hand the rotation on to each other.
+ */
+type StudioMotion = "full" | "continuous";
+const STUDIO_MOTIONS: { id: StudioMotion; label: string }[] = [
+  { id: "full", label: "Full turn" },
+  { id: "continuous", label: "Continuous" },
+];
 
 type StudioOutput = "clips" | "video";
 const STUDIO_OUTPUTS: { id: StudioOutput; label: string }[] = [
@@ -98,6 +116,8 @@ const DEFAULT_SETTINGS: StudioSettings = {
   view: "three-quarter",
   zoom: 1,
   seconds: 8,
+  motion: "full",
+  cutSeconds: 2,
   caption: true,
   captionSize: 22,
   output: "clips",
@@ -142,6 +162,7 @@ function restoreSettings(stored: Partial<StudioSettings>): StudioSettings {
       ? stored.aspect
       : STUDIO_RATIOS[orientation][0];
   const seconds = Number(stored.seconds);
+  const cutSeconds = Number(stored.cutSeconds);
   const zoom = Number(stored.zoom);
   const captionSize = Number(stored.captionSize);
   return {
@@ -153,6 +174,13 @@ function restoreSettings(stored: Partial<StudioSettings>): StudioSettings {
     zoom: zoom >= ZOOM_MIN && zoom <= ZOOM_MAX ? zoom : d.zoom,
     seconds:
       seconds >= SECONDS_MIN && seconds <= SECONDS_MAX ? seconds : d.seconds,
+    motion: STUDIO_MOTIONS.some((m) => m.id === stored.motion)
+      ? stored.motion!
+      : d.motion,
+    cutSeconds:
+      cutSeconds >= CUT_MIN && cutSeconds <= CUT_MAX
+        ? cutSeconds
+        : d.cutSeconds,
     caption: typeof stored.caption === "boolean" ? stored.caption : d.caption,
     captionSize:
       captionSize >= CAPTION_SIZE_MIN && captionSize <= CAPTION_SIZE_MAX
@@ -236,6 +264,33 @@ function frameFor(entry: RestroomSummary): StudioFrame {
         }
       : null,
   };
+}
+
+/**
+ * The stretch of the rotation the `index`th cut of a continuous sequence
+ * covers. Counted in whole frames, so each cut starts exactly one frame-step
+ * past where the last one stopped and nothing repeats or jumps at the cut.
+ * Angles are relative to each restroom's own start angle, so the rotation
+ * carries on from each room's front rather than from a shared compass.
+ */
+function continuousSegment(index: number) {
+  const cutFrames = Math.max(
+    1,
+    Math.round(settings.value.cutSeconds * STUDIO_FPS),
+  );
+  const turnFrames = Math.round(settings.value.seconds * STUDIO_FPS);
+  return {
+    seconds: cutFrames / STUDIO_FPS,
+    from: ((index * cutFrames) % turnFrames) / turnFrames,
+    span: cutFrames / turnFrames,
+  };
+}
+
+/** How the `index`th clip to be exported turns. */
+function turnFor(index: number) {
+  return settings.value.motion === "continuous"
+    ? continuousSegment(index)
+    : { seconds: settings.value.seconds };
 }
 
 /* --- The checklist ---------------------------------------------------------- */
@@ -356,9 +411,25 @@ function tick(now: number) {
   raf = requestAnimationFrame(tick);
   // The exporter drives the stage while it runs; the preview stands aside.
   if (!stage || exporting.value || !focus.value || !stage.hasModel()) return;
+  stage.render(frameFor(focus.value), previewTurn(now));
+}
+
+/**
+ * Where the preview is in the turn. In continuous motion a restroom in the
+ * batch loops its own cut, so the hand-over between neighbours can be checked
+ * by clicking down the list; one outside the batch turns as usual.
+ */
+function previewTurn(now: number) {
+  const slug = focus.value?.slug;
+  const index = batch.value.findIndex((e) => e.slug === slug);
+  if (settings.value.motion === "continuous" && index >= 0) {
+    const { seconds, from, span } = continuousSegment(index);
+    if (!playing.value) return from;
+    const period = seconds * 1000;
+    return from + (span * ((now - turnOrigin) % period)) / period;
+  }
   const period = settings.value.seconds * 1000;
-  const turn = playing.value ? ((now - turnOrigin) % period) / period : 0;
-  stage.render(frameFor(focus.value), turn);
+  return playing.value ? ((now - turnOrigin) % period) / period : 0;
 }
 
 function togglePlaying() {
@@ -520,6 +591,10 @@ async function exportClips(
   sink: StudioSink,
   signal: AbortSignal,
 ) {
+  const continuous = settings.value.motion === "continuous";
+  // Counts only the clips that made it, so a scan that will not load leaves
+  // no gap in the rotation: the next one picks up where the last one stopped.
+  let made = 0;
   for (const [i, entry] of entries.entries()) {
     beginEntry(i);
     if (signal.aborted) {
@@ -530,12 +605,17 @@ async function exportClips(
       await loadForExport(entry, signal);
       const frame = frameFor(entry);
       const blob = await encodeTurntable(stage!, canvasEl.value!, frame, {
-        seconds: settings.value.seconds,
+        ...turnFor(made),
         signal,
         onProgress: (p) => (exportProgress.value = p),
       });
-      const file = studioFileName(entry.slug, frame);
+      const file = studioFileName(
+        entry.slug,
+        frame,
+        continuous ? made + 1 : undefined,
+      );
       await sink.save(file, blob);
+      made++;
       record(entry, "done", { file });
     } catch (e) {
       recordError(entry, e);
@@ -557,6 +637,8 @@ async function exportOneVideo(
   let video: TurntableVideo | null = null;
   let firstFrame: StudioFrame | null = null;
   let encodeError: unknown = null;
+  // As in exportClips: a skipped scan leaves no gap in a continuous turn.
+  let made = 0;
 
   for (const [i, entry] of entries.entries()) {
     beginEntry(i);
@@ -579,10 +661,11 @@ async function exportOneVideo(
         firstFrame = frame;
       }
       await video.addTurn(frame, {
-        seconds: settings.value.seconds,
+        ...turnFor(made),
         signal,
         onProgress: (p) => (exportProgress.value = p),
       });
+      made++;
       record(entry, "done");
     } catch (e) {
       recordError(entry, e);
@@ -626,9 +709,13 @@ const failed = computed(() =>
 
 /** How long the one video will run, for weighing it against Instagram's limits. */
 const videoLength = computed(() => {
-  const total = batch.value.length * settings.value.seconds;
+  const each =
+    settings.value.motion === "continuous"
+      ? continuousSegment(0).seconds
+      : settings.value.seconds;
+  const total = Math.round(batch.value.length * each * 10) / 10;
   const m = Math.floor(total / 60);
-  const sec = total % 60;
+  const sec = Math.round((total % 60) * 10) / 10;
   return m ? `${m}:${String(sec).padStart(2, "0")}` : `${sec}s`;
 });
 
@@ -814,6 +901,51 @@ const zoomPercent = computed(() => Math.round(settings.value.zoom * 100));
             </div>
 
             <div class="settings-row">
+              <span class="settings-label">Motion</span>
+              <div class="seg" role="radiogroup" aria-label="Motion">
+                <button
+                  v-for="m in STUDIO_MOTIONS"
+                  :key="m.id"
+                  type="button"
+                  class="seg-btn"
+                  role="radio"
+                  :aria-checked="settings.motion === m.id"
+                  :class="{ active: settings.motion === m.id }"
+                  :disabled="exporting"
+                  @click="settings.motion = m.id"
+                >
+                  {{ m.label }}
+                </button>
+              </div>
+              <span class="settings-note">
+                {{
+                  settings.motion === "continuous"
+                    ? "Each restroom picks up the turn where the one before it stopped."
+                    : "Each restroom turns all the way round."
+                }}
+              </span>
+            </div>
+
+            <div v-if="settings.motion === 'continuous'" class="settings-row">
+              <label class="settings-label" for="studio-cut">
+                Cut length
+              </label>
+              <div class="range-row">
+                <input
+                  id="studio-cut"
+                  v-model.number="settings.cutSeconds"
+                  class="range"
+                  type="range"
+                  :min="CUT_MIN"
+                  :max="CUT_MAX"
+                  step="0.5"
+                  :disabled="exporting"
+                />
+                <span class="range-value">{{ settings.cutSeconds }}s</span>
+              </div>
+            </div>
+
+            <div class="settings-row">
               <span class="settings-label">Export as</span>
               <div class="seg" role="radiogroup" aria-label="Export as">
                 <button
@@ -833,7 +965,7 @@ const zoomPercent = computed(() => Math.round(settings.value.zoom * 100));
               <span class="settings-note">
                 {{
                   settings.output === "video"
-                    ? `Every turn back to back${batch.length ? `, ${videoLength} in all` : ""}.`
+                    ? `Every ${settings.motion === "continuous" ? "cut" : "turn"} back to back${batch.length ? `, ${videoLength} in all` : ""}.`
                     : "A file per restroom."
                 }}
               </span>
