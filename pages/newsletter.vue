@@ -15,6 +15,10 @@
  */
 import type { RestroomSummary } from "~/types/restroom";
 import { apiErrorMessage } from "~~/shared/utils/apiError";
+import {
+  compressForEmail,
+  type EmailImageSlot,
+} from "~/composables/emailImage";
 import { formatDayMonthYear } from "~~/shared/utils/formatDate";
 import {
   computeReportStats,
@@ -198,27 +202,39 @@ const featuredUploaded = computed(
  */
 async function uploadPicked(
   e: Event,
+  slot: EmailImageSlot,
   budget: number,
 ): Promise<{ url: string | null; note: string } | null> {
   const input = e.target as HTMLInputElement;
-  const file = input.files?.[0];
+  const picked = input.files?.[0];
   input.value = "";
-  if (!file) return null;
+  if (!picked) return null;
+  const size = (bytes: number) => {
+    const kb = Math.round(bytes / 1000);
+    return kb >= 1000 ? `${(kb / 1000).toFixed(1)} MB` : `${kb} KB`;
+  };
   try {
+    // Shrunk to what the email shows before it goes anywhere; see
+    // composables/emailImage.ts.
+    const { file, originalBytes, changed } = await compressForEmail(
+      picked,
+      slot,
+    );
     const body = new FormData();
     body.append("file", file);
     const res = await $fetch<{ url: string; bytes: number }>(
       "/api/admin/newsletter/media",
       { method: "POST", body },
     );
-    const kb = Math.round(res.bytes / 1000);
-    const size = kb >= 1000 ? `${(kb / 1000).toFixed(1)} MB` : `${kb} KB`;
+    const shown = changed
+      ? `${size(originalBytes)} → ${size(res.bytes)}`
+      : size(res.bytes);
     return {
       url: res.url,
       note:
         res.bytes > budget
-          ? `${size}: over the ${budget >= 1_000_000 ? `${budget / 1_000_000} MB` : `${budget / 1000} KB`} that keeps an email quick to load.`
-          : `${size}.`,
+          ? `${shown}: over the ${size(budget)} that keeps an email quick to load.`
+          : `${shown}.`,
     };
   } catch (err) {
     return { url: null, note: apiErrorMessage(err, "The upload failed.") };
@@ -232,7 +248,7 @@ async function uploadFeatured(e: Event) {
   if (!draft.value.issue.featured) return;
   uploading.value = true;
   uploadNote.value = null;
-  const res = await uploadPicked(e, 1_000_000);
+  const res = await uploadPicked(e, "featured", 1_000_000);
   uploading.value = false;
   if (!res) return;
   if (res.url && draft.value.issue.featured)
@@ -262,13 +278,18 @@ function toggleSubmission(e: RestroomSummary) {
   else list.push(toReportEntry(e));
 }
 
-const addSlug = ref("");
-watch(addSlug, (slug) => {
-  const e = bySlug.value.get(slug);
-  if (e && !chosen.value.has(slug))
-    draft.value.issue.submissions.push(toReportEntry(e));
-  addSlug.value = "";
-});
+/**
+ * Adds the picked entry and puts the menu back on "Choose an entry…". Done on
+ * the element itself: resetting a bound value in a watcher changed it twice
+ * before Vue rendered, so the menu went on showing the entry just added.
+ */
+function addSubmission(e: Event) {
+  const select = e.target as HTMLSelectElement;
+  const entry = bySlug.value.get(select.value);
+  if (entry && !chosen.value.has(entry.slug))
+    draft.value.issue.submissions.push(toReportEntry(entry));
+  select.value = "";
+}
 
 function removeSubmission(slug: string) {
   draft.value.issue.submissions = issue.value.submissions.filter(
@@ -298,7 +319,7 @@ const submissionNotes = ref<Record<string, string>>({});
 
 async function uploadSubmission(slug: string, e: Event) {
   uploadingSlug.value = slug;
-  const res = await uploadPicked(e, 300_000);
+  const res = await uploadPicked(e, "tile", 300_000);
   uploadingSlug.value = null;
   if (!res) return;
   const entry = draft.value.issue.submissions.find((s) => s.slug === slug);
@@ -637,7 +658,7 @@ async function sendToSubscribers() {
                 </div>
                 <span class="settings-note">{{
                   uploadNote ??
-                  "A 3:2 GIF from the video studio, 600 wide. Outlook shows only its first frame."
+                  "Best as a 3:2 GIF from the video studio. Uploads are shrunk to fit: GIFs to 600 wide, other images to 1072. Outlook shows only a GIF's first frame."
                 }}</span>
               </div>
               <div class="settings-row">
@@ -703,7 +724,11 @@ async function sendToSubscribers() {
             </ul>
             <div class="settings-row">
               <label class="settings-label" for="nl-add">Add another</label>
-              <select id="nl-add" v-model="addSlug" class="field-input nl-grow">
+              <select
+                id="nl-add"
+                class="field-input nl-grow"
+                @change="addSubmission"
+              >
                 <option value="">Choose an entry…</option>
                 <option
                   v-for="e in entries"
@@ -762,8 +787,9 @@ async function sendToSubscribers() {
                 </li>
               </ul>
               <span class="settings-note"
-                >Square, 520 × 520, in the order they appear. Any other shape
-                throws the grid out of line.</span
+                >In the order they appear. Use square images: any other shape
+                throws the grid out of line. Uploads are shrunk to 520 wide
+                (GIFs to 260).</span
               >
             </div>
           </section>
@@ -953,12 +979,18 @@ async function sendToSubscribers() {
   min-width: 0;
 }
 
+/* .simple-row spreads its children to either end, which suits a title with a
+   button at the far side but pushed these labels away from their checkboxes.
+   The label sits beside its box and takes the rest of the row, so "Remove"
+   still lands at the right. */
 .nl-check {
   display: flex;
+  justify-content: flex-start;
   align-items: center;
   gap: 10px;
 }
 .nl-check .simple-main {
+  flex: 1 1 auto;
   cursor: pointer;
 }
 
