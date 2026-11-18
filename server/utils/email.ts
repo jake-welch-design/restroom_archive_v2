@@ -1,4 +1,5 @@
 import { escapeHtml } from "~~/shared/utils/html";
+import { renderWeeklyReportConfirm } from "~~/shared/utils/weeklyReport";
 
 const FROM_EMAIL = "noreply@restroomarchive.com";
 const FROM_NAME = "The Restroom Archive";
@@ -54,7 +55,12 @@ async function send(
       to,
       subject,
       body: html,
-      subscribed: true,
+      // No `subscribed` flag. Plunk creates or updates a contact for every
+      // recipient, and passing `true` here used to mark everyone who got a
+      // password reset as subscribed -- and would re-subscribe someone who
+      // had unsubscribed from the Weekly Report the next time they reset a
+      // password. Omitted, new contacts start unsubscribed and existing ones
+      // keep their state; transactional mail is delivered either way.
       name: FROM_NAME,
       from: FROM_EMAIL,
       reply: replyTo,
@@ -92,6 +98,15 @@ export async function sendPasswordResetEmail(to: string, token: string) {
         If you didn't request this, you can ignore this email. Your password won't change.
       </p>
     `),
+  );
+}
+
+/** The Weekly Report's double opt-in: nothing is subscribed until this is clicked. */
+export async function sendWeeklyReportConfirmEmail(to: string, link: string) {
+  await send(
+    to,
+    "Confirm your subscription to The Restroom Archive Weekly Report",
+    renderWeeklyReportConfirm(link, siteUrl()),
   );
 }
 

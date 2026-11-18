@@ -21,4 +21,5 @@ useHead({
   <NuxtLayout>
     <NuxtPage />
   </NuxtLayout>
+  <WeeklyReportDialog />
 </template>

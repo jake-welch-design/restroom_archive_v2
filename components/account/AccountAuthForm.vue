@@ -17,7 +17,11 @@ const { refreshSession } = useAuth();
 const { token: turnstileToken, waitForToken, resetToken } = useTurnstileToken();
 
 type AuthTab = "signin" | "signup";
-const tab = ref<AuthTab>("signin");
+// `/account?signup` opens on Create account: the Weekly Report's "Become an
+// Archivist" button links there, and a sign-in form is the wrong first sight.
+const tab = ref<AuthTab>(
+  useRoute().query.signup !== undefined ? "signup" : "signin",
+);
 
 const tabsEl = ref<HTMLElement | null>(null);
 defineExpose({ tabsEl });

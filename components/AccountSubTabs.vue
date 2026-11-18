@@ -92,6 +92,12 @@ defineEmits<{ (e: "update:modelValue", id: string): void }>();
      video studio. */
   text-decoration: none;
 }
+/* A second trailing control that belongs with the one before it, such as the
+   Admin tab's studio and newsletter links: joined on a shared hairline like
+   the tabs, rather than set a gap apart. */
+:slotted(.subtab-btn.joined) {
+  margin-left: -1px;
+}
 .row-break {
   display: none;
 }

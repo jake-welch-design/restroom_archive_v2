@@ -60,6 +60,22 @@ const legalOpen = ref(false);
 // land them on a sign-in form instead of the thing they asked to see.
 const guideOpen = ref(false);
 
+// `/about?guide` opens it on arrival: the Weekly Report's "Submission Guide"
+// button links there. After the page mounts, since a <dialog> only opens in
+// the browser. Closing drops the param, so a reload doesn't reopen it.
+const route = useRoute();
+const router = useRouter();
+onMounted(() => {
+  if (route.query.guide !== undefined) guideOpen.value = true;
+});
+function closeGuide() {
+  guideOpen.value = false;
+  if (route.query.guide !== undefined) {
+    const { guide: _g, ...query } = route.query;
+    router.replace({ query });
+  }
+}
+
 // Support links. There is deliberately no amount field here: these are Stripe
 // Payment Links, which take no amount from the URL, so a field on this page
 // could not carry a value through to the checkout. The donor picks the amount
@@ -163,13 +179,17 @@ async function submitContact() {
             target="_blank"
           >
             and Toilet Game Studies </a
-          >. <br /><br />
-          Follow us on
-          <a href="https://www.instagram.com/restroomarchive/" target="_blank">
-            Instagram
-          </a>
-          for occasional updates and Archive highlights.
+          >.
         </p>
+        <!-- The Weekly Report signup, for visitors who closed the first-visit
+             pop-up (components/WeeklyReportDialog.vue) and came back for it. -->
+        <div class="weekly-report">
+          <p>
+            Sign up for the Weekly Report and receive emails with Archive
+            highlights, newest submissions, features, updates, and more.
+          </p>
+          <WeeklyReportSignup id-prefix="about-wr" hide-label />
+        </div>
       </section>
       <!-- 
       <section>
@@ -310,13 +330,22 @@ async function submitContact() {
         <p>© 2026 Jake Welch</p>
         <p>•</p>
         <p class="dim">
+          <a
+            href="https://www.instagram.com/restroomarchive/"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Instagram</a
+          >
+        </p>
+        <p>•</p>
+        <p class="dim">
           <a href="#" @click.prevent="legalOpen = true">Privacy and Terms</a>
         </p>
       </footer>
     </article>
 
     <LegalDialog :open="legalOpen" @close="legalOpen = false" />
-    <AccountArchivistGuideDialog :open="guideOpen" @close="guideOpen = false" />
+    <AccountArchivistGuideDialog :open="guideOpen" @close="closeGuide" />
   </div>
 </template>
 
@@ -417,6 +446,28 @@ async function submitContact() {
   justify-content: center;
   font-size: 9px;
   line-height: 1;
+}
+
+/* Weekly Report signup: as narrow as the contact form, and in the prose's
+   rhythm, so it reads as part of the bio rather than a banner across it. */
+/* The blurb runs the full prose width; only the field and its button are held
+   to the contact form's width. The page's 2px input padding left the
+   placeholder touching the border, so this field gets room on the left. */
+.weekly-report {
+  --field-input-padding: 4px 8px;
+  margin: 0 0 1.2em;
+  font-size: 14px;
+}
+.weekly-report p {
+  max-width: none;
+  margin: 0 0 8px;
+}
+/* Room above and below the field, so it stands apart from the blurb and
+   whatever follows. Vertical margins merge with the neighbours' (the blurb's
+   8px, this block's 1.2em), so these are the gaps that actually show. */
+.weekly-report :deep(.wr-form) {
+  max-width: 380px;
+  margin: 24px 0 32px;
 }
 
 /* Contact */

@@ -522,6 +522,29 @@ function setAdminSection(value: string) {
             <path d="M10.5 7 15 4.5v7L10.5 9" />
           </svg>
         </NuxtLink>
+        <!-- The Weekly Report's composer: a tool, like the studio beside it. -->
+        <NuxtLink
+          v-if="accountTab === 'admin' && isAdmin"
+          to="/newsletter"
+          class="subtab-btn joined"
+          aria-label="Weekly Report"
+          title="Weekly Report"
+        >
+          <svg
+            viewBox="0 0 16 16"
+            width="16"
+            height="16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.25"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <rect x="1" y="3.5" width="14" height="9" rx="1" />
+            <path d="m1.5 4.5 6.5 5 6.5-5" />
+          </svg>
+        </NuxtLink>
       </AccountSubTabs>
 
       <!-- The Admin tab's second row: the sections inside the chosen group.

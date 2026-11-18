@@ -171,18 +171,28 @@ function onClick(e: MouseEvent) {
         <a href="https://www.cloudflare.com/privacypolicy/">Cloudflare</a> hosts
         the site, database, and files, and provides the anti-bot check on forms.
         <a href="https://www.useplunk.com/legal/privacy">Plunk</a> sends account
-        and contact emails, and receives recipient addresses. On the map view,
-        tiles load directly from
+        and contact emails and the Weekly Report, and receives recipient
+        addresses. On the map view, tiles load directly from
         <a href="https://carto.com/privacy/">CARTO</a> and
         <a href="https://www.esri.com/en-us/privacy/overview">Esri</a>, which
         receive visitor IP addresses and the map area requested. No other third
         party receives data.
       </p>
 
+      <h4>Weekly Report</h4>
+      <p>
+        Signing up for the Weekly Report stores your email address with Plunk,
+        which sends it. You are only added after confirming through the link
+        emailed to you, and every issue has an unsubscribe link. Your address is
+        used for the Weekly Report and nothing else.
+      </p>
+
       <h4>Cookies</h4>
       <p>
         Two, both strictly functional: one maintains the signed-in session, the
-        other stores the preferred catalog view.
+        other stores the preferred catalog view. Your browser also keeps a note,
+        in its own storage, that the Weekly Report pop-up was closed, so it is
+        not shown again.
       </p>
 
       <h4>Scans and people</h4>
