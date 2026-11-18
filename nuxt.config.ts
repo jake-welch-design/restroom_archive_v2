@@ -18,6 +18,14 @@ export default defineNuxtConfig({
     modules: ["nitro-cloudflare-dev"],
   },
 
+  // The local D1 and R2 state lives in .wrangler/ inside the project, and any
+  // write to it (a sign-in, a rate-limit counter, an admin save) used to set
+  // off the dev server's watcher and reload the page out from under whatever
+  // was happening in it.
+  vite: {
+    server: { watch: { ignored: ["**/.wrangler/**"] } },
+  },
+
   components: [{ path: "~/components", pathPrefix: false }],
 
   routeRules: {
