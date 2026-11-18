@@ -13,7 +13,9 @@ import {
 } from "~/composables/turntableStage";
 
 /**
- * Encoding a turntable to MP4, and getting the file onto disk.
+ * Encoding a turntable to MP4 or GIF, and getting the file onto disk.
+ *
+ * GIFs are for email, where video does not play; see `openTurntableGif`.
  *
  * WebCodecs does the encoding in the browser, so nothing is uploaded and there
  * is no server or ffmpeg involved. H.264 in MP4 because that is what Instagram
@@ -136,14 +138,134 @@ export async function openTurntableVideo(
   };
 }
 
-/** One turn, or part of one, of whatever the stage has loaded, as its own MP4. */
-export async function encodeTurntable(
+/* --- GIF ------------------------------------------------------------------- */
+
+/**
+ * GIF frame rates. A GIF stores each frame's delay in hundredths of a second,
+ * so only rates that divide 100 play back at the speed they were rendered at:
+ * 15 fps would be stored as 7/100 s a frame and run 5% slow, and the loop
+ * would no longer last the turn's length.
+ */
+export const GIF_FPS_OPTIONS = [10, 20, 25] as const;
+export type GifFps = (typeof GIF_FPS_OPTIONS)[number];
+
+/**
+ * Output widths. GIFs are sized for where they are going rather than rendered
+ * at Instagram's 1080: a newsletter column is 536–600 px wide, and every extra
+ * pixel costs file size, which email clients punish long before video sites do.
+ */
+export const GIF_WIDTH_OPTIONS = [480, 600, 800, 1080] as const;
+export type GifWidth = (typeof GIF_WIDTH_OPTIONS)[number];
+
+/** The GIF's pixel size: `width` across, the frame's ratio down. */
+export function gifSize(aspect: StudioAspect, width: number) {
+  const full = STUDIO_ASPECTS[aspect];
+  return { width, height: Math.round((width * full.height) / full.width) };
+}
+
+/** How many angles of a turn are sampled to choose its 256 colours. */
+const PALETTE_SAMPLES = 8;
+
+/**
+ * A GIF being written, with the same shape as the MP4 so the studio's batch
+ * and one-file modes drive it the same way.
+ *
+ * GIF allows 256 colours, so each turn gets its own palette, sampled from a
+ * handful of its own angles before its frames are encoded. Sampling the whole
+ * turn rather than its first frame keeps the walls that only come into view
+ * halfway round from being forced into colours chosen for the opening view.
+ * The first turn's palette is the file's global table; a later turn's goes on
+ * each of its frames as a local one, which costs 768 bytes a frame but keeps
+ * one restroom's colours from being squeezed into another's.
+ *
+ * No dithering: on a slowly turning scan, dither noise shimmers frame to frame
+ * and costs far more in file size than the banding it hides.
+ */
+export async function openTurntableGif(
   stage: TurntableStage,
   canvas: HTMLCanvasElement,
   frame: StudioFrame,
+  options: { width: number; fps: number },
+): Promise<TurntableVideo> {
+  const { GIFEncoder, quantize, applyPalette } = await import("gifenc");
+  const { width, height } = gifSize(frame.aspect, options.width);
+  const delay = 1000 / options.fps;
+
+  const small = document.createElement("canvas");
+  small.width = width;
+  small.height = height;
+  const ctx = small.getContext("2d", { willReadFrequently: true })!;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+
+  /** Renders the stage at `turn` and reads it back at the GIF's size. */
+  function grab(f: StudioFrame, turn: number) {
+    stage.render(f, turn);
+    ctx.drawImage(canvas, 0, 0, width, height);
+    return ctx.getImageData(0, 0, width, height).data;
+  }
+
+  // The encoder is synchronous; handing the main thread back now and then
+  // keeps the progress bar and the Cancel button alive.
+  const breathe = () => new Promise<void>((r) => setTimeout(r, 0));
+
+  const gif = GIFEncoder();
+  let first = true;
+
+  return {
+    async addTurn(f, turnOptions) {
+      const frames = Math.round(turnOptions.seconds * options.fps);
+      const from = turnOptions.from ?? 0;
+      const span = turnOptions.span ?? 1;
+      const angle = (i: number) => from + (span * i) / frames;
+
+      const samples = Math.min(PALETTE_SAMPLES, frames);
+      const sampled = new Uint8ClampedArray(width * height * 4 * samples);
+      for (let s = 0; s < samples; s++) {
+        if (turnOptions.signal?.aborted)
+          throw new DOMException("Aborted", "AbortError");
+        const i = Math.floor((s * frames) / samples);
+        sampled.set(grab(f, angle(i)), s * width * height * 4);
+      }
+      const palette = quantize(sampled, 256);
+      const local = !first;
+
+      for (let i = 0; i < frames; i++) {
+        if (turnOptions.signal?.aborted)
+          throw new DOMException("Aborted", "AbortError");
+        const index = applyPalette(grab(f, angle(i)), palette);
+        gif.writeFrame(index, width, height, {
+          palette: first || local ? palette : undefined,
+          delay,
+          repeat: 0,
+        });
+        first = false;
+        turnOptions.onProgress?.((i + 1) / frames);
+        if (i % 4 === 3) await breathe();
+      }
+    },
+
+    async finish() {
+      if (first) throw new Error("The GIF has no frames.");
+      gif.finish();
+      return new Blob([gif.bytes()], { type: "image/gif" });
+    },
+
+    async cancel() {},
+  };
+}
+
+/* --- Either --------------------------------------------------------------- */
+
+/**
+ * One turn, or part of one, of whatever the stage has loaded, as its own file,
+ * written by `video`, which has just been opened on `frame`.
+ */
+export async function encodeTurntable(
+  video: TurntableVideo,
+  frame: StudioFrame,
   options: TurnOptions,
 ): Promise<Blob> {
-  const video = await openTurntableVideo(stage, canvas, frame);
   try {
     await video.addTurn(frame, options);
     return await video.finish();
@@ -210,18 +332,31 @@ export const downloadSink: StudioSink = {
   },
 };
 
-/** `turntable-12-three-quarter-9x16.mp4`, for a batch exported as one video. */
-export function studioReelFileName(count: number, frame: StudioFrame): string {
-  return `turntable-${count}-${frame.view}-${frame.aspect.replace(":", "x")}.mp4`;
+export type StudioFileType = "mp4" | "gif";
+
+/** `turntable-12-three-quarter-9x16.mp4`, for a batch exported as one file. */
+export function studioReelFileName(
+  count: number,
+  frame: StudioFrame,
+  type: StudioFileType,
+): string {
+  return `turntable-${count}-${frame.view}-${frame.aspect.replace(":", "x")}.${type}`;
 }
 
 /** `good-fork-three-quarter-9x16.mp4` */
 export function studioFileName(
   slug: string,
   frame: StudioFrame,
+  type: StudioFileType,
   /** 1-based place in a continuous sequence, so the files sort in order. */
   sequence?: number,
 ): string {
   const prefix = sequence ? `${String(sequence).padStart(2, "0")}-` : "";
-  return `${prefix}${slug}-${frame.view}-${frame.aspect.replace(":", "x")}.mp4`;
+  return `${prefix}${slug}-${frame.view}-${frame.aspect.replace(":", "x")}.${type}`;
+}
+
+/** `1.4 MB`, `640 KB` */
+export function formatBytes(bytes: number): string {
+  if (bytes >= 1_000_000) return `${(bytes / 1_000_000).toFixed(1)} MB`;
+  return `${Math.max(1, Math.round(bytes / 1000))} KB`;
 }

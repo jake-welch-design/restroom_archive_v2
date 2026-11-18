@@ -27,7 +27,8 @@ import {
  * which a recording would not pick up.
  */
 
-export type StudioAspect = "9:16" | "4:5" | "1:1" | "5:4" | "16:9";
+export type StudioAspect =
+  "9:16" | "2:3" | "4:5" | "1:1" | "5:4" | "3:2" | "16:9";
 export type StudioOrientation = "portrait" | "landscape";
 export type StudioView =
   "front" | "three-quarter" | "high" | "top-down" | "inside";
@@ -42,9 +43,16 @@ export const STUDIO_ASPECTS: Record<
     label: "9:16",
     hint: "Stories, Highlights, Reels",
   },
+  "2:3": { width: 1080, height: 1620, label: "2:3", hint: "Portrait photo" },
   "4:5": { width: 1080, height: 1350, label: "4:5", hint: "Feed, portrait" },
   "1:1": { width: 1080, height: 1080, label: "1:1", hint: "Feed, square" },
   "5:4": { width: 1350, height: 1080, label: "5:4", hint: "Feed, landscape" },
+  "3:2": {
+    width: 1620,
+    height: 1080,
+    label: "3:2",
+    hint: "Newsletter, landscape photo",
+  },
   "16:9": {
     width: 1920,
     height: 1080,
@@ -58,8 +66,8 @@ export const STUDIO_ASPECTS: Record<
  * orientation over turns the chosen ratio over with it. Square is in both.
  */
 export const STUDIO_RATIOS: Record<StudioOrientation, StudioAspect[]> = {
-  portrait: ["9:16", "4:5", "1:1"],
-  landscape: ["16:9", "5:4", "1:1"],
+  portrait: ["9:16", "2:3", "4:5", "1:1"],
+  landscape: ["16:9", "3:2", "5:4", "1:1"],
 };
 
 /**

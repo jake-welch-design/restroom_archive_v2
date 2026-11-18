@@ -9,7 +9,8 @@
  * part of the same site.
  *
  * Everything happens in the browser: the stage renders a frame at a time, and
- * studioExport.ts encodes the frames to MP4. Nothing is uploaded.
+ * studioExport.ts encodes the frames to MP4, or to GIF for email. Nothing is
+ * uploaded.
  *
  * Settings and per-entry adjustments are kept in localStorage, so a batch can
  * be re-run later from the same machine with the same framing.
@@ -30,14 +31,22 @@ import {
 } from "~/composables/turntableStage";
 import {
   canExport,
+  GIF_FPS_OPTIONS,
+  GIF_WIDTH_OPTIONS,
   STUDIO_FPS,
   canPickFolder,
   downloadSink,
   encodeTurntable,
+  formatBytes,
+  gifSize,
+  openTurntableGif,
   openTurntableVideo,
   pickFolderSink,
   studioFileName,
   studioReelFileName,
+  type GifFps,
+  type GifWidth,
+  type StudioFileType,
   type StudioSink,
   type TurntableVideo,
 } from "~/composables/studioExport";
@@ -80,9 +89,18 @@ interface StudioSettings {
   cutSeconds: number;
   caption: boolean;
   captionSize: number;
-  /** A file per restroom, or the whole batch back to back in one MP4. */
+  /** A file per restroom, or the whole batch back to back in one file. */
   output: StudioOutput;
+  /** MP4 for Instagram, GIF for email, where video does not play. */
+  fileType: StudioFileType;
+  gifWidth: GifWidth;
+  gifFps: GifFps;
 }
+
+const STUDIO_FILE_TYPES: { id: StudioFileType; label: string }[] = [
+  { id: "mp4", label: "MP4" },
+  { id: "gif", label: "GIF" },
+];
 
 /**
  * A full turn per restroom, or one turn carried across the batch: each cut
@@ -121,6 +139,9 @@ const DEFAULT_SETTINGS: StudioSettings = {
   caption: true,
   captionSize: 22,
   output: "clips",
+  fileType: "mp4",
+  gifWidth: 600,
+  gifFps: 20,
 };
 
 const SETTINGS_KEY = "studio:settings";
@@ -189,7 +210,40 @@ function restoreSettings(stored: Partial<StudioSettings>): StudioSettings {
     output: STUDIO_OUTPUTS.some((o) => o.id === stored.output)
       ? stored.output!
       : d.output,
+    fileType: STUDIO_FILE_TYPES.some((t) => t.id === stored.fileType)
+      ? stored.fileType!
+      : d.fileType,
+    gifWidth: GIF_WIDTH_OPTIONS.includes(stored.gifWidth as GifWidth)
+      ? stored.gifWidth!
+      : d.gifWidth,
+    gifFps: GIF_FPS_OPTIONS.includes(stored.gifFps as GifFps)
+      ? stored.gifFps!
+      : d.gifFps,
   };
+}
+
+/**
+ * The frame rate of whatever is being exported. The preview and continuous
+ * motion's cuts count in it, so a cut lands on the same frame boundary in the
+ * file as it does on screen.
+ */
+const fps = computed(() =>
+  settings.value.fileType === "gif" ? settings.value.gifFps : STUDIO_FPS,
+);
+
+const fileLabel = computed(() =>
+  settings.value.fileType === "gif" ? "GIF" : "video",
+);
+
+/** Opens the chosen kind of file on `frame`, ready for its first turn. */
+function openWriter(frame: StudioFrame): Promise<TurntableVideo> {
+  const s = settings.value;
+  return s.fileType === "gif"
+    ? openTurntableGif(stage!, canvasEl.value!, frame, {
+        width: s.gifWidth,
+        fps: s.gifFps,
+      })
+    : openTurntableVideo(stage!, canvasEl.value!, frame);
 }
 
 /** Turns the frame over, carrying the ratio across: 9:16 becomes 16:9. */
@@ -274,13 +328,11 @@ function frameFor(entry: RestroomSummary): StudioFrame {
  * carries on from each room's front rather than from a shared compass.
  */
 function continuousSegment(index: number) {
-  const cutFrames = Math.max(
-    1,
-    Math.round(settings.value.cutSeconds * STUDIO_FPS),
-  );
-  const turnFrames = Math.round(settings.value.seconds * STUDIO_FPS);
+  const rate = fps.value;
+  const cutFrames = Math.max(1, Math.round(settings.value.cutSeconds * rate));
+  const turnFrames = Math.round(settings.value.seconds * rate);
   return {
-    seconds: cutFrames / STUDIO_FPS,
+    seconds: cutFrames / rate,
     from: ((index * cutFrames) % turnFrames) / turnFrames,
     span: cutFrames / turnFrames,
   };
@@ -453,9 +505,11 @@ function onFineZoom(value: number) {
 
 const exportSupported = ref(true);
 watch(
-  () => settings.value.aspect,
-  async (aspect) => {
-    if (import.meta.client) exportSupported.value = await canExport(aspect);
+  () => [settings.value.aspect, settings.value.fileType] as const,
+  async ([aspect, fileType]) => {
+    if (!import.meta.client) return;
+    // GIFs are encoded in plain script, so every browser can make them.
+    exportSupported.value = fileType === "gif" || (await canExport(aspect));
   },
   { immediate: true },
 );
@@ -466,6 +520,7 @@ interface ExportResult {
   name: string;
   status: ResultStatus;
   file?: string;
+  bytes?: number;
   error?: string;
 }
 
@@ -477,6 +532,7 @@ const exportNote = ref<string | null>(null);
 const results = ref<ExportResult[]>([]);
 /** Set when the batch went out as one video and that video was saved. */
 const reelFile = ref<string | null>(null);
+const reelBytes = ref(0);
 /** Why the one video could not be finished or saved, when it could not. */
 const reelError = ref<string | null>(null);
 /** The mode the last export ran in, which the toggle may have moved on from. */
@@ -553,6 +609,7 @@ async function startExport() {
   exportTotal.value = entries.length;
   results.value = [];
   reelFile.value = null;
+  reelBytes.value = 0;
   reelError.value = null;
   exportedAsVideo.value = settings.value.output === "video";
   sinkLabel.value = sink.label;
@@ -604,7 +661,7 @@ async function exportClips(
     try {
       await loadForExport(entry, signal);
       const frame = frameFor(entry);
-      const blob = await encodeTurntable(stage!, canvasEl.value!, frame, {
+      const blob = await encodeTurntable(await openWriter(frame), frame, {
         ...turnFor(made),
         signal,
         onProgress: (p) => (exportProgress.value = p),
@@ -612,11 +669,12 @@ async function exportClips(
       const file = studioFileName(
         entry.slug,
         frame,
+        settings.value.fileType,
         continuous ? made + 1 : undefined,
       );
       await sink.save(file, blob);
       made++;
-      record(entry, "done", { file });
+      record(entry, "done", { file, bytes: blob.size });
     } catch (e) {
       recordError(entry, e);
     }
@@ -657,7 +715,7 @@ async function exportOneVideo(
       if (!video) {
         // Opened at the first scan that loads, since the encoder sizes itself
         // from the canvas as it stands.
-        video = await openTurntableVideo(stage!, canvasEl.value!, frame);
+        video = await openWriter(frame);
         firstFrame = frame;
       }
       await video.addTurn(frame, {
@@ -687,9 +745,14 @@ async function exportOneVideo(
   try {
     const count = results.value.filter((r) => r.status === "done").length;
     const blob = await video.finish();
-    const file = studioReelFileName(count, firstFrame!);
+    const file = studioReelFileName(
+      count,
+      firstFrame!,
+      settings.value.fileType,
+    );
     await sink.save(file, blob);
     reelFile.value = file;
+    reelBytes.value = blob.size;
   } catch (e) {
     dropFile();
     reelError.value = (e as Error).message;
@@ -706,6 +769,27 @@ const doneCount = computed(
 const failed = computed(() =>
   results.value.filter((r) => r.status === "failed"),
 );
+
+/**
+ * What the saved files weigh. Shown because a GIF bound for email has a budget
+ * (about 1 MB) that only the finished file can be checked against.
+ */
+const savedSize = computed(() => {
+  const done = results.value.filter((r) => r.status === "done");
+  const total = done.reduce((sum, r) => sum + (r.bytes ?? 0), 0);
+  if (!total) return "";
+  return done.length > 1
+    ? `${formatBytes(total)} in all, largest ${formatBytes(Math.max(...done.map((r) => r.bytes ?? 0)))}`
+    : formatBytes(total);
+});
+
+/** The exported file's pixel size, which for a GIF is smaller than the stage's. */
+const outputSize = computed(() => {
+  const s = settings.value;
+  return s.fileType === "gif"
+    ? gifSize(s.aspect, s.gifWidth)
+    : STUDIO_ASPECTS[s.aspect];
+});
 
 /** How long the one video will run, for weighing it against Instagram's limits. */
 const videoLength = computed(() => {
@@ -820,9 +904,7 @@ const zoomPercent = computed(() => Math.round(settings.value.zoom * 100));
               </div>
               <span class="settings-note">
                 {{ STUDIO_ASPECTS[settings.aspect].hint }} ·
-                {{ STUDIO_ASPECTS[settings.aspect].width }}×{{
-                  STUDIO_ASPECTS[settings.aspect].height
-                }}
+                {{ outputSize.width }}×{{ outputSize.height }}
               </span>
             </div>
 
@@ -946,6 +1028,78 @@ const zoomPercent = computed(() => Math.round(settings.value.zoom * 100));
             </div>
 
             <div class="settings-row">
+              <span class="settings-label">File</span>
+              <div class="seg" role="radiogroup" aria-label="File">
+                <button
+                  v-for="t in STUDIO_FILE_TYPES"
+                  :key="t.id"
+                  type="button"
+                  class="seg-btn"
+                  role="radio"
+                  :aria-checked="settings.fileType === t.id"
+                  :class="{ active: settings.fileType === t.id }"
+                  :disabled="exporting"
+                  @click="settings.fileType = t.id"
+                >
+                  {{ t.label }}
+                </button>
+              </div>
+              <span class="settings-note">
+                {{
+                  settings.fileType === "gif"
+                    ? "For email. Keep it under 1 MB; Outlook shows only the first frame."
+                    : "H.264 video, for Instagram."
+                }}
+              </span>
+            </div>
+
+            <template v-if="settings.fileType === 'gif'">
+              <div class="settings-row">
+                <span class="settings-label">GIF width</span>
+                <div class="seg" role="radiogroup" aria-label="GIF width">
+                  <button
+                    v-for="w in GIF_WIDTH_OPTIONS"
+                    :key="w"
+                    type="button"
+                    class="seg-btn"
+                    role="radio"
+                    :aria-checked="settings.gifWidth === w"
+                    :class="{ active: settings.gifWidth === w }"
+                    :disabled="exporting"
+                    @click="settings.gifWidth = w"
+                  >
+                    {{ w }}
+                  </button>
+                </div>
+                <span class="settings-note">
+                  Pixels across. A newsletter column is 536–600.
+                </span>
+              </div>
+
+              <div class="settings-row">
+                <span class="settings-label">Frame rate</span>
+                <div class="seg" role="radiogroup" aria-label="Frame rate">
+                  <button
+                    v-for="r in GIF_FPS_OPTIONS"
+                    :key="r"
+                    type="button"
+                    class="seg-btn"
+                    role="radio"
+                    :aria-checked="settings.gifFps === r"
+                    :class="{ active: settings.gifFps === r }"
+                    :disabled="exporting"
+                    @click="settings.gifFps = r"
+                  >
+                    {{ r }} fps
+                  </button>
+                </div>
+                <span class="settings-note">
+                  Fewer frames and a shorter turn make a smaller file.
+                </span>
+              </div>
+            </template>
+
+            <div class="settings-row">
               <span class="settings-label">Export as</span>
               <div class="seg" role="radiogroup" aria-label="Export as">
                 <button
@@ -959,7 +1113,7 @@ const zoomPercent = computed(() => Math.round(settings.value.zoom * 100));
                   :disabled="exporting"
                   @click="settings.output = o.id"
                 >
-                  {{ o.label }}
+                  {{ o.id === "video" ? `One ${fileLabel}` : o.label }}
                 </button>
               </div>
               <span class="settings-note">
@@ -1142,16 +1296,18 @@ const zoomPercent = computed(() => Math.round(settings.value.zoom * 100));
           <template v-else>
             <div v-if="results.length" class="foot-results" role="status">
               <span v-if="reelFile">
-                {{ doneCount }} of {{ results.length }} in one video, saved to
-                {{ sinkLabel }} as {{ reelFile }}.
+                {{ doneCount }} of {{ results.length }} in one file, saved to
+                {{ sinkLabel }} as {{ reelFile }} ({{
+                  formatBytes(reelBytes)
+                }}).
               </span>
               <span v-else-if="reelError" class="form-error">
-                The video could not be saved: {{ reelError }}
+                The file could not be saved: {{ reelError }}
               </span>
-              <span v-else-if="exportedAsVideo"> No video saved. </span>
+              <span v-else-if="exportedAsVideo"> No file saved. </span>
               <span v-else>
-                {{ doneCount }} of {{ results.length }} saved to
-                {{ sinkLabel }}.
+                {{ doneCount }} of {{ results.length }} saved to {{ sinkLabel
+                }}<template v-if="savedSize"> ({{ savedSize }})</template>.
               </span>
               <span v-for="r in failed" :key="r.slug" class="form-error">
                 {{ r.name }}: {{ r.error }}
@@ -1167,12 +1323,12 @@ const zoomPercent = computed(() => Math.round(settings.value.zoom * 100));
                 <template
                   v-if="settings.output === 'video' && batch.length > 1"
                 >
-                  Export {{ batch.length }} as one video
+                  Export {{ batch.length }} as one {{ fileLabel }}
                 </template>
                 <template v-else>
                   Export
                   {{ batch.length || "" }}
-                  {{ batch.length === 1 ? "video" : "videos" }}
+                  {{ batch.length === 1 ? fileLabel : `${fileLabel}s` }}
                 </template>
               </button>
               <button
@@ -1191,8 +1347,8 @@ const zoomPercent = computed(() => Math.round(settings.value.zoom * 100));
                   chosenSink
                     ? `Saving to ${chosenSink.label}.`
                     : folderAccess
-                      ? "MP4s are written to a folder you choose."
-                      : "MP4s go to your downloads."
+                      ? `${settings.fileType.toUpperCase()}s are written to a folder you choose.`
+                      : `${settings.fileType.toUpperCase()}s go to your downloads.`
                 }}
               </span>
             </div>
