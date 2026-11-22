@@ -507,7 +507,7 @@ function renderWeek(s: ReportWeekStats): string {
     ? `${kicker("This week")}<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${rows
         .map(
           ([label, value], i) =>
-            `<tr><td width="140" valign="top" class="muted" style="${LABEL}width:140px;padding:${i ? 4 : 0}px 16px 0 0;">${label}</td><td valign="top" style="${LINE}padding-top:${i ? 4 : 0}px;">${escapeHtml(value)}</td></tr>`,
+            `<tr><td width="140" valign="top" class="muted" style="${LABEL}width:140px;padding:${i ? 4 : 0}px 16px 0 0;">${label}</td><td valign="top" class="ink" style="${LINE}padding-top:${i ? 4 : 0}px;">${escapeHtml(value)}</td></tr>`,
         )
         .join("")}</table>`
     : "";
@@ -569,7 +569,7 @@ function shell(o: {
     .canvas { background:#111111 !important; }
     .body, .box { background:#000000 !important; }
     .box { border-color:#ffffff !important; }
-    .body div, .body p, .body a, .ink { color:#ffffff !important; }
+    .body div, .body p, .body a, .body td, .ink { color:#ffffff !important; }
     .muted, .body .muted { color:#999999 !important; }
     .rule { background:#ffffff !important; }
     .btn { background:#ffffff !important; }
