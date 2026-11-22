@@ -299,6 +299,32 @@ export const restroomReports = sqliteTable(
   }),
 );
 
+/**
+ * The Weekly Report's sent issues, one per week (migration 0032). `issue` is
+ * the composer's WeeklyReportIssue as JSON; `html` is the email as it went out.
+ */
+export const weeklyReportIssues = sqliteTable(
+  "weekly_report_issues",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    weekStart: text("week_start").notNull(),
+    weekEnd: text("week_end").notNull(),
+    subject: text("subject").notNull(),
+    issue: text("issue").notNull(),
+    html: text("html").notNull(),
+    campaignId: text("campaign_id"),
+    sentAt: text("sent_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+  (t) => ({
+    weekIdx: uniqueIndex("weekly_report_issues_week_unique").on(t.weekStart),
+  }),
+);
+
 export type User = typeof users.$inferSelect;
 export type Restroom = typeof restrooms.$inferSelect;
 export type Annotation = typeof annotations.$inferSelect;
@@ -306,3 +332,4 @@ export type AnnotationReport = typeof annotationReports.$inferSelect;
 export type ApiToken = typeof apiTokens.$inferSelect;
 export type UserBlock = typeof userBlocks.$inferSelect;
 export type RestroomReport = typeof restroomReports.$inferSelect;
+export type WeeklyReportIssueRow = typeof weeklyReportIssues.$inferSelect;

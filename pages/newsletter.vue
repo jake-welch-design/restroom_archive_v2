@@ -146,7 +146,14 @@ watch(
 );
 
 function startNewIssue() {
-  if (!window.confirm("Clear this draft and start a new issue from last week?"))
+  const warning = archivedThisWeek.value
+    ? ""
+    : " This week's issue isn't in the archive yet.";
+  if (
+    !window.confirm(
+      `Clear this draft and start a new issue from last week?${warning}`,
+    )
+  )
     return;
   draft.value = freshDraft();
   status.value = null;
@@ -406,11 +413,11 @@ const sizeKb = computed(() => Math.round(new Blob([html.value]).size / 1000));
 
 /* --- Sending ---------------------------------------------------------------- */
 
-const busy = ref<"test" | "send" | null>(null);
+const busy = ref<"test" | "send" | "archive" | null>(null);
 const status = ref<{ ok: boolean; text: string } | null>(null);
 
 async function post(path: "test" | "send") {
-  return $fetch<{ campaignId: string; sentTo?: string }>(
+  return $fetch<{ campaignId: string; sentTo?: string; archived?: boolean }>(
     `/api/admin/newsletter/${path}`,
     {
       method: "POST",
@@ -443,15 +450,89 @@ async function sendToSubscribers() {
   busy.value = "send";
   status.value = null;
   try {
-    await post("send");
+    const res = await post("send");
     // A sent campaign is frozen in Plunk; further edits start a new one.
     draft.value.campaignId = null;
-    status.value = {
-      ok: true,
-      text: "Sending to subscribers. Plunk has it from here.",
-    };
+    await loadArchive();
+    status.value = res.archived
+      ? {
+          ok: true,
+          text: "Sending to subscribers. Plunk has it from here, and the issue is saved to the archive.",
+        }
+      : {
+          ok: false,
+          text: "Sending to subscribers, but the issue wasn't saved to the archive. Use Add to archive below; don't send it again.",
+        };
   } catch (e) {
     status.value = { ok: false, text: apiErrorMessage(e, "Sending failed.") };
+  } finally {
+    busy.value = null;
+  }
+}
+
+/* --- The archive ------------------------------------------------------------ */
+
+/* Sent issues are kept in D1, one per week, to show again later. Sending
+   saves one; "Add to archive" saves the draft by hand, for an issue sent
+   before the archive existed or a correction to one already in it. */
+
+interface ArchivedIssue {
+  weekStart: string;
+  weekEnd: string;
+  subject: string;
+  sentAt: string;
+  updatedAt: string;
+}
+
+const archived = ref<ArchivedIssue[] | null>(null);
+
+async function loadArchive() {
+  try {
+    archived.value = (
+      await $fetch<{ issues: ArchivedIssue[] }>("/api/admin/newsletter/archive")
+    ).issues;
+  } catch {
+    archived.value = null;
+  }
+}
+onMounted(loadArchive);
+
+const archivedThisWeek = computed(
+  () =>
+    archived.value?.find((a) => a.weekStart === issue.value.weekStart) ?? null,
+);
+
+/** "Sent 22 Nov 2026", on the Archive's clock (the column is UTC). */
+const archiveNote = computed(() => {
+  if (!archived.value) return "";
+  const a = archivedThisWeek.value;
+  if (!a) return "This week isn't in the archive yet. Sending adds it.";
+  const sent = formatDayMonthYear(submittedDay(a.sentAt));
+  const updated = formatDayMonthYear(submittedDay(a.updatedAt));
+  return `In the archive: sent ${sent}${updated !== sent ? `, updated ${updated}` : ""}.`;
+});
+
+async function addToArchive() {
+  const a = archivedThisWeek.value;
+  const question = a
+    ? `Replace the archived issue for this week with this draft?`
+    : `Add “${issue.value.subject}” to the archive as a sent issue? Only do this for an issue that has gone out.`;
+  if (!window.confirm(question)) return;
+  busy.value = "archive";
+  status.value = null;
+  try {
+    archived.value = (
+      await $fetch<{ issues: ArchivedIssue[] }>(
+        "/api/admin/newsletter/archive",
+        { method: "POST", body: { issue: issue.value } },
+      )
+    ).issues;
+    status.value = { ok: true, text: "Saved to the archive." };
+  } catch (e) {
+    status.value = {
+      ok: false,
+      text: apiErrorMessage(e, "Saving to the archive failed."),
+    };
   } finally {
     busy.value = null;
   }
@@ -825,6 +906,23 @@ async function sendToSubscribers() {
               {{ busy === "send" ? "Sending…" : "Send to subscribers" }}
             </button>
           </div>
+          <div v-if="archived" class="nl-foot-row nl-archive">
+            <span class="settings-note">{{ archiveNote }}</span>
+            <button
+              type="button"
+              class="link-btn"
+              :disabled="!!busy"
+              @click="addToArchive"
+            >
+              {{
+                busy === "archive"
+                  ? "Saving…"
+                  : archivedThisWeek
+                    ? "Update archive"
+                    : "Add to archive"
+              }}
+            </button>
+          </div>
         </footer>
       </template>
     </aside>
@@ -1012,6 +1110,14 @@ async function sendToSubscribers() {
 .nl-foot-row {
   display: flex;
   gap: 8px;
+}
+.nl-archive {
+  justify-content: space-between;
+  align-items: baseline;
+}
+.nl-archive .link-btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .nl-stage {
