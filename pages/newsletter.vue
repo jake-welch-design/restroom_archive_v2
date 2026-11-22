@@ -26,6 +26,7 @@ import {
   defaultSubject,
   previousWeek,
   renderWeeklyReport,
+  submittedDay,
   type ReportEntry,
   type WeeklyReportIssue,
 } from "~~/shared/utils/weeklyReport";
@@ -62,10 +63,13 @@ function entryLabel(e: RestroomSummary) {
   return `${e.name} · ${formatDayMonthYear(e.isoDate)} · ${e.location}`;
 }
 
-/** Entries submitted between `start` and `end`, both inclusive. */
+/**
+ * Entries submitted between `start` and `end`, both inclusive, by the
+ * Archive's clock: 12:00 AM on the first day to 11:59 PM on the last.
+ */
 function submittedIn(start: string, end: string) {
   return entries.value.filter((e) => {
-    const day = e.createdAt.slice(0, 10);
+    const day = submittedDay(e.createdAt);
     return day >= start && day <= end;
   });
 }

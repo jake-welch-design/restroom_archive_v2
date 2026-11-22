@@ -109,16 +109,49 @@ function isoDay(d: Date): string {
 }
 
 /**
- * The last full week before `today`, Sunday to Saturday: on Tuesday 17 November
- * 2026 that is 8–14 November.
+ * The Archive's clock for the Weekly Report: a week runs from 12:00 AM Sunday
+ * to 11:59 PM Saturday here. Submission times are stored in UTC, so without
+ * this a scan sent in on a Saturday evening would land on Sunday. A fixed zone
+ * rather than the browser's, because the composer is first rendered on the
+ * server, which runs in UTC, and both must agree on the list.
+ */
+export const REPORT_TIME_ZONE = "America/New_York";
+
+const reportDayParts = new Intl.DateTimeFormat("en-US", {
+  timeZone: REPORT_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+/** A moment's calendar day in the Archive's time zone, as `YYYY-MM-DD`. */
+function dayInReportZone(d: Date): string {
+  const part = (type: string) =>
+    reportDayParts.formatToParts(d).find((p) => p.type === type)?.value;
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
+/**
+ * The day a submission belongs to: its `createdAt` (SQLite's UTC
+ * `YYYY-MM-DD HH:MM:SS`) read in the Archive's time zone.
+ */
+export function submittedDay(createdAt: string): string {
+  const hasZone = /(Z|[+-]\d\d:?\d\d)$/i.test(createdAt);
+  const d = new Date(createdAt.replace(" ", "T") + (hasZone ? "" : "Z"));
+  return Number.isNaN(d.getTime())
+    ? createdAt.slice(0, 10)
+    : dayInReportZone(d);
+}
+
+/**
+ * The last full week before `today`, Sunday to Saturday, in the Archive's time
+ * zone: on Tuesday 17 November 2026 that is 8–14 November.
  */
 export function previousWeek(today = new Date()): {
   start: string;
   end: string;
 } {
-  const d = new Date(
-    Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()),
-  );
+  const d = utcDate(dayInReportZone(today));
   const end = new Date(d);
   end.setUTCDate(d.getUTCDate() - d.getUTCDay() - 1);
   const start = new Date(end);
@@ -178,7 +211,7 @@ export function computeReportStats(
   weekStart: string,
   weekEnd: string,
 ): { totals: ReportTotals; week: ReportWeekStats } {
-  const day = (e: StatsEntry) => e.createdAt.slice(0, 10);
+  const day = (e: StatsEntry) => submittedDay(e.createdAt);
   const published = all
     .filter((e) => e.status === "published" && day(e) <= weekEnd)
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
