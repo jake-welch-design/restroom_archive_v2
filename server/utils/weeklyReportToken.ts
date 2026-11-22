@@ -1,7 +1,13 @@
 import type { H3Event } from "h3";
 
 /**
- * The Weekly Report's double opt-in link, signed rather than stored.
+ * The Weekly Report's old double opt-in link, signed rather than stored.
+ *
+ * Signups have been single opt-in since 2026-11-22, so nothing signs new links.
+ * Verification stays so links already emailed still work until they expire
+ * (7 days, so by 2026-11-29). After that this file, server/api/newsletter/
+ * confirm.post.ts, pages/weekly-report/confirm.vue and
+ * renderWeeklyReportConfirm in shared/utils/weeklyReport.ts can all go.
  *
  * A signup emails a link carrying the address, the time, and an HMAC of both.
  * Confirming checks the signature and the age, then adds the contact to Plunk.
@@ -29,28 +35,12 @@ async function hmacKey(event: H3Event) {
   );
 }
 
-function toHex(buf: ArrayBuffer) {
-  return [...new Uint8Array(buf)]
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
 function fromHex(hex: string) {
   const pairs = hex.match(/^[0-9a-f]{64}$/) ? hex.match(/../g)! : [];
   return new Uint8Array(pairs.map((p) => parseInt(p, 16)));
 }
 
 const payload = (email: string, ts: number) => `${email}\n${ts}`;
-
-export async function signConfirmation(event: H3Event, email: string) {
-  const ts = Date.now();
-  const sig = await crypto.subtle.sign(
-    "HMAC",
-    await hmacKey(event),
-    new TextEncoder().encode(payload(email, ts)),
-  );
-  return { email, ts, sig: toHex(sig) };
-}
 
 export async function verifyConfirmation(
   event: H3Event,

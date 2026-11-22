@@ -4,6 +4,12 @@ import { useDb, schema } from "~~/server/utils/db";
 import { verifyPassword } from "~~/server/utils/hash";
 import { requireActiveUser } from "~~/server/utils/requireActiveUser";
 import { rateLimitByUser } from "~~/server/utils/rateLimit";
+import {
+  findPlunkContact,
+  isWeeklyReportSubscriber,
+  plunkConfigured,
+  setWeeklyReportSubscription,
+} from "~~/server/utils/plunk";
 
 const Body = z.object({
   email: z.string().email(),
@@ -63,5 +69,29 @@ export default defineEventHandler(async (event) => {
     });
   }
 
+  await moveWeeklyReport(event, row.email, nextEmail);
+
   return { ok: true, email: nextEmail };
 });
+
+/**
+ * The Weekly Report follows the account to its new address, so the Profile
+ * tab's Newsletter row stays true and the old inbox stops getting it.
+ * Best effort: the email has already changed, and a Plunk hiccup here is not
+ * worth failing that over. The row would then read "Not subscribed" and can be
+ * fixed from there.
+ */
+async function moveWeeklyReport(
+  event: Parameters<typeof plunkConfigured>[0],
+  from: string,
+  to: string,
+) {
+  if (!plunkConfigured(event)) return;
+  try {
+    if (!isWeeklyReportSubscriber(await findPlunkContact(event, from))) return;
+    await setWeeklyReportSubscription(event, to, true);
+    await setWeeklyReportSubscription(event, from, false);
+  } catch (e) {
+    console.error("[weekly-report] moving subscription on email change", e);
+  }
+}

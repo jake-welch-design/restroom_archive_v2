@@ -3,8 +3,7 @@
  * The Weekly Report signup: an email field and a button. Shared by the first-
  * visit pop-up and the About page, so the two can't drift apart.
  *
- * A signup only sends a confirmation email (see server/api/newsletter); the
- * success message says so, since nothing arrives until that link is clicked.
+ * Single opt-in: a signup joins the list at once (server/api/newsletter).
  */
 import { apiErrorMessage } from "~~/shared/utils/apiError";
 import { useTurnstileToken } from "~/composables/useTurnstileToken";
@@ -54,7 +53,7 @@ async function submit() {
 <template>
   <div class="wr-signup">
     <p v-if="sentTo" class="wr-sent" role="status">
-      Please check {{ sentTo }} for a link to confirm your subscription.
+      You're subscribed. The next Weekly Report will go to {{ sentTo }}.
     </p>
 
     <form v-else class="wr-form" @submit.prevent="submit">
@@ -82,7 +81,7 @@ async function submit() {
             class="primary-btn wr-btn"
             :disabled="loading || !token"
           >
-            {{ loading ? "Sending…" : !token ? "Verifying…" : "Subscribe" }}
+            {{ loading ? "Subscribing…" : !token ? "Verifying…" : "Subscribe" }}
           </button>
         </span>
       </div>

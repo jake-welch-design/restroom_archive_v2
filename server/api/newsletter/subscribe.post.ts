@@ -1,10 +1,10 @@
 import { z } from "zod";
-import { sendWeeklyReportConfirmEmail } from "~~/server/utils/email";
-import { plunkConfigured } from "~~/server/utils/plunk";
+import {
+  plunkConfigured,
+  setWeeklyReportSubscription,
+} from "~~/server/utils/plunk";
 import { rateLimitByIp } from "~~/server/utils/rateLimit";
 import { verifyTurnstile } from "~~/server/utils/turnstile";
-import { publicUrls } from "~~/server/utils/urls";
-import { signConfirmation } from "~~/server/utils/weeklyReportToken";
 
 const Body = z.object({
   email: z.string().trim().toLowerCase().email().max(254),
@@ -12,8 +12,10 @@ const Body = z.object({
 });
 
 /**
- * A Weekly Report signup: emails a confirmation link and nothing else. The
- * address joins the list only once that link is followed (confirm.post.ts).
+ * A Weekly Report signup, single opt-in: the address joins the list at once,
+ * with no confirmation email (double opt-in was dropped on 2026-11-22; about a
+ * quarter of signups never clicked the link). Turnstile and the rate limit are
+ * what stand between the form and a bot filling the list.
  *
  * The answer is the same whether or not the address is already subscribed, so
  * the form cannot be used to find out who is on the list.
@@ -32,18 +34,15 @@ export default defineEventHandler(async (event) => {
       statusMessage: "Turnstile verification failed",
     });
 
-  const { email, ts, sig } = await signConfirmation(event, body.email);
-  const link =
-    `${publicUrls(event).site}/weekly-report/confirm` +
-    `?email=${encodeURIComponent(email)}&ts=${ts}&sig=${sig}`;
-
-  // Locally there is no Plunk key. Rather than failing, hand the link to the
-  // terminal so the whole flow can be walked through on the dev server.
+  // Locally there is no Plunk key. Rather than failing, say so in the
+  // terminal so the form can still be walked through on the dev server.
   if (import.meta.dev && !plunkConfigured(event)) {
-    console.warn(`[weekly-report] confirmation link for ${email}: ${link}`);
+    console.warn(
+      `[weekly-report] subscribed ${body.email} (Plunk not configured)`,
+    );
     return { ok: true };
   }
 
-  await sendWeeklyReportConfirmEmail(email, link);
+  await setWeeklyReportSubscription(event, body.email, true);
   return { ok: true };
 });

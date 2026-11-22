@@ -1,5 +1,4 @@
 import { escapeHtml } from "~~/shared/utils/html";
-import { renderWeeklyReportConfirm } from "~~/shared/utils/weeklyReport";
 
 const FROM_EMAIL = "noreply@restroomarchive.com";
 const FROM_NAME = "The Restroom Archive";
@@ -98,15 +97,6 @@ export async function sendPasswordResetEmail(to: string, token: string) {
         If you didn't request this, you can ignore this email. Your password won't change.
       </p>
     `),
-  );
-}
-
-/** The Weekly Report's double opt-in: nothing is subscribed until this is clicked. */
-export async function sendWeeklyReportConfirmEmail(to: string, link: string) {
-  await send(
-    to,
-    "Confirm your subscription to The Restroom Archive Weekly Report",
-    renderWeeklyReportConfirm(link, siteUrl()),
   );
 }
 

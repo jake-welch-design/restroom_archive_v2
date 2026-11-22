@@ -69,3 +69,60 @@ export const WEEKLY_REPORT_AUDIENCE = {
     },
   ],
 };
+
+/* --- Weekly Report subscriptions ----------------------------------------- */
+
+interface PlunkContact {
+  id: string;
+  email: string;
+  subscribed: boolean;
+  data: Record<string, unknown> | null;
+}
+
+/**
+ * One contact by exact address, or null. Plunk has no lookup-by-email: its
+ * list's `search` is a case-insensitive substring match, so `ann@x.com` also
+ * matches `joann@x.com`. Hence the exact comparison over the matches.
+ */
+export async function findPlunkContact(
+  event: H3Event,
+  email: string,
+): Promise<PlunkContact | null> {
+  const address = email.trim().toLowerCase();
+  const res = await plunk<{ data: PlunkContact[] }>(
+    event,
+    `/contacts?search=${encodeURIComponent(address)}&limit=100`,
+  );
+  return res.data.find((c) => c.email.toLowerCase() === address) ?? null;
+}
+
+/** On the list in the same sense as WEEKLY_REPORT_AUDIENCE: both must hold. */
+export function isWeeklyReportSubscriber(contact: PlunkContact | null) {
+  return !!contact?.subscribed && contact.data?.weeklyReport === true;
+}
+
+/**
+ * Adds an address to the Weekly Report (single opt-in) or takes it off.
+ *
+ * An upsert: an existing contact (from a password reset, say) is updated in
+ * place, and `data` merges key by key, so other fields are kept. Taking
+ * someone off clears `subscribed`, the same flag Plunk's own unsubscribe link
+ * clears, so either way out drops them from the audience.
+ */
+export async function setWeeklyReportSubscription(
+  event: H3Event,
+  email: string,
+  subscribed: boolean,
+) {
+  const at = new Date().toISOString();
+  await plunk(event, "/contacts", {
+    method: "POST",
+    body: {
+      email: email.trim().toLowerCase(),
+      subscribed,
+      data: subscribed
+        ? { weeklyReport: true, weeklyReportSubscribedAt: at }
+        : { weeklyReportUnsubscribedAt: at },
+    },
+  });
+}

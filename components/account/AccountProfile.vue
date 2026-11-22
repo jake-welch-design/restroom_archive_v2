@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * The Profile tab: the four things a user can change about their own account.
+ * The Profile tab: the things a user can change about their own account.
  *
  * Every row follows one idiom, which is what makes the tab readable as a list
  * rather than as four forms: a label, the current value, and an action on the
@@ -131,6 +131,52 @@ async function savePassword() {
   changingPassword.value = false;
   clearPasswordDrafts();
   passwordSaved.value = true;
+}
+
+/* --- Weekly Report --------------------------------------------------------- */
+
+/**
+ * Whether the account's email is on the Weekly Report, read from Plunk, plus a
+ * one-click toggle. No inline form: there is nothing to type, and both
+ * directions are easy to undo from the same button.
+ *
+ * Loaded in a watcher on the session, as the Alerts row below is, rather than
+ * with useFetch: the route 401s until there is a signed-in user to ask about.
+ */
+interface NewsletterStatus {
+  subscribed: boolean;
+  /** False when the server has no Plunk key (the local dev server). */
+  configured: boolean;
+}
+
+const newsletter = ref<NewsletterStatus | null>(null);
+const newsletterFailed = ref(false);
+const newsletterAction = useAsyncAction("Could not update your subscription.");
+
+watch(
+  () => user.value?.email,
+  async (email) => {
+    if (!email) return;
+    newsletterFailed.value = false;
+    try {
+      newsletter.value = await $fetch<NewsletterStatus>("/api/me/newsletter");
+    } catch {
+      newsletterFailed.value = true;
+    }
+  },
+  { immediate: true },
+);
+
+async function toggleNewsletter() {
+  if (!newsletter.value) return;
+  const next = !newsletter.value.subscribed;
+  const ok = await newsletterAction.run(() =>
+    $fetch("/api/me/newsletter", {
+      method: "PATCH",
+      body: { subscribed: next },
+    }),
+  );
+  if (ok) newsletter.value = { ...newsletter.value, subscribed: next };
 }
 
 /* --- Admin notifications -------------------------------------------------- */
@@ -497,6 +543,40 @@ async function confirmDelete() {
       </form>
     </div>
 
+    <div class="settings-row">
+      <span class="settings-label">Newsletter</span>
+
+      <span class="settings-value">
+        <span v-if="newsletterFailed" class="dim">Couldn't load</span>
+        <span v-else-if="!newsletter" class="dim">…</span>
+        <span v-else-if="!newsletter.configured" class="dim"
+          >Email isn't configured on this server</span
+        >
+        <template v-else-if="newsletter.subscribed"
+          >Subscribed to the Weekly Report</template
+        >
+        <span v-else class="dim">Not subscribed to the Weekly Report</span>
+      </span>
+      <button
+        v-if="newsletter?.configured"
+        type="button"
+        class="btn settings-change"
+        :disabled="newsletterAction.loading"
+        @click="toggleNewsletter"
+      >
+        {{
+          newsletterAction.loading
+            ? "…"
+            : newsletter.subscribed
+              ? "Unsubscribe"
+              : "Subscribe"
+        }}
+      </button>
+      <p v-if="newsletterAction.error" class="form-error settings-row-error">
+        {{ newsletterAction.error }}
+      </p>
+    </div>
+
     <!-- Admin-only, and off until the box below is checked. Nobody is enrolled
          by being promoted. -->
     <div v-if="isAdmin" class="settings-row">
@@ -775,6 +855,12 @@ async function confirmDelete() {
   font-size: 11px;
   line-height: 1.5;
   color: #a60;
+}
+
+/* Under the row's label/value/action line rather than squeezed beside it. */
+.settings-row-error {
+  flex-basis: 100%;
+  margin: 0;
 }
 
 .danger-warning {

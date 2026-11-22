@@ -182,9 +182,9 @@ function onClick(e: MouseEvent) {
       <h4>Weekly Report</h4>
       <p>
         Signing up for the Weekly Report stores your email address with Plunk,
-        which sends it. You are only added after confirming through the link
-        emailed to you, and every issue has an unsubscribe link. Your address is
-        used for the Weekly Report and nothing else.
+        which sends it. Every issue has an unsubscribe link, and signed-in
+        archivists can also unsubscribe from their profile. Your address is used
+        for the Weekly Report and nothing else.
       </p>
 
       <h4>Cookies</h4>

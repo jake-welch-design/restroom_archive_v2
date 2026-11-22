@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { plunk, plunkConfigured } from "~~/server/utils/plunk";
+import {
+  plunkConfigured,
+  setWeeklyReportSubscription,
+} from "~~/server/utils/plunk";
 import { rateLimitByIp } from "~~/server/utils/rateLimit";
 import { verifyConfirmation } from "~~/server/utils/weeklyReportToken";
 
@@ -10,6 +13,9 @@ const Body = z.object({
 });
 
 /**
+ * Left over from double opt-in (see server/utils/weeklyReportToken.ts): honours
+ * confirmation links emailed before 2026-11-22 until they expire.
+ *
  * The second half of the double opt-in. Called by the confirm page's script
  * rather than by the emailed link itself, because mail scanners follow links
  * to check them, and a GET that subscribed would let a scanner confirm on the
@@ -42,20 +48,7 @@ export default defineEventHandler(async (event) => {
     return { ok: true };
   }
 
-  // An upsert: an existing contact (from a password reset, say) is updated in
-  // place, and a returning subscriber who had unsubscribed is opted back in,
-  // which is what following a fresh confirmation link asks for.
-  await plunk(event, "/contacts", {
-    method: "POST",
-    body: {
-      email: body.email,
-      subscribed: true,
-      data: {
-        weeklyReport: true,
-        weeklyReportConfirmedAt: new Date().toISOString(),
-      },
-    },
-  });
+  await setWeeklyReportSubscription(event, body.email, true);
 
   return { ok: true };
 });
