@@ -116,17 +116,33 @@ onMounted(() => {
     const raw = localStorage.getItem(DRAFT_KEY);
     if (raw) {
       const saved = JSON.parse(raw) as Draft;
-      // Drafts from before the Stats section, or from before it was split
-      // into totals and the week (no `week` key): both halves, on.
-      if (
-        saved.issue.stats === undefined ||
-        (saved.issue.stats && !("week" in saved.issue.stats))
-      )
-        saved.issue.stats = computeReportStats(
+      const stats = saved.issue.stats;
+      const fresh = () =>
+        computeReportStats(
           entries.value,
           saved.issue.weekStart,
           saved.issue.weekEnd,
         );
+      // Drafts from before the Stats section, or from before it was split
+      // into totals and the week (no `week` key): both halves, on.
+      if (stats === undefined || (stats && !("week" in stats)))
+        saved.issue.stats = fresh();
+      // Drafts from before new places were linked kept them as bare names:
+      // worked out again, keeping whichever halves were on.
+      else if (
+        stats?.week &&
+        [
+          stats.week.newCountries,
+          stats.week.newStates,
+          stats.week.newCities,
+        ].some((list) => list.some((p) => typeof p === "string"))
+      ) {
+        const all = fresh();
+        saved.issue.stats = {
+          totals: stats.totals ? all.totals : null,
+          week: all.week,
+        };
+      }
       draft.value = saved;
     }
   } catch {
@@ -474,7 +490,8 @@ async function sendToSubscribers() {
 
 /* Sent issues are kept in D1, one per week, to show again later. Sending
    saves one; "Add to archive" saves the draft by hand, for an issue sent
-   before the archive existed or a correction to one already in it. */
+   before the archive existed or one whose save failed. Once the week is in,
+   the button gives way to a grey "Archived". */
 
 interface ArchivedIssue {
   weekStart: string;
@@ -502,22 +519,22 @@ const archivedThisWeek = computed(
     archived.value?.find((a) => a.weekStart === issue.value.weekStart) ?? null,
 );
 
-/** "Sent 22 Nov 2026", on the Archive's clock (the column is UTC). */
-const archiveNote = computed(() => {
-  if (!archived.value) return "";
+/** "Archived"'s tooltip: when, on the Archive's clock (the column is UTC). */
+const archiveTitle = computed(() => {
   const a = archivedThisWeek.value;
-  if (!a) return "This week isn't in the archive yet. Sending adds it.";
+  if (!a) return "";
   const sent = formatDayMonthYear(submittedDay(a.sentAt));
   const updated = formatDayMonthYear(submittedDay(a.updatedAt));
-  return `In the archive: sent ${sent}${updated !== sent ? `, updated ${updated}` : ""}.`;
+  return `Sent ${sent}${updated !== sent ? `, updated ${updated}` : ""}`;
 });
 
 async function addToArchive() {
-  const a = archivedThisWeek.value;
-  const question = a
-    ? `Replace the archived issue for this week with this draft?`
-    : `Add “${issue.value.subject}” to the archive as a sent issue? Only do this for an issue that has gone out.`;
-  if (!window.confirm(question)) return;
+  if (
+    !window.confirm(
+      `Add “${issue.value.subject}” to the archive as a sent issue? Only do this for an issue that has gone out.`,
+    )
+  )
+    return;
   busy.value = "archive";
   status.value = null;
   try {
@@ -907,20 +924,20 @@ async function addToArchive() {
             </button>
           </div>
           <div v-if="archived" class="nl-foot-row nl-archive">
-            <span class="settings-note">{{ archiveNote }}</span>
+            <span
+              v-if="archivedThisWeek"
+              class="nl-archived"
+              :title="archiveTitle"
+              >Archived</span
+            >
             <button
+              v-else
               type="button"
               class="link-btn"
               :disabled="!!busy"
               @click="addToArchive"
             >
-              {{
-                busy === "archive"
-                  ? "Saving…"
-                  : archivedThisWeek
-                    ? "Update archive"
-                    : "Add to archive"
-              }}
+              {{ busy === "archive" ? "Saving…" : "Add to archive" }}
             </button>
           </div>
         </footer>
@@ -1112,8 +1129,14 @@ async function addToArchive() {
   gap: 8px;
 }
 .nl-archive {
-  justify-content: space-between;
-  align-items: baseline;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+}
+/* Grey and small like the composer's notes: a status, not a control. */
+.nl-archived {
+  font-size: 11px;
+  color: #999;
 }
 .nl-archive .link-btn {
   flex: 0 0 auto;

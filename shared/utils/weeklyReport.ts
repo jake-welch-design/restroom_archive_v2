@@ -55,12 +55,19 @@ export interface ReportTotals {
   cities: number;
 }
 
+/** A place new to the archive, and the restroom that brought it in. */
+export interface ReportPlace {
+  name: string;
+  /** The first published entry there, which the place's chip links to. */
+  slug: string;
+}
+
 export interface ReportWeekStats {
   /** The week's most prolific submitters: more than one on a tie. */
   topArchivists: { name: string; count: number }[];
-  newCountries: string[];
-  newStates: string[];
-  newCities: string[];
+  newCountries: ReportPlace[];
+  newStates: ReportPlace[];
+  newCities: ReportPlace[];
 }
 
 /** Either half can be left out of an issue on its own; null is left out. */
@@ -220,14 +227,22 @@ export function computeReportStats(
   const distinct = (key: (e: StatsEntry) => string | null | undefined) =>
     new Set(published.map(key).filter(Boolean)).size;
 
-  /** Each key's first entry, in order of first appearance. */
-  const firsts = (key: (e: StatsEntry) => string | null) => {
+  /**
+   * The keys first seen this week, in order of first appearance, each with
+   * the entry that brought it in.
+   */
+  const firsts = (
+    key: (e: StatsEntry) => string | null,
+    label: (k: string) => string = (k) => k,
+  ): ReportPlace[] => {
     const seen = new Map<string, StatsEntry>();
     for (const e of published) {
       const k = key(e);
       if (k && !seen.has(k)) seen.set(k, e);
     }
-    return [...seen].filter(([, e]) => inWeek(e)).map(([k]) => k);
+    return [...seen]
+      .filter(([, e]) => inWeek(e))
+      .map(([k, e]) => ({ name: label(k), slug: e.slug }));
   };
 
   const stateName = (e: StatsEntry) => {
@@ -270,9 +285,12 @@ export function computeReportStats(
       topArchivists: best
         ? [...counts.values()].filter((c) => c.count === best)
         : [],
-      newCountries: firsts((e) => e.country).map((c) => countryName(c) ?? c),
+      newCountries: firsts(
+        (e) => e.country,
+        (c) => countryName(c) ?? c,
+      ),
       newStates: firsts(stateName),
-      newCities: firsts((e) => e.location).map(cityLabel),
+      newCities: firsts((e) => e.location, cityLabel),
     },
   };
 }
@@ -391,7 +409,11 @@ function button(label: string, href: string, full = false): string {
   const link = full
     ? "display:block;padding:16px 12px;text-align:center;"
     : "display:inline-block;padding:16px 20px;";
-  return `<table role="presentation"${table} cellpadding="0" cellspacing="0" border="0"><tr><td bgcolor="${INK}"${cell} class="btn" style="background:${INK};border-radius:3px;"><a href="${escapeHtml(href)}" class="btn-text" style="${link}font-family:${FONT};font-size:14px;line-height:14px;color:#ffffff;text-decoration:none;white-space:nowrap;">${escapeHtml(label)}</a></td></tr></table>`;
+  // The link carries the fill as well as the cell: dark mode recolours both
+  // in one rule, so a client can't apply the text colour without the fill.
+  // iPhone Mail did exactly that to the cell (black text on a black button).
+  // The cell's fill stays for Outlook, which ignores a link's padding.
+  return `<table role="presentation"${table} cellpadding="0" cellspacing="0" border="0"><tr><td bgcolor="${INK}"${cell} class="btn" style="background:${INK};border-radius:3px;"><a href="${escapeHtml(href)}" class="btn-text" style="${link}background:${INK};border-radius:3px;font-family:${FONT};font-size:14px;line-height:14px;color:#ffffff;text-decoration:none;white-space:nowrap;">${escapeHtml(label)}</a></td></tr></table>`;
 }
 
 /**
@@ -446,8 +468,8 @@ function pairs(cells: string[]): string {
  * two by two. The week's firsts are label and value rows, and a row with
  * nothing to report is left out rather than printed empty.
  */
-function renderStats(s: ReportStats): string {
-  const week = s.week ? renderWeek(s.week) : "";
+function renderStats(s: ReportStats, siteUrl: string): string {
+  const week = s.week ? renderWeek(s.week, siteUrl) : "";
   return [
     s.totals ? kicker("Stats") + renderTotals(s.totals) : "",
     // The week's rows carry no heading of their own, so without the totals
@@ -482,40 +504,56 @@ function renderTotals(t: ReportTotals): string {
   );
 }
 
-/** The week's rows; a week with nothing new renders nothing at all. */
-function renderWeek(s: ReportWeekStats): string {
-  const rows = [
-    [
-      s.topArchivists.length > 1
-        ? "Archivists of the week"
-        : "Archivist of the week",
-      s.topArchivists
-        .map(
-          (a) => `${a.name} (${a.count} ${a.count === 1 ? "scan" : "scans"})`,
-        )
-        .join(" · "),
-    ],
-    [
-      s.newCountries.length > 1 ? "New countries" : "New country",
-      s.newCountries.join(" · "),
-    ],
-    [
-      s.newStates.length > 1 ? "New U.S. states" : "New U.S. state",
-      s.newStates.join(" · "),
-    ],
-    [
-      s.newCities.length > 1 ? "New cities" : "New city",
-      s.newCities.join(" · "),
-    ],
-  ].filter(([, v]) => v);
-  return rows.length
-    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${rows
-        .map(
-          ([label, value], i) =>
-            `<tr><td width="176" valign="top" class="muted" style="${LABEL}width:176px;padding:${i ? 4 : 0}px 16px 0 0;">${label}</td><td valign="top" class="ink" style="${LINE}padding-top:${i ? 4 : 0}px;">${escapeHtml(value)}</td></tr>`,
-        )
-        .join("")}</table>`
-    : "";
+/**
+ * A place as a chip, drawn like the catalog's tags (DescriptorChips.vue):
+ * outlined, slightly rounded, 12px, and linked to the restroom that brought
+ * the place into the archive. Outlook on Windows ignores the padding and the
+ * corners and shows outlined text, which still reads.
+ */
+function chip(place: ReportPlace, siteUrl: string): string {
+  const href = `${siteUrl}/r/${encodeURIComponent(place.slug)}`;
+  return `<a href="${escapeHtml(href)}" class="chip" style="display:inline-block;font-family:${FONT};font-size:12px;line-height:15px;color:${INK};text-decoration:none;border:1px solid ${INK};border-radius:3px;padding:3px 8px;margin:6px 4px 0 0;white-space:nowrap;">${escapeHtml(place.name)}</a>`;
+}
+
+/**
+ * The week's items, stacked like the totals: a grey label with its value
+ * under it. The archivist(s) as text with the scan count in grey, places as
+ * chips. A week with nothing new renders nothing at all.
+ */
+function renderWeek(s: ReportWeekStats, siteUrl: string): string {
+  const groups: string[] = [];
+  const group = (label: string, body: string) =>
+    groups.push(`<div style="${LABEL}" class="muted">${label}</div>${body}`);
+
+  const top = s.topArchivists;
+  if (top.length) {
+    const names = top.map((a) => escapeHtml(a.name));
+    const who =
+      names.length > 1
+        ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`
+        : names[0];
+    const n = top[0].count;
+    const count = `${n} ${n === 1 ? "scan" : "scans"}${top.length > 1 ? " each" : ""}`;
+    group(
+      top.length > 1 ? "Archivists of the week" : "Archivist of the week",
+      `<div style="${LINE}padding-top:2px;">${who} <span class="muted" style="color:${MUTED};">· ${count}</span></div>`,
+    );
+  }
+
+  const places = (one: string, many: string, list: ReportPlace[]) => {
+    if (list.length)
+      group(
+        list.length > 1 ? many : one,
+        `<div>${list.map((p) => chip(p, siteUrl)).join("")}</div>`,
+      );
+  };
+  places("New country", "New countries", s.newCountries);
+  places("New U.S. state", "New U.S. states", s.newStates);
+  places("New city", "New cities", s.newCities);
+
+  return groups
+    .map((g, i) => (i ? `<div style="padding-top:16px;">${g}</div>` : g))
+    .join("");
 }
 
 /**
@@ -575,10 +613,11 @@ function shell(o: {
     .body, .box { background:#000000 !important; }
     .box { border-color:#ffffff !important; }
     .body div, .body p, .body a, .body td, .ink { color:#ffffff !important; }
+    .chip { color:#ffffff !important; border-color:#ffffff !important; }
     .muted, .body .muted { color:#999999 !important; }
     .rule { background:#ffffff !important; }
-    .btn { background:#ffffff !important; }
-    .body a.btn-text { color:#000000 !important; }
+    .btn { background:#ffffff !important; background-color:#ffffff !important; }
+    .body a.btn-text { color:#000000 !important; background:#ffffff !important; background-color:#ffffff !important; }
     .surface { background:#1a1a1a !important; }
   }
 </style>
@@ -637,7 +676,7 @@ export function renderWeeklyReport(
     );
   }
 
-  const stats = issue.stats ? renderStats(issue.stats) : "";
+  const stats = issue.stats ? renderStats(issue.stats, siteUrl) : "";
   if (stats) parts.push(section(stats));
 
   if (issue.featured) {

@@ -24,6 +24,9 @@ const Entry = z.object({
   imageUrl: image,
 });
 
+/** A place new to the archive and the entry its chip links to. */
+const Place = z.object({ name: text(200), slug: text(200) });
+
 export const Issue = z.object({
   weekStart: isoDate,
   weekEnd: isoDate,
@@ -59,9 +62,9 @@ export const Issue = z.object({
               z.object({ name: text(200), count: z.number().int().positive() }),
             )
             .max(20),
-          newCountries: z.array(text(200)).max(100),
-          newStates: z.array(text(200)).max(100),
-          newCities: z.array(text(200)).max(100),
+          newCountries: z.array(Place).max(100),
+          newStates: z.array(Place).max(100),
+          newCities: z.array(Place).max(100),
         })
         .nullable(),
     })
