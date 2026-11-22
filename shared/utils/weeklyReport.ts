@@ -447,9 +447,12 @@ function pairs(cells: string[]): string {
  * nothing to report is left out rather than printed empty.
  */
 function renderStats(s: ReportStats): string {
+  const week = s.week ? renderWeek(s.week) : "";
   return [
     s.totals ? kicker("Stats") + renderTotals(s.totals) : "",
-    s.week ? renderWeek(s.week) : "",
+    // The week's rows carry no heading of their own, so without the totals
+    // above them they take the section's.
+    week && !s.totals ? kicker("Stats") + week : week,
   ]
     .filter(Boolean)
     .map((part, i) =>
@@ -483,7 +486,9 @@ function renderTotals(t: ReportTotals): string {
 function renderWeek(s: ReportWeekStats): string {
   const rows = [
     [
-      s.topArchivists.length > 1 ? "Top Archivists" : "Top Archivist",
+      s.topArchivists.length > 1
+        ? "Archivists of the week"
+        : "Archivist of the week",
       s.topArchivists
         .map(
           (a) => `${a.name} (${a.count} ${a.count === 1 ? "scan" : "scans"})`,
@@ -504,10 +509,10 @@ function renderWeek(s: ReportWeekStats): string {
     ],
   ].filter(([, v]) => v);
   return rows.length
-    ? `${kicker("This week")}<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${rows
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${rows
         .map(
           ([label, value], i) =>
-            `<tr><td width="140" valign="top" class="muted" style="${LABEL}width:140px;padding:${i ? 4 : 0}px 16px 0 0;">${label}</td><td valign="top" class="ink" style="${LINE}padding-top:${i ? 4 : 0}px;">${escapeHtml(value)}</td></tr>`,
+            `<tr><td width="176" valign="top" class="muted" style="${LABEL}width:176px;padding:${i ? 4 : 0}px 16px 0 0;">${label}</td><td valign="top" class="ink" style="${LINE}padding-top:${i ? 4 : 0}px;">${escapeHtml(value)}</td></tr>`,
         )
         .join("")}</table>`
     : "";

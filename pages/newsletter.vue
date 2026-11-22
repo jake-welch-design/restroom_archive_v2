@@ -695,8 +695,8 @@ async function addToArchive() {
                 <span>Weekly stats</span>
               </label>
               <span class="settings-note"
-                >The week's top archivist and its new countries, U.S. states and
-                cities. Rows with nothing new are left out.</span
+                >The archivist of the week and the week's new countries, U.S.
+                states and cities. Rows with nothing new are left out.</span
               >
             </div>
           </section>
