@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import Fuse from "fuse.js";
 import type { CatalogRow } from "~/types/restroom";
+import { createCatalogSearch } from "~~/shared/utils/catalogSearch";
 import { formatDayMonthYear } from "~~/shared/utils/formatDate";
 import { groupEntries } from "~~/shared/utils/versions";
 
@@ -69,26 +69,24 @@ const scanRows = computed<CatalogRow[]>(() => {
   return out;
 });
 
-const fuse = computed(() => {
-  return new Fuse(scanRows.value, {
-    keys: ["name", "location", "date", "isoDate"],
-    threshold: 0.3,
-  });
-});
+const sortedRows = computed<CatalogRow[]>(() =>
+  [...scanRows.value].sort((a, b) => {
+    const key = sortKey.value;
+    const dir = sortDir.value === "asc" ? 1 : -1;
+    const av = a[key] ?? "";
+    const bv = b[key] ?? "";
+    if (av < bv) return -1 * dir;
+    if (av > bv) return 1 * dir;
+    return 0;
+  }),
+);
+
+// Built over the sorted rows so equally good matches keep the chosen sort.
+const catalogSearch = computed(() => createCatalogSearch(sortedRows.value));
 
 const rows = computed<CatalogRow[]>(() => {
   const q = query.value.trim();
-  const base = q
-    ? fuse.value.search(q).map((r) => r.item)
-    : [...scanRows.value].sort((a, b) => {
-        const key = sortKey.value;
-        const dir = sortDir.value === "asc" ? 1 : -1;
-        const av = a[key] ?? "";
-        const bv = b[key] ?? "";
-        if (av < bv) return -1 * dir;
-        if (av > bv) return 1 * dir;
-        return 0;
-      });
+  const base = q ? catalogSearch.value.search(q) : sortedRows.value;
   if (!activeTags.value.length) return base;
   const needles = activeTags.value.map((t) => t.toLowerCase());
   return base.filter((r) => {
