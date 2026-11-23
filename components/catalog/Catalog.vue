@@ -191,6 +191,17 @@ watch(data, maybeAutoSelect);
 const stripGeom = useStripGeom();
 const catalogEl = ref<HTMLElement | null>(null);
 const controlsEl = ref<HTMLElement | null>(null);
+const viewModeEl = ref<HTMLElement | null>(null);
+
+// On mobile the grid's column icons span the view switcher's width, the single
+// column under List and the three-column icon under Map. The switcher's width
+// follows its font, so it is measured rather than restated as a constant.
+const viewModeWidth = ref<number | null>(null);
+
+function measureViewMode() {
+  const w = viewModeEl.value?.getBoundingClientRect().width;
+  if (w) viewModeWidth.value = w;
+}
 
 function measureStrip() {
   const cat = catalogEl.value;
@@ -210,6 +221,7 @@ function measureStrip() {
   const height =
     cRect.height + (bottomEl ? bottomEl.getBoundingClientRect().height : 0);
   if (height > 0) stripGeom.value = { top, height };
+  measureViewMode();
 }
 
 let ro: ResizeObserver | null = null;
@@ -219,6 +231,7 @@ onMounted(() => {
   ro = new ResizeObserver(() => measureStrip());
   if (catalogEl.value) ro.observe(catalogEl.value);
   if (controlsEl.value) ro.observe(controlsEl.value);
+  if (viewModeEl.value) ro.observe(viewModeEl.value);
   // Web-font swap is a primary source of cross-platform drift, so re-measure once
   // fonts are ready.
   document.fonts?.ready.then(measureStrip).catch(() => {});
@@ -238,7 +251,13 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
 </script>
 
 <template>
-  <div ref="catalogEl" class="catalog">
+  <div
+    ref="catalogEl"
+    class="catalog"
+    :style="
+      viewModeWidth ? { '--view-mode-w': `${viewModeWidth}px` } : undefined
+    "
+  >
     <CatalogHeader />
 
     <div ref="controlsEl" class="controls">
@@ -300,7 +319,7 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
         </button>
       </div>
 
-      <div class="view-mode">
+      <div ref="viewModeEl" class="view-mode">
         <button
           class="control-btn"
           :class="{ active: viewMode === 'list' }"
@@ -623,7 +642,8 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
   margin-left: auto;
   margin-right: -8px;
   display: flex;
-  gap: 8px;
+  /* One icon's width, so icons and spaces alternate evenly. */
+  gap: 11px;
 }
 
 /* Bottom-aligned with the sort labels: the strip aligns on the text baseline,
@@ -651,8 +671,9 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
 .cols-btn svg {
   display: inline-block;
   vertical-align: baseline;
-  width: 11px;
-  height: 11px;
+  --cols-icon: 11px;
+  width: var(--cols-icon);
+  height: var(--cols-icon);
 }
 
 .cols-btn.active,
@@ -874,13 +895,13 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
   /* 12px sub-header padding against the controls row's 8px. */
   .grid-cols {
     margin-right: -4px;
+    gap: 9px;
   }
   .cols-btn {
     font-size: 12px;
   }
   .cols-btn svg {
-    width: 9px;
-    height: 9px;
+    --cols-icon: 9px;
   }
   /* The grid drops to two columns at this width while no count is chosen. */
   .grid-cols.auto .cols-3 {
@@ -920,6 +941,18 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
   }
   .filter-panel {
     overflow: auto;
+  }
+  /* The column icons span the view switcher above them: single column under
+     List's left edge, three columns under Map's right, two between. The gap
+     stays as the minimum spacing until the width has been measured. */
+  .grid-cols {
+    width: var(--view-mode-w, auto);
+    justify-content: space-between;
+  }
+  /* 125% of the size the panel's width would give them, easier to tap. */
+  .cols-btn svg {
+    width: calc(var(--cols-icon) * 1.25);
+    height: calc(var(--cols-icon) * 1.25);
   }
 }
 </style>
