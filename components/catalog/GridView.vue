@@ -92,7 +92,7 @@ function onTileClick(slug: string, e: MouseEvent) {
   <div
     ref="gridWrapRef"
     class="grid-wrap thin-scroll"
-    :class="{ 'list-sized': listSized }"
+    :class="{ 'list-sized': listSized, single: columns === 1 }"
   >
     <div class="grid" :style="gridStyle">
       <component
@@ -309,6 +309,18 @@ function onTileClick(slug: string, e: MouseEvent) {
 .list-sized .submitter-line {
   font-size: 12px;
 }
+/* In a single column the open tile is the panel's full width, and kept square
+   it is mostly empty white below the details. There it shrinks to fit them
+   instead. With no tile beside it, only the tiles below shift. In two and three
+   columns it stays square, so a row's tiles stay level. */
+.single .tile.selected .thumb {
+  aspect-ratio: auto;
+}
+.single .expanded {
+  height: auto;
+  overflow-y: visible;
+}
+
 @container panel (max-width: 560px) {
   .list-sized .tile-info,
   .list-sized .desc-text {

@@ -623,8 +623,7 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
   margin-left: auto;
   margin-right: -8px;
   display: flex;
-  /* The view switcher's spacing (`.view-mode`), including its narrow step. */
-  gap: 20px;
+  gap: 8px;
 }
 
 /* Bottom-aligned with the sort labels: the strip aligns on the text baseline,
@@ -875,7 +874,6 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
   /* 12px sub-header padding against the controls row's 8px. */
   .grid-cols {
     margin-right: -4px;
-    gap: 12px;
   }
   .cols-btn {
     font-size: 12px;
