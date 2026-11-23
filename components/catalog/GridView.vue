@@ -221,16 +221,40 @@ function onTileClick(slug: string, e: MouseEvent) {
   text-decoration: none;
   font: inherit;
 }
-.tile:hover:not(.selected) .thumb img,
-.tile:hover:not(.selected) .thumb-placeholder {
-  opacity: 0.8;
-}
 .thumb {
+  /* How far the hover rings reach in from the tile's edge. The thumbnail and
+     its text sit inside that inset, so they shrink to make room for the rings
+     rather than being covered by them, while the tile's own size never
+     changes. */
+  --ring: 0px;
   width: 100%;
   aspect-ratio: 1;
+  box-sizing: border-box;
+  padding: var(--ring);
   background: #f0f0f0;
   overflow: hidden;
   position: relative;
+}
+/* Hover: a 1px black line around the edge with 2px of white inside it. The line
+   is an inset shadow, which paints under the content, and the white is the
+   tile's own background, so both show only in the padding the thumbnail gives
+   up. Gated
+   on a real pointer so a tap doesn't leave a tile ringed, and shown on keyboard
+   focus too, as the tile is a link. */
+@media (hover: hover) {
+  .tile:hover:not(.selected) .thumb {
+    --ring: 3px;
+    background: #fff;
+    box-shadow: inset 0 0 0 1px #000;
+  }
+}
+.tile:focus-visible {
+  outline: none;
+}
+.tile:focus-visible .thumb {
+  --ring: 3px;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px #000;
 }
 .thumb img {
   width: 100%;
@@ -245,9 +269,9 @@ function onTileClick(slug: string, e: MouseEvent) {
 }
 .tile-info {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
+  top: var(--ring);
+  left: var(--ring);
+  right: var(--ring);
   padding: 10px 12px 28px;
   display: flex;
   flex-direction: column;
