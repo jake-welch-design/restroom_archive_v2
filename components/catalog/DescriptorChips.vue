@@ -36,7 +36,7 @@ const { isTagActive } = useTagFilter();
       :class="{ active: isTagActive(tag, activeTags) }"
       @click.stop="$emit('toggleTag', tag)"
     >
-      {{ tag }}
+      <SearchHighlight :text="tag" />
     </button>
   </div>
 </template>

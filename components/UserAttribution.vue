@@ -33,5 +33,7 @@ const label = computed(() => {
 </script>
 
 <template>
-  <span class="user-attribution">{{ prefix }}{{ label }}</span>
+  <span class="user-attribution"
+    >{{ prefix }}<SearchHighlight :text="label"
+  /></span>
 </template>

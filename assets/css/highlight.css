@@ -1,0 +1,12 @@
+/* Selected text: the archive's black on white, inverted. */
+::selection {
+  color: #fff;
+  background: #000;
+}
+
+/* What the catalog search matched in a listing (SearchHighlight). Colour
+   only, no padding, so marking a word never moves the text around it. */
+.search-hit {
+  color: #fff;
+  background: #ff0000;
+}

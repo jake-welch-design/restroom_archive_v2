@@ -88,7 +88,9 @@ function onTileClick(slug: string, e: MouseEvent) {
           <template v-if="r.slug === selectedSlug">
             <div class="expanded thin-scroll" @click.stop>
               <div class="tile-info selected">
-                <span class="tile-name">{{ r.name }}</span>
+                <span class="tile-name"
+                  ><SearchHighlight :text="r.name"
+                /></span>
                 <ArchiveDate
                   class="tile-date"
                   :scans="r.scans"
@@ -96,11 +98,17 @@ function onTileClick(slug: string, e: MouseEvent) {
                   :iso-date="r.isoDate"
                   @select="emit('select', $event)"
                 />
-                <span class="tile-location">{{ r.location }}</span>
+                <span class="tile-location"
+                  ><SearchHighlight
+                    :text="r.location"
+                    kind="location"
+                    :country="r.country"
+                /></span>
               </div>
 
               <p class="desc-text">
-                {{ r.description ?? "No description yet." }}
+                <SearchHighlight v-if="r.description" :text="r.description" />
+                <template v-else>No description yet.</template>
               </p>
 
               <UserAttribution
@@ -130,9 +138,18 @@ function onTileClick(slug: string, e: MouseEvent) {
             />
             <div v-else class="thumb-placeholder" />
             <div class="tile-info">
-              <span class="tile-name">{{ r.name }}</span>
-              <span class="tile-date">{{ formatDayMonthYear(r.isoDate) }}</span>
-              <span class="tile-location">{{ r.location }}</span>
+              <span class="tile-name"><SearchHighlight :text="r.name" /></span>
+              <span class="tile-date"
+                ><SearchHighlight
+                  :text="formatDayMonthYear(r.isoDate)"
+                  kind="date"
+              /></span>
+              <span class="tile-location"
+                ><SearchHighlight
+                  :text="r.location"
+                  kind="location"
+                  :country="r.country"
+              /></span>
             </div>
           </template>
         </div>

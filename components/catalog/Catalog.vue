@@ -84,9 +84,16 @@ const sortedRows = computed<CatalogRow[]>(() =>
 // Built over the sorted rows so equally good matches keep the chosen sort.
 const catalogSearch = computed(() => createCatalogSearch(sortedRows.value));
 
-const rows = computed<CatalogRow[]>(() => {
+const searchResult = computed(() => {
   const q = query.value.trim();
-  const base = q ? catalogSearch.value.search(q) : sortedRows.value;
+  return q ? catalogSearch.value.search(q) : null;
+});
+
+// For the listings to mark what matched (see SearchHighlight).
+provideSearchTerms(computed(() => searchResult.value?.terms ?? []));
+
+const rows = computed<CatalogRow[]>(() => {
+  const base = searchResult.value?.rows ?? sortedRows.value;
   if (!activeTags.value.length) return base;
   const needles = activeTags.value.map((t) => t.toLowerCase());
   return base.filter((r) => {

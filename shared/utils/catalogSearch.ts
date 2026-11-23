@@ -13,6 +13,9 @@
  * parsing the display string. The date is indexed as shown, with the month
  * spelled out, and as ISO.
  *
+ * The same rules mark what matched in the listing as it is shown (see
+ * markMatches), so the highlight never disagrees with why a row is there.
+ *
  * Fuse.js did this before, over the name, the location and the date only, with
  * its default penalty on matches far into a field, which is why a description
  * was out of reach even had it been a key.
@@ -66,20 +69,54 @@ const COUNTRY_ALIASES: Record<string, readonly string[]> = {
   KR: ["Korea"],
 };
 
+/** One word of a text, normalised, with where it sits in the original. */
+interface Token {
+  norm: string;
+  start: number;
+  /** `ends[k]`: the original offset just past the k-th normalised character. */
+  ends: number[];
+}
+
 /**
  * Lowercased, accents and apostrophes dropped, split at everything else:
  * "McDonald's, Malmö" is `mcdonalds`, `malmo`. Queries go through the same
  * function, so typing either spelling finds both.
+ *
+ * Done a character at a time rather than over the whole string so that each
+ * word keeps its offsets in the original, which is what lets a highlight land
+ * on "Malmö" for a query of "malm".
  */
+function tokenize(text: string | null | undefined): Token[] {
+  const out: Token[] = [];
+  if (!text) return out;
+  let cur: Token | null = null;
+  let at = 0;
+  for (const ch of text) {
+    const next = at + ch.length;
+    const base = ch.normalize("NFD").replace(/\p{M}/gu, "");
+    if (!base) {
+      // A combining mark on its own belongs to the letter before it.
+      if (cur) cur.ends[cur.ends.length - 1] = next;
+    } else if (ch === "'" || ch === "’") {
+      // Dropped, without ending the word: "joe's" is `joes`.
+    } else if (/^[\p{L}\p{N}]+$/u.test(base)) {
+      cur ??= { norm: "", start: at, ends: [] };
+      for (const c of base.toLowerCase()) {
+        cur.norm += c;
+        cur.ends.push(next);
+      }
+    } else if (cur) {
+      out.push(cur);
+      cur = null;
+    }
+    at = next;
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+
 function words(text: string | null | undefined): string[] {
-  if (!text) return [];
-  return text
-    .normalize("NFD")
-    .replace(/\p{M}/gu, "")
-    .toLowerCase()
-    .replace(/['’]/g, "")
-    .split(/[^\p{L}\p{N}]+/u)
-    .filter(Boolean);
+  return tokenize(text).map((t) => t.norm);
 }
 
 /** Full month name, for "march" as well as the "Mar" the catalog shows. */
@@ -92,19 +129,31 @@ function monthName(isoDate: string): string {
   });
 }
 
+/**
+ * The names behind a location's codes: the country's, and the state's or
+ * province's where the trailing token is one.
+ */
+function placeNames(location: string, country: string | null) {
+  if (!country) return { country: [], region: null };
+  // "Austin, TX" -> Texas. Only where the trailing token is a subdivision by
+  // construction (see composeLocation), so "CA" is California on a US row and
+  // nothing on any other.
+  const sub = subdivisionFromLocation(location);
+  const region = subdivisionsFor(country)?.find((r) => r.code === sub);
+  return {
+    country: [
+      country,
+      countryName(country) ?? "",
+      ...(COUNTRY_ALIASES[country] ?? []),
+    ],
+    region: region?.name ?? null,
+  };
+}
+
 /** Everything a row can be found by, as words per field. */
 function indexRow(row: Searchable): Record<Field, string[]> {
-  const place = [row.location];
-  if (row.country) {
-    place.push(row.country, countryName(row.country) ?? "");
-    place.push(...(COUNTRY_ALIASES[row.country] ?? []));
-    // "Austin, TX" -> Texas. Only where the trailing token is a subdivision by
-    // construction (see composeLocation), so "CA" is California on a US row
-    // and nothing on any other.
-    const sub = subdivisionFromLocation(row.location);
-    const region = subdivisionsFor(row.country)?.find((r) => r.code === sub);
-    if (region) place.push(region.name);
-  }
+  const names = placeNames(row.location, row.country);
+  const place = [row.location, ...names.country, names.region ?? ""];
 
   return {
     name: words(row.name),
@@ -167,9 +216,25 @@ function wordMatch(q: string, w: string): number {
   return 0;
 }
 
-export interface CatalogSearch<T> {
+/** A word of the query, as the catalog matched it. */
+export interface SearchTerm {
+  text: string;
+  /**
+   * Found nowhere in the catalog as typed, so matched on near misses instead.
+   * A highlight has to know, or "brooklin" would light up nothing in the
+   * Brooklyn rows it found.
+   */
+  typo: boolean;
+}
+
+export interface SearchResult<T> {
   /** Rows matching every word of the query, best first. */
-  search(query: string): T[];
+  rows: T[];
+  terms: SearchTerm[];
+}
+
+export interface CatalogSearch<T> {
+  search(query: string): SearchResult<T>;
 }
 
 export function createCatalogSearch<T extends Searchable>(
@@ -181,7 +246,7 @@ export function createCatalogSearch<T extends Searchable>(
   return {
     search(query) {
       const terms = [...new Set(words(query))];
-      if (!terms.length) return [...rows];
+      if (!terms.length) return { rows: [...rows], terms: [] };
 
       // Each row's best score for each term. How well a word matched outranks
       // where it matched: an exact word in a description beats a typo in a
@@ -221,7 +286,100 @@ export function createCatalogSearch<T extends Searchable>(
 
       // Ties keep the order the rows came in, which is the catalog's sort.
       hits.sort((a, b) => b.score - a.score || a.at - b.at);
-      return hits.map((h) => h.row);
+      return {
+        rows: hits.map((h) => h.row),
+        terms: terms.map((text, t) => ({ text, typo: floor[t] === 10 })),
+      };
     },
   };
 }
+
+/** A run of displayed text, and whether it is part of a match. */
+export interface Segment {
+  text: string;
+  hit: boolean;
+}
+
+/**
+ * Displayed words that stand for others, keyed by the displayed word: the "ES"
+ * of "Madrid, ES" for Spain, the "Mar" of a date for March.
+ */
+export type Aliases = Readonly<Record<string, readonly string[]>>;
+
+/** Whether `term` finds `word` by the same rule the search used. */
+function termFinds(term: SearchTerm, word: string): boolean {
+  return wordMatch(term.text, word) >= (term.typo ? 1 : 2);
+}
+
+/**
+ * Splits displayed text into the parts the query matched and the rest.
+ *
+ * What is marked is what was typed: "barc" marks the "Barc" of Barcelona, not
+ * the whole word. A word matched as a whole (a typo, or an alias) is marked
+ * whole, since there is no typed part of it to pick out.
+ */
+export function markMatches(
+  text: string,
+  terms: readonly SearchTerm[],
+  aliases?: Aliases,
+): Segment[] {
+  if (!text || !terms.length) return [{ text, hit: false }];
+
+  const ranges: [number, number][] = [];
+  for (const tok of tokenize(text)) {
+    let len = 0;
+    for (const t of terms) {
+      if (tok.norm.startsWith(t.text)) len = Math.max(len, t.text.length);
+      else if (t.typo && termFinds(t, tok.norm)) len = tok.norm.length;
+    }
+    const stands = aliases?.[tok.norm];
+    if (stands?.some((w) => terms.some((t) => termFinds(t, w))))
+      len = tok.norm.length;
+    if (len) ranges.push([tok.start, tok.ends[len - 1]!]);
+  }
+  if (!ranges.length) return [{ text, hit: false }];
+
+  const out: Segment[] = [];
+  let at = 0;
+  for (const [from, to] of ranges) {
+    if (from > at) out.push({ text: text.slice(at, from), hit: false });
+    out.push({ text: text.slice(from, to), hit: true });
+    at = to;
+  }
+  if (at < text.length) out.push({ text: text.slice(at), hit: false });
+  return out;
+}
+
+/**
+ * A location's trailing code, standing for the place it abbreviates. "TX" on a
+ * US row stands for Texas; "ES" for Spain. A US or Canadian row's trailing
+ * token is its state or province, so its country names have nothing displayed
+ * to mark.
+ */
+export function locationAliases(location: string, country: string | null) {
+  const code = subdivisionFromLocation(location);
+  const names = placeNames(location, country);
+  const stands = names.region
+    ? [names.region]
+    : code === country
+      ? names.country
+      : [];
+  return stands.length
+    ? { [code.toLowerCase()]: words(stands.join(" ")) }
+    : undefined;
+}
+
+/**
+ * A date's month as shown ("Mar") standing for its full name and its number,
+ * which is how "march" and "2025-03" find it. Built with the same formatter as
+ * the date it marks, so whatever this runtime abbreviates September to is the
+ * key.
+ */
+export const DATE_ALIASES: Aliases = Object.fromEntries(
+  Array.from({ length: 12 }, (_, m) => {
+    const day = new Date(Date.UTC(2000, m, 1));
+    const name = (month: "short" | "long") =>
+      day.toLocaleString("en-US", { month, timeZone: "UTC" }).toLowerCase();
+    return [name("short"), [name("long"), String(m + 1).padStart(2, "0")]];
+  }),
+);

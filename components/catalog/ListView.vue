@@ -154,11 +154,17 @@ function onNameClick(e: MouseEvent) {
       >
         <div class="row-main">
           <div class="col-name">
-            <a class="name-link" :href="`/r/${r.slug}`" @click="onNameClick">{{
-              r.name
-            }}</a>
+            <a class="name-link" :href="`/r/${r.slug}`" @click="onNameClick"
+              ><SearchHighlight :text="r.name"
+            /></a>
           </div>
-          <div class="col-loc">{{ r.location }}</div>
+          <div class="col-loc">
+            <SearchHighlight
+              :text="r.location"
+              kind="location"
+              :country="r.country"
+            />
+          </div>
           <div class="col-date">
             <!-- A combined entry's date is a picker for its other scans. -->
             <ArchiveDate
@@ -196,7 +202,8 @@ function onNameClick(e: MouseEvent) {
           <!-- Read view -->
           <div v-else class="description">
             <p class="desc-text">
-              {{ r.description ?? "No description yet." }}
+              <SearchHighlight v-if="r.description" :text="r.description" />
+              <template v-else>No description yet.</template>
             </p>
 
             <UserAttribution

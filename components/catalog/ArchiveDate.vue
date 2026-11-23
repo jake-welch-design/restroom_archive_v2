@@ -215,7 +215,9 @@ onBeforeUnmount(() => {
       @click="open ? close() : openMenu()"
       @keydown="onTriggerKeydown"
     >
-      <span class="date-text">{{ formatDayMonthYear(isoDate) }}</span>
+      <span class="date-text"
+        ><SearchHighlight :text="formatDayMonthYear(isoDate)" kind="date"
+      /></span>
       <svg
         class="caret"
         viewBox="0 0 9 6"
@@ -234,7 +236,9 @@ onBeforeUnmount(() => {
 
     <template v-else>
       <span class="label" aria-hidden="true">
-        <span class="date-text">{{ formatDayMonthYear(isoDate) }}</span>
+        <span class="date-text"
+          ><SearchHighlight :text="formatDayMonthYear(isoDate)" kind="date"
+        /></span>
         <svg class="caret" viewBox="0 0 9 6" width="9" height="6">
           <path
             d="M1 1l3.5 3.5L8 1"
@@ -284,7 +288,9 @@ onBeforeUnmount(() => {
       </ul>
     </Teleport>
   </span>
-  <span v-else>{{ formatDayMonthYear(isoDate) }}</span>
+  <span v-else
+    ><SearchHighlight :text="formatDayMonthYear(isoDate)" kind="date"
+  /></span>
 </template>
 
 <style scoped>

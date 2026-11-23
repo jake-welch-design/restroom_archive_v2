@@ -30,9 +30,16 @@ const emit = defineEmits<{
   <div class="map-panel thin-scroll">
     <div class="panel-header">
       <div class="panel-info">
-        <span class="panel-name">{{ restroom.name }}</span>
+        <span class="panel-name"
+          ><SearchHighlight :text="restroom.name"
+        /></span>
         <span class="panel-meta">
-          <span>{{ restroom.location }}</span>
+          <span
+            ><SearchHighlight
+              :text="restroom.location"
+              kind="location"
+              :country="restroom.country"
+          /></span>
           <span class="panel-meta-sep"> · </span>
           <ArchiveDate
             :scans="scans ?? []"
@@ -49,7 +56,11 @@ const emit = defineEmits<{
 
     <div class="description">
       <p class="desc-text">
-        {{ restroom.description ?? "No description yet." }}
+        <SearchHighlight
+          v-if="restroom.description"
+          :text="restroom.description"
+        />
+        <template v-else>No description yet.</template>
       </p>
 
       <UserAttribution

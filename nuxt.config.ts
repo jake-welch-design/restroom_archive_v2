@@ -11,6 +11,7 @@ export default defineNuxtConfig({
     "~/assets/css/forms.css",
     "~/assets/css/tabs.css",
     "~/assets/css/account.css",
+    "~/assets/css/highlight.css",
   ],
 
   nitro: {
