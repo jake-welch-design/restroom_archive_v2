@@ -18,8 +18,16 @@ const props = defineProps<{
   selectedSlug: string | null;
   activeTags: string[];
   /** The viewer's chosen column count; null leaves it to the panel's width. */
-  columns?: 2 | 3 | null;
+  columns?: 1 | 2 | 3 | null;
 }>();
+
+// One or two columns make tiles big enough to carry the list's type rather
+// than the grid's smaller tile type, so they take list view's sizes: the text
+// classes below, and the comfortable density of the chips and annotations.
+// Only for a chosen count; the narrow panel's automatic two columns keep the
+// tile sizes they always had.
+const listSized = computed(() => props.columns === 1 || props.columns === 2);
+const density = computed(() => (listSized.value ? "comfortable" : "compact"));
 
 // Inline, so a chosen count outranks the container query's narrow-panel step.
 const gridStyle = computed(() =>
@@ -81,7 +89,11 @@ function onTileClick(slug: string, e: MouseEvent) {
 </script>
 
 <template>
-  <div ref="gridWrapRef" class="grid-wrap thin-scroll">
+  <div
+    ref="gridWrapRef"
+    class="grid-wrap thin-scroll"
+    :class="{ 'list-sized': listSized }"
+  >
     <div class="grid" :style="gridStyle">
       <component
         :is="r.slug === selectedSlug ? 'div' : 'a'"
@@ -129,12 +141,12 @@ function onTileClick(slug: string, e: MouseEvent) {
               <DescriptorChips
                 :tags="r.descriptors ?? []"
                 :active-tags="activeTags"
-                density="compact"
+                :density="density"
                 @toggle-tag="emit('toggleTag', $event)"
               />
 
               <div class="annotations-section">
-                <AnnotationList :slug="r.slug" density="compact" />
+                <AnnotationList :slug="r.slug" :density="density" />
               </div>
             </div>
           </template>
@@ -286,5 +298,21 @@ function onTileClick(slug: string, e: MouseEvent) {
 }
 .annotations-section {
   margin-top: auto;
+}
+
+/* List view's sizes (ListView's `.row-main`, `.desc-text` and
+   `.submitter-line`), stepping down at the same 560px panel width it does. */
+.list-sized .tile-info,
+.list-sized .desc-text {
+  font-size: 14px;
+}
+.list-sized .submitter-line {
+  font-size: 12px;
+}
+@container panel (max-width: 560px) {
+  .list-sized .tile-info,
+  .list-sized .desc-text {
+    font-size: 12px;
+  }
 }
 </style>

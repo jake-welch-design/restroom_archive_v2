@@ -18,7 +18,9 @@ const query = ref("");
 const viewMode = useCookie<ViewMode>("viewMode", { default: () => "list" });
 // The grid's column count once the viewer picks one. Until then it is null and
 // the grid follows the panel's width (three, or two in a narrow panel).
-const gridCols = useCookie<2 | 3 | null>("gridCols", { default: () => null });
+const gridCols = useCookie<1 | 2 | 3 | null>("gridCols", {
+  default: () => null,
+});
 const dateFrom = ref<string>("");
 const dateTo = ref<string>("");
 const activeTags = ref<string[]>([]);
@@ -378,17 +380,18 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
         aria-label="Grid columns"
       >
         <button
-          v-for="n in [2, 3] as const"
+          v-for="n in [1, 2, 3] as const"
           :key="n"
           type="button"
           class="cols-btn"
           :class="[`cols-${n}`, { active: gridCols === n }]"
-          :aria-label="`${n} columns`"
+          :aria-label="n === 1 ? '1 column' : `${n} columns`"
           :aria-pressed="gridCols === n"
           @click="gridCols = n"
         >
           <svg viewBox="0 0 11 11" fill="currentColor" aria-hidden="true">
-            <template v-if="n === 2">
+            <rect v-if="n === 1" x="0" y="0" width="11" height="11" />
+            <template v-else-if="n === 2">
               <rect x="0" y="0" width="5" height="5" />
               <rect x="6" y="0" width="5" height="5" />
               <rect x="0" y="6" width="5" height="5" />
@@ -620,7 +623,8 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
   margin-left: auto;
   margin-right: -8px;
   display: flex;
-  gap: 8px;
+  /* The view switcher's spacing (`.view-mode`), including its narrow step. */
+  gap: 20px;
 }
 
 /* Bottom-aligned with the sort labels: the strip aligns on the text baseline,
@@ -871,6 +875,7 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
   /* 12px sub-header padding against the controls row's 8px. */
   .grid-cols {
     margin-right: -4px;
+    gap: 12px;
   }
   .cols-btn {
     font-size: 12px;
