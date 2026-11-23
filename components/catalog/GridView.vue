@@ -17,7 +17,16 @@ const props = defineProps<{
   rows: CatalogRow[];
   selectedSlug: string | null;
   activeTags: string[];
+  /** The viewer's chosen column count; null leaves it to the panel's width. */
+  columns?: 2 | 3 | null;
 }>();
+
+// Inline, so a chosen count outranks the container query's narrow-panel step.
+const gridStyle = computed(() =>
+  props.columns
+    ? { gridTemplateColumns: `repeat(${props.columns}, 1fr)` }
+    : undefined,
+);
 
 const emit = defineEmits<{
   select: [slug: string];
@@ -73,7 +82,7 @@ function onTileClick(slug: string, e: MouseEvent) {
 
 <template>
   <div ref="gridWrapRef" class="grid-wrap thin-scroll">
-    <div class="grid">
+    <div class="grid" :style="gridStyle">
       <component
         :is="r.slug === selectedSlug ? 'div' : 'a'"
         v-for="r in rows"

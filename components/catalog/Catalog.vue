@@ -16,6 +16,9 @@ const sortKey = ref<SortKey>("isoDate");
 const sortDir = ref<SortDir>("desc");
 const query = ref("");
 const viewMode = useCookie<ViewMode>("viewMode", { default: () => "list" });
+// The grid's column count once the viewer picks one. Until then it is null and
+// the grid follows the panel's width (three, or two in a narrow panel).
+const gridCols = useCookie<2 | 3 | null>("gridCols", { default: () => null });
 const dateFrom = ref<string>("");
 const dateTo = ref<string>("");
 const activeTags = ref<string[]>([]);
@@ -342,7 +345,7 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
       </div>
     </div>
 
-    <div v-if="viewMode === 'grid'" class="sub-header">
+    <div v-if="viewMode === 'grid'" class="sub-header grid-sub">
       <button
         v-for="opt in [
           { key: 'isoDate', label: 'Date' },
@@ -364,6 +367,48 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
           >▲</span
         >
       </button>
+
+      <!-- Column count. With no choice made (`auto`), CSS marks whichever count
+           the panel's width is showing, so the right icon reads as active
+           without measuring anything on the client. -->
+      <div
+        class="grid-cols"
+        :class="{ auto: !gridCols }"
+        role="group"
+        aria-label="Grid columns"
+      >
+        <button
+          v-for="n in [2, 3] as const"
+          :key="n"
+          type="button"
+          class="cols-btn"
+          :class="[`cols-${n}`, { active: gridCols === n }]"
+          :aria-label="`${n} columns`"
+          :aria-pressed="gridCols === n"
+          @click="gridCols = n"
+        >
+          <svg viewBox="0 0 11 11" fill="currentColor" aria-hidden="true">
+            <template v-if="n === 2">
+              <rect x="0" y="0" width="5" height="5" />
+              <rect x="6" y="0" width="5" height="5" />
+              <rect x="0" y="6" width="5" height="5" />
+              <rect x="6" y="6" width="5" height="5" />
+            </template>
+            <template v-else>
+              <template v-for="y in [0, 4, 8]" :key="y">
+                <rect
+                  v-for="x in [0, 4, 8]"
+                  :key="x"
+                  :x="x"
+                  :y="y"
+                  width="3"
+                  height="3"
+                />
+              </template>
+            </template>
+          </svg>
+        </button>
+      </div>
     </div>
 
     <div v-else-if="viewMode === 'map'" class="sub-header">
@@ -468,6 +513,7 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
           :rows="rows"
           :selected-slug="selectedSlug"
           :active-tags="activeTags"
+          :columns="gridCols"
           @select="select"
           @toggle-tag="toggleTag"
         />
@@ -565,6 +611,56 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
 
 .sort-arrow.desc {
   transform: rotate(180deg);
+}
+
+/* Pushed to the strip's right end. The negative margin takes back the gap
+   between the sub-header's 24px side padding and the controls row's 16px, so
+   the last icon's edge lines up with the Map button's directly above it. */
+.grid-cols {
+  margin-left: auto;
+  margin-right: -8px;
+  display: flex;
+  gap: 8px;
+}
+
+/* Bottom-aligned with the sort labels: the strip aligns on the text baseline,
+   and each icon is an inline SVG sitting on its button's own baseline, so the
+   squares' bottom edge lands where the labels' letters stand. */
+.grid-sub {
+  align-items: baseline;
+}
+
+/* The 4px padding enlarges the tap target; the matching negative margin keeps
+   it out of the layout, so the icons neither move nor grow the strip. The font
+   size matters: it gives the button the same line box as a sort label. */
+.cols-btn {
+  display: inline-block;
+  background: none;
+  border: none;
+  padding: 4px;
+  margin: -4px;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  color: #000;
+}
+
+.cols-btn svg {
+  display: inline-block;
+  vertical-align: baseline;
+  width: 11px;
+  height: 11px;
+}
+
+.cols-btn.active,
+.grid-cols.auto .cols-3 {
+  color: #595959;
+}
+
+@media (hover: hover) {
+  .cols-btn:hover {
+    color: #595959;
+  }
 }
 
 .date-field {
@@ -771,6 +867,24 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
      mounted, so a mismatch resizes the tab when switching views. */
   .sub-header {
     padding: 8px 12px;
+  }
+  /* 12px sub-header padding against the controls row's 8px. */
+  .grid-cols {
+    margin-right: -4px;
+  }
+  .cols-btn {
+    font-size: 12px;
+  }
+  .cols-btn svg {
+    width: 9px;
+    height: 9px;
+  }
+  /* The grid drops to two columns at this width while no count is chosen. */
+  .grid-cols.auto .cols-3 {
+    color: #000;
+  }
+  .grid-cols.auto .cols-2 {
+    color: #595959;
   }
   .control-btn,
   .sort-btn,
