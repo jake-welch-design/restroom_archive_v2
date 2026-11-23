@@ -732,14 +732,9 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
 
 .slide-up-enter-from,
 .slide-up-leave-to {
-  transform: translateY(100%);
-}
-
-@media (max-width: 750px) {
-  .slide-up-enter-from,
-  .slide-up-leave-to {
-    transform: translateX(-100%);
-  }
+  /* 100% is the panel's own height; the extra clears its bottom offset so it
+     starts fully below the map's edge. */
+  transform: translateY(calc(100% + 16px));
 }
 
 .state {

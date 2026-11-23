@@ -92,7 +92,8 @@ const emit = defineEmits<{
   background: #fff;
   border: 1px solid #000;
   padding: 8px 24px 20px;
-  height: 33.33%;
+  /* Sized to its content, up to a third of the map; scrolls past that. */
+  max-height: 33.33%;
   overflow-y: auto;
   font-family: Arial, Helvetica, sans-serif;
   font-size: 16px;
@@ -174,18 +175,17 @@ const emit = defineEmits<{
   border-top: 1px solid #e8e8e8;
 }
 
-/* Sheet layout: the panel moves off the map's bottom edge and onto its side.
-   Geometry only; the type below follows the panel's width instead. */
+/* Sheet layout: the panel narrows to the map's left half, still docked to the
+   bottom and sized to its content, up to the map's full height. Geometry only;
+   the type below follows the panel's width instead. */
 @media (max-width: 750px) {
   .map-panel {
-    top: 8px;
     bottom: 8px;
     left: 8px;
     right: auto;
-    height: auto;
     box-sizing: border-box;
     width: 50%;
-    max-height: none;
+    max-height: calc(100% - 16px);
   }
 }
 

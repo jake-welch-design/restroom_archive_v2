@@ -331,7 +331,9 @@ function offsetBox(el: HTMLElement, ancestor: HTMLElement) {
 }
 
 // Camera padding that keeps the selected pin centred in the part of the map the
-// info panel does not cover: a side sheet on mobile, a bottom sheet on desktop.
+// info panel does not cover. It's docked to the bottom and sized to its
+// content: full width on desktop, the left half on mobile, where a tall enough
+// panel is treated as a side sheet.
 //
 // This is measured from the rendered elements rather than derived from the CSS
 // percentages. The old version multiplied `window.innerWidth` by the panel's
@@ -572,9 +574,48 @@ watch(
     if (open && !prevOpen) {
       setTimeout(() => cameraOwned && recenterSelected(0), 360);
     }
+    if (open !== prevOpen) observePanel(open);
   },
   { flush: "post" },
 );
+
+// The panel is sized to its content, so it changes height after it opens
+// (annotations load in) and whenever a different pin is selected. The padding
+// the camera was placed with is then stale, so re-centre for the new height.
+let panelObs: ResizeObserver | null = null;
+let panelHeight = 0;
+let recenterAfterMove = false;
+
+function observePanel(open: boolean) {
+  panelObs?.disconnect();
+  panelObs = null;
+  panelHeight = 0;
+  if (!open) return;
+  const panel = mapContainer.value
+    ?.closest<HTMLElement>(".map-area")
+    ?.querySelector<HTMLElement>(".map-panel");
+  if (!panel) return;
+  panelHeight = panel.offsetHeight;
+  panelObs = new ResizeObserver(() => {
+    const h = panel.offsetHeight;
+    if (h === panelHeight) return;
+    panelHeight = h;
+    if (!map || !cameraOwned) return;
+    // Mid fly-to (a new pin was picked): easing now would cut it short, so
+    // correct once it lands instead.
+    if (map.isMoving()) {
+      if (recenterAfterMove) return;
+      recenterAfterMove = true;
+      map.once("moveend", () => {
+        recenterAfterMove = false;
+        if (cameraOwned) recenterSelected(250);
+      });
+      return;
+    }
+    recenterSelected(250);
+  });
+  panelObs.observe(panel);
+}
 
 // iOS reports the URL bar showing/hiding through visualViewport, which doesn't
 // always coincide with a ResizeObserver entry for the map container.
@@ -590,6 +631,8 @@ if (window.visualViewport) {
 onBeforeUnmount(() => {
   resizeObs?.disconnect();
   resizeObs = null;
+  panelObs?.disconnect();
+  panelObs = null;
   if (recenterTimer) clearTimeout(recenterTimer);
   recenterTimer = null;
   if (debugTimer) clearInterval(debugTimer);
@@ -717,8 +760,8 @@ onBeforeUnmount(() => {
     left: 16px;
   }
 
-  /* With the info panel open it covers the left half of the map, so the visible
-     map is the right half, so the switcher goes in that half's top-left corner.
+  /* With the info panel open it can run the full height of the map's left half,
+     so the switcher goes in the right half's top-left corner.
      The panel is 50% of .map-area and .map-wrap fills .map-area, so 50% here is
      the panel's right edge; +16px keeps the 8px inset plus an 8px gap. */
   .basemap-switch.panel-open {
