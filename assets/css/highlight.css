@@ -1,7 +1,8 @@
-/* Selected text: the archive's black on white, inverted. */
+/* Selected text: the page's ink and paper, swapped. White on black in light
+   mode, black on white in dark (tokens from theme.css). */
 ::selection {
-  color: #fff;
-  background: #000;
+  color: var(--paper);
+  background: var(--ink);
 }
 
 /* What the catalog search matched in a listing (SearchHighlight). Colour
