@@ -220,7 +220,20 @@ const strandedCount = computed(() => {
 function onCropButton() {
   if (!cropEditing.value) {
     // The box appears once the controls have finished moving; see startCrop.
-    startCrop({ sceneDelayMs: reducedMotion() ? 0 : SLIDE_MS + 40 });
+    // On mobile with the catalog sheet open, the layout closes it for the tool
+    // (see useViewerControls), and the viewer grows to the full screen as it
+    // goes. The scene then waits for that instead, so the camera is reframed on
+    // the final shape and the shader compile does not stall the slide.
+    const sheetClosing =
+      window.matchMedia("(max-width: 750px)").matches &&
+      (canvasRef.value?.getBoundingClientRect().top ?? 0) > 1;
+    startCrop({
+      sceneDelayMs: reducedMotion()
+        ? 0
+        : sheetClosing
+          ? SHEET_MS + 60
+          : SLIDE_MS + 40,
+    });
     return;
   }
   // A second press before the box has even appeared is a double click, not a
@@ -391,6 +404,8 @@ const controlRowRef = ref<HTMLElement | null>(null);
 const rowRectsBefore = new Map<HTMLElement, DOMRect>();
 
 const SLIDE_MS = 260;
+/** The layout's mobile sheet open/close transition (`.panel` in default.vue). */
+const SHEET_MS = 350;
 
 function reducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -431,6 +446,14 @@ watch(
       void el.offsetWidth;
       el.style.transition = `transform ${SLIDE_MS}ms cubic-bezier(0.2, 0.8, 0.2, 1)`;
       el.style.transform = "";
+      // Hand the transition back to the stylesheet once the slide is done. Left
+      // inline, it would outrank the compact menu's fade on these two buttons.
+      const done = (e: TransitionEvent) => {
+        if (e.target !== el || e.propertyName !== "transform") return;
+        el.style.transition = "";
+        el.removeEventListener("transitionend", done);
+      };
+      el.addEventListener("transitionend", done);
     }
   },
   // After the DOM has patched, so the new layout can be measured.
@@ -463,6 +486,41 @@ function unpin(el: Element) {
   node.style.left = "";
   node.style.top = "";
 }
+
+// --- Control menu -------------------------------------------------------------
+// Every control folds behind one "more" button: on desktop they slide out to its
+// left along the top edge, on mobile they rise out of it up the right-hand edge.
+// The flag is shared so the layout can keep its mobile sheet clear of an open
+// column, and fold the menu when the sheet is dragged; see useViewerControls.
+const {
+  open: controlsOpen,
+  columnHeight,
+  cropping: sharedCropping,
+} = useViewerControls();
+watch(
+  cropEditing,
+  (on) => {
+    sharedCropping.value = on;
+  },
+  { immediate: true },
+);
+// The folded pills keep their place in the layout (they are only hidden), so
+// this is the height of the open column whatever the menu's state, and it
+// changes only when a pill arrives or leaves.
+let rowObserver: ResizeObserver | null = null;
+onMounted(() => {
+  const row = controlRowRef.value;
+  if (!row) return;
+  rowObserver = new ResizeObserver(() => {
+    columnHeight.value = row.getBoundingClientRect().height;
+  });
+  rowObserver.observe(row);
+});
+onBeforeUnmount(() => {
+  rowObserver?.disconnect();
+  controlsOpen.value = false;
+  sharedCropping.value = false;
+});
 
 // Transient toast describing the last viewport-button action
 const toastMessage = ref("");
@@ -521,17 +579,26 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
     <canvas ref="canvasRef" @pointerdown="onCanvasPointerDown" />
 
     <div class="overlay">
-      <div ref="controlRowRef" class="overlay-right">
+      <div
+        ref="controlRowRef"
+        class="overlay-right"
+        :class="{
+          open: controlsOpen,
+          'can-crop': canCrop,
+          cropping: canCrop && cropEditing,
+        }"
+      >
         <!-- The scan's own controls: view mode, and the crop tool's buttons. A
-        wrapper only so that on the mobile sheet they can stack up the
-        left-hand edge; on desktop it is display: contents and the row is laid
-        out as if it were not there.
+        wrapper only so that on mobile they can stack bottom up in the column;
+        on desktop it is display: contents and the row is laid out as if it
+        were not there.
 
         DOM order is the desktop order, left to right: view mode, reset, rotate,
-        mode, crop. On desktop, opening the tool slides view mode and crop right into
-        the space the annotation buttons leave (see "Control row motion" in the
-        script). On mobile the stack grows upward from crop, so neither moves;
-        `order` sets that stacking, see the stylesheet. -->
+        mode, crop, then annotations and the menu button. On desktop, opening the
+        tool slides view mode and crop right into the space the annotation
+        buttons leave (see "Control row motion" in the script). On mobile the
+        stack grows upward from crop, so neither moves; `order` sets that
+        stacking, see the stylesheet. -->
         <div class="ctrl-stack">
           <!-- View mode: single circle that changes icon -->
           <div class="ctrl-group view-mode-group" data-slide>
@@ -856,6 +923,32 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
             </button>
           </div>
         </Transition>
+
+        <!-- The menu button, the one control always shown: folds the rest away
+        and brings them back out of it. Last in the DOM, so it ends the desktop
+        row on the right and the mobile column at the bottom. One icon serves
+        both: the dots are drawn vertical for mobile and turned on their side
+        for desktop's row by the stylesheet. -->
+        <button
+          class="ctrl-more"
+          :class="{ active: controlsOpen }"
+          :title="controlsOpen ? 'Hide controls' : 'Show controls'"
+          :aria-label="controlsOpen ? 'Hide controls' : 'Show controls'"
+          :aria-expanded="controlsOpen"
+          @click="controlsOpen = !controlsOpen"
+        >
+          <svg
+            viewBox="0 0 16 16"
+            width="18"
+            height="18"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            <circle cx="8" cy="3" r="1.4" />
+            <circle cx="8" cy="8" r="1.4" />
+            <circle cx="8" cy="13" r="1.4" />
+          </svg>
+        </button>
       </div>
     </div>
 
@@ -1094,6 +1187,122 @@ canvas {
     transition: none;
   }
 }
+/* --- Control menu ----------------------------------------------------------
+   Everything folds behind the menu button. On desktop the row runs out to the
+   button's left along the top edge; the mobile query below turns it into a
+   column rising from the bottom-right corner. Folded pills keep their place in
+   the layout and are only hidden, which is what lets the layout read the open
+   column's height at any time (see useViewerControls). */
+
+/* The row's gaps, and the space the folded pills keep, must not swallow
+   clicks meant for the scan, so only the pills themselves take them. */
+.overlay .overlay-right {
+  pointer-events: none;
+}
+.overlay-right > * {
+  pointer-events: auto;
+}
+/* A circle the height of the pills. */
+.ctrl-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: calc(
+    var(--ctrl-btn-size, 26px) + 2 * var(--ctrl-group-pad-y, 4px) + 2 *
+      var(--ctrl-group-border, 1px)
+  );
+  height: calc(
+    var(--ctrl-btn-size, 26px) + 2 * var(--ctrl-group-pad-y, 4px) + 2 *
+      var(--ctrl-group-border, 1px)
+  );
+  flex-shrink: 0;
+  padding: 0;
+  border: var(--ctrl-group-border, 1px) solid #fff;
+  border-radius: 50%;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+/* Horizontal dots for the row. */
+.ctrl-more svg {
+  transform: rotate(90deg);
+}
+.ctrl-more:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+.ctrl-more.active {
+  background: #fff;
+  color: #000;
+}
+/* Each pill's distance from the button, counting outwards. It sets both the
+   stagger and how far the pill travels, so further ones come from further
+   away and the row reads as coming out of the button. Along the desktop row:
+   annotations, crop, then the crop tool's buttons while it is open, and view
+   mode last, wherever that leaves it. */
+.annotation-group {
+  --reach: 0;
+}
+.view-mode-group {
+  --reach: 1;
+}
+.crop-group {
+  --reach: 1;
+}
+.overlay-right.can-crop .view-mode-group {
+  --reach: 2;
+}
+.crop-mode-group {
+  --reach: 2;
+}
+.crop-rotate-group {
+  --reach: 3;
+}
+.crop-reset-group {
+  --reach: 4;
+}
+.overlay-right.cropping .view-mode-group {
+  --reach: 5;
+}
+/* Folding: all together, quickly. Visibility flips only once the fade ends, so
+   nothing vanishes mid-fade, and while hidden the pills can be neither clicked
+   nor tabbed to. The Vue enter/leave classes are left out so the crop tool's
+   own pop and fade keep their transitions. */
+.overlay-right
+  .ctrl-group:not(.ctrl-pop-enter-active):not(.ctrl-pop-leave-active):not(
+    .ctrl-out-enter-active
+  ):not(.ctrl-out-leave-active) {
+  transition:
+    opacity 140ms ease,
+    transform 160ms ease,
+    visibility 0s linear 160ms;
+}
+/* Folded: faded, drawn in towards the button and out of reach. */
+.overlay-right:not(.open) .ctrl-group {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(calc((var(--reach, 0) + 1) * 14px)) scale(0.85);
+  transform-origin: right center;
+}
+/* Unfolding: the pill nearest the button first, each one a beat after. */
+.overlay-right.open
+  .ctrl-group:not(.ctrl-pop-enter-active):not(.ctrl-pop-leave-active):not(
+    .ctrl-out-enter-active
+  ):not(.ctrl-out-leave-active) {
+  transition:
+    opacity 200ms ease calc(var(--reach, 0) * 35ms),
+    transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1) calc(var(--reach, 0) * 35ms),
+    visibility 0s linear calc(var(--reach, 0) * 35ms);
+}
+@media (prefers-reduced-motion: reduce) {
+  .overlay-right .ctrl-group,
+  .overlay-right.open .ctrl-group {
+    transition: none !important;
+  }
+}
 .ctrl-toggle {
   display: flex;
   align-items: center;
@@ -1213,37 +1422,32 @@ canvas {
     padding: 0.75rem;
     z-index: 4;
   }
-  /* Bottom row: view-mode pill hugs the left, annotations the right. The row
-  spans the full width, so it stays transparent to pointer events in the middle
-  where the layout's bottom nav sits. */
+  /* The menu as a column up the right-hand edge, rising from the button in the
+  bottom-right corner. A plain top-down column of the DOM order, so the button
+  (last) is at the bottom, the annotation pill above it, then the view-mode/crop
+  stack, which keeps its own bottom-up `order` below. Only as wide as its widest
+  pill, so it covers none of the layout's bottom nav. */
   .overlay-right {
     position: absolute;
     bottom: 0.75rem;
-    left: 0.75rem;
     right: 0.75rem;
-    flex-direction: row;
+    flex-direction: column;
     align-items: flex-end;
-    justify-content: space-between;
+    justify-content: flex-end;
     gap: 8px;
-    pointer-events: none;
   }
-  .overlay-right > * {
-    pointer-events: auto;
-  }
-  /* The same buttons as the desktop row, stacked up the left-hand edge: view
-  mode at the bottom, level with the annotation toggle, then crop, then the
-  tool's mode and reset buttons above it while it is open. They grow upward
-  from crop, away from the corner, so neither view mode nor crop moves when
-  the tool opens. The DOM order is the desktop one, so `order` sets the stack's
-  and column-reverse lays it bottom up. The stack is transparent to pointer
-  events like the row around it, so the gaps between buttons do not swallow
-  touches meant for the scan. */
+  /* The same buttons as the desktop row, stacked: view mode at the bottom, then
+  crop, then the tool's mode and reset buttons above it while it is open. They
+  grow upward from crop, so neither view mode nor crop moves when the tool
+  opens. The DOM order is the desktop one, so `order` sets the stack's and
+  column-reverse lays it bottom up. Transparent to pointer events like the
+  column around it, so the gaps between buttons do not swallow touches meant
+  for the scan. */
   .ctrl-stack {
     display: flex;
     flex-direction: column-reverse;
-    align-items: flex-start;
+    align-items: flex-end;
     gap: 8px;
-    margin-right: auto;
     pointer-events: none;
   }
   .ctrl-stack > * {
@@ -1264,9 +1468,64 @@ canvas {
   .ctrl-stack > .crop-reset-group {
     order: 4;
   }
-  .annotation-group {
-    margin-left: auto;
+  /* Vertical dots for the column. */
+  .ctrl-more svg {
+    transform: none;
   }
+
+  /* The annotation pill stands up like the column it is in: toggle on top, add
+  button below, and the pill as wide as the round buttons around it (the
+  desktop padding, turned on its side). */
+  .annotation-group {
+    flex-direction: column;
+    padding: 5px var(--ctrl-group-pad-y, 4px);
+    gap: 6px;
+  }
+  .ctrl-toggle {
+    padding: 4px 0 0;
+  }
+  /* The switch stands up too, and on is up. */
+  .toggle-track {
+    width: 16px;
+    height: 28px;
+  }
+  .toggle-thumb {
+    top: 14px;
+    transition: top 0.15s;
+  }
+  .ctrl-toggle.active .toggle-thumb {
+    top: 2px;
+    left: 2px;
+  }
+
+  /* Distances from the button, counting up the column: annotations, view
+  mode, crop, then the crop tool's buttons. */
+  .annotation-group {
+    --reach: 0;
+  }
+  .view-mode-group,
+  .overlay-right.can-crop .view-mode-group,
+  .overlay-right.cropping .view-mode-group {
+    --reach: 1;
+  }
+  .crop-group {
+    --reach: 2;
+  }
+  .crop-mode-group {
+    --reach: 3;
+  }
+  .crop-rotate-group {
+    --reach: 4;
+  }
+  .crop-reset-group {
+    --reach: 5;
+  }
+  /* Folded pills drop towards the button rather than sliding sideways. */
+  .overlay-right:not(.open) .ctrl-group {
+    transform: translateY(calc((var(--reach, 0) + 1) * 14px)) scale(0.85);
+    transform-origin: bottom right;
+  }
+
   .crosshair-hint {
     top: 2.75rem;
   }

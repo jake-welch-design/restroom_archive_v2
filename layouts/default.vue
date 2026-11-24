@@ -101,28 +101,70 @@ function isSheetLayout() {
 }
 
 /**
- * Tallest the sheet may be dragged: the grabber has to clear the viewer's
- * bottom control row by the same margin that row keeps from the bottom of the
- * screen. The whole row is measured rather than the annotation toggle alone:
- * for admins the crop button stacks above the view-mode button, which makes
- * the row's left end taller than its right, and measuring only the toggle let
- * the sheet slide over the crop button. Measured off the live controls rather than
- * hard-coded, so it follows their real rendered size. The row is anchored to the
- * bottom of the viewport and the viewer never moves once the sheet is past its
- * resting height, so one read at the start of the drag holds for all of it.
+ * Tallest the sheet may be, so that the grabber clears the viewer's controls
+ * by the same margin they keep from the bottom of the screen. The controls are
+ * a menu in the bottom-right corner: folded, only its button shows; open, a
+ * column rises from it. `whole` measures the open column, otherwise just the
+ * button. (The folded column keeps its full height in the layout, only hidden,
+ * so the open column can be measured whatever state the menu is in.) Measured
+ * off the live controls rather than hard-coded, so it follows their real
+ * rendered size. They are anchored to the bottom of the viewport and the
+ * viewer never moves once the sheet is past its resting height, so one read at
+ * the start of a drag holds for all of it.
  */
-function maxSheetFrac(tab: HTMLElement) {
+function maxSheetFrac(tab: Element | null, whole: boolean) {
   const vh = window.innerHeight;
-  const ctrl =
-    document.querySelector(".viewer-panel .overlay-right") ??
-    document.querySelector(".viewer-panel .annotation-group");
+  const ctrl = document.querySelector(
+    whole ? ".viewer-panel .overlay-right" : ".viewer-panel .ctrl-more",
+  );
   const rect = ctrl?.getBoundingClientRect();
   const clearance =
     rect && rect.height > 0
-      ? vh - rect.top + (vh - rect.bottom) + tab.getBoundingClientRect().height
+      ? vh -
+        rect.top +
+        (vh - rect.bottom) +
+        (tab?.getBoundingClientRect().height ?? 18)
       : FALLBACK_CLEARANCE;
   return Math.max(0, (vh - clearance) / vh);
 }
+
+// A drag only has to clear the menu button, because it folds the menu (see
+// onTabPointerDown). Opening the menu again with the sheet that tall would
+// raise the column under it, so the sheet makes way: it eases back down until
+// the whole column clears it. The same goes for the column growing while open,
+// when the crop tool's buttons arrive.
+const { open: controlsOpen, columnHeight, cropping } = useViewerControls();
+watch(
+  [controlsOpen, columnHeight],
+  () => {
+    if (!controlsOpen.value || dragging.value || isClosed.value) return;
+    if (!isSheetLayout()) return;
+    const cap = maxSheetFrac(document.querySelector(".expand-tab"), true);
+    if (panelFrac.value > cap) panelFrac.value = cap;
+  },
+  { flush: "post" },
+);
+
+// On mobile the crop tool takes the whole screen: the box needs every pixel of
+// a phone's viewport, so opening it closes the sheet. Closing it brings the
+// sheet back at its resting height, but only when it was the tool that closed
+// it: a sheet the admin closed or reopened by hand meanwhile is left as it is.
+// The viewer times the crop scene to land after this slide (see onCropButton).
+let sheetClosedForCrop = false;
+watch(cropping, (on) => {
+  if (!isSheetLayout() || inProgress.value) return;
+  if (on) {
+    if (!panelOpen.value) return;
+    panelOpen.value = false;
+    sheetClosedForCrop = true;
+  } else if (sheetClosedForCrop) {
+    sheetClosedForCrop = false;
+    if (!panelOpen.value) togglePanel();
+  }
+});
+watch(panelOpen, (open) => {
+  if (open) sheetClosedForCrop = false;
+});
 
 function clamp(n: number, max: number) {
   return Math.min(max, Math.max(0, n));
@@ -131,7 +173,9 @@ function clamp(n: number, max: number) {
 function onTabPointerDown(e: PointerEvent) {
   if (!isSheetLayout() || (e.pointerType === "mouse" && e.button !== 0)) return;
   dragPointerId = e.pointerId;
-  dragMaxFrac = maxSheetFrac(e.currentTarget as HTMLElement);
+  // Fold the viewer's menu, so the sheet only has to clear its button.
+  controlsOpen.value = false;
+  dragMaxFrac = maxSheetFrac(e.currentTarget as HTMLElement, false);
   dragStartY = e.clientY;
   // Dragging out of the closed state starts from zero height, not from the
   // remembered open height.
