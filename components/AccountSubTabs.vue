@@ -98,7 +98,8 @@ defineEmits<{ (e: "update:modelValue", id: string): void }>();
 :slotted(.subtab-btn.joined) {
   margin-left: -1px;
 }
-.row-break {
+.row-break,
+:slotted(.row-break) {
   display: none;
 }
 .subtab-btn:hover:not(.active),
@@ -186,7 +187,8 @@ defineEmits<{ (e: "update:modelValue", id: string): void }>();
    both flush left with a clear 11px between them. Same window breakpoint as the
    account page's sheet layout. */
 @media (max-width: 750px) {
-  .row-break {
+  .row-break,
+  :slotted(.row-break) {
     display: block;
     flex-basis: 100%;
     /* The rows' whole separation: the buttons' border-overlap margin is off
@@ -207,10 +209,15 @@ defineEmits<{ (e: "update:modelValue", id: string): void }>();
        second row off the left edge. */
     margin-left: 0;
   }
+  /* Trailing controls that open a row after a slotted break, such as the
+     Admin tab's studio and newsletter links: flush left, like the row above. */
+  :slotted(.subtab-btn.row-start) {
+    margin-left: 0;
+  }
 }
 
-/* The smallest phones, where the Admin tab's four groups and the studio icon
-   only share a line with the padding taken in. */
+/* The smallest phones, where the Admin tab's four groups only fit on a line
+   with the padding taken in. */
 @media (max-width: 374px) {
   .subtab-btn,
   :slotted(.subtab-btn) {

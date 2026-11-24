@@ -496,17 +496,23 @@ function setAdminSection(value: string) {
         :tabs="primarySubTabs"
       >
         <AccountArchivistGuide v-if="accountTab === 'submissions'" />
+        <!-- The admin tools start their own row on a phone (AccountSubTabs
+             shows this break only there). -->
+        <span
+          v-if="accountTab === 'admin' && isAdmin"
+          class="row-break"
+          aria-hidden="true"
+        />
         <!-- A tool rather than a list, so a link out to its own page rather
              than a group: see pages/studio.vue. -->
         <NuxtLink
           v-if="accountTab === 'admin' && isAdmin"
           to="/studio"
-          class="subtab-btn"
+          class="subtab-btn row-start"
           aria-label="Video studio"
           title="Video studio"
         >
-          <!-- An icon rather than a label, so the row fits on one line on a
-               phone instead of wrapping this onto a second. -->
+          <!-- An icon rather than a label, to keep the tools pair small. -->
           <svg
             viewBox="0 0 16 16"
             width="16"

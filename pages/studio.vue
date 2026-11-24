@@ -55,6 +55,11 @@ definePageMeta({ layout: false });
 useHead({
   title: "Studio",
   meta: [{ name: "robots", content: "noindex" }],
+  // Always light, whatever the display mode: this page keeps literal colours
+  // of its own, and the shared themed styles it borrows (forms, tabs) would
+  // otherwise go dark around them. Overrides app.vue's attribute while the
+  // page is open and hands it back on leaving.
+  htmlAttrs: { "data-theme": "light" },
 });
 
 const { isAdmin } = useAuth();
