@@ -43,6 +43,31 @@ const emit = defineEmits<{
 
 const gridWrapRef = ref<HTMLDivElement | null>(null);
 
+// The scrollbar sits in the right-hand gutter, as the list's does, rather than
+// inside it, where it set the tiles 8px further from the right edge than the
+// left. The gutter's right padding gives up exactly the bar's width. Measured
+// as ListView does: `.thin-scroll`'s 8px in Chrome and Safari, Firefox's own
+// `thin` width there. The CSS falls back to 8px until this runs.
+const scrollbarWidth = ref<number | null>(null);
+let wrapRo: ResizeObserver | null = null;
+
+function measureScrollbar() {
+  const el = gridWrapRef.value;
+  if (el) scrollbarWidth.value = el.offsetWidth - el.clientWidth;
+}
+
+onMounted(() => {
+  measureScrollbar();
+  if (!gridWrapRef.value) return;
+  wrapRo = new ResizeObserver(measureScrollbar);
+  wrapRo.observe(gridWrapRef.value);
+});
+
+onBeforeUnmount(() => {
+  wrapRo?.disconnect();
+  wrapRo = null;
+});
+
 /**
  * Brings the selected tile into view. Selection can originate outside the grid
  * (the viewer's next/previous controls, a deep link), in which case the tile may
@@ -93,6 +118,9 @@ function onTileClick(slug: string, e: MouseEvent) {
     ref="gridWrapRef"
     class="grid-wrap thin-scroll"
     :class="{ 'list-sized': listSized, single: columns === 1 }"
+    :style="
+      scrollbarWidth === null ? undefined : { '--sbw': `${scrollbarWidth}px` }
+    "
   >
     <div class="grid" :style="gridStyle">
       <component
@@ -180,10 +208,18 @@ function onTileClick(slug: string, e: MouseEvent) {
 </template>
 
 <style scoped>
+/* The side gutters are padding rather than margin so the scroller runs to the
+   panel's edges and its bar lands inside the right gutter. `scroll`, not
+   `auto`, keeps that bar's space reserved, so filtering down to a few tiles
+   doesn't drop it and widen the grid. Top and bottom stay margins: the scroll
+   area keeps its gap below the header, and scrolling a tile into view still
+   stops 16px under it. */
 .grid-wrap {
+  --gutter: 16px;
   flex: 1 1 auto;
-  overflow-y: auto;
-  margin: 16px;
+  overflow-y: scroll;
+  margin: var(--gutter) 0;
+  padding: 0 max(0px, calc(var(--gutter) - var(--sbw, 8px))) 0 var(--gutter);
   font-family: Arial, Helvetica, sans-serif;
 }
 .grid {
@@ -197,7 +233,7 @@ function onTileClick(slug: string, e: MouseEvent) {
    still got three columns (107px tiles) while a 700px one dropped to two. */
 @container panel (max-width: 560px) {
   .grid-wrap {
-    margin: 8px;
+    --gutter: 8px;
   }
   .grid {
     grid-template-columns: repeat(2, 1fr);
