@@ -43,6 +43,8 @@ const {
   projection,
   createMode,
   markersVisible,
+  measureVisible,
+  roomMeasurement,
   cropEditing,
   cropReady,
   cropTool,
@@ -56,6 +58,7 @@ const {
   setProjection,
   flyTo,
   project,
+  projectSegment,
   captureThumb,
   startCrop,
   cancelCrop,
@@ -579,6 +582,11 @@ const projectionTitle = computed(() =>
       : "Switch to orthographic",
 );
 
+function toggleMeasure() {
+  measureVisible.value = !measureVisible.value;
+  showToast(measureVisible.value ? "Measurements on" : "Measurements off");
+}
+
 function toggleMarkers() {
   markersVisible.value = !markersVisible.value;
   showToast(markersVisible.value ? "Annotations on" : "Annotations off");
@@ -627,15 +635,15 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
         }"
       >
         <!-- Counting out from the menu button: display mode, projection, view
-        mode, annotations, then crop (admins) with the crop tool's buttons
-        beyond it.
+        mode, space measurements, annotations, then crop (admins) with the crop
+        tool's buttons beyond it.
 
         DOM order is the desktop order, left to right: the crop tool's reset,
-        rotate and mode buttons, crop, annotations, view mode, projection,
-        display, and the menu button. On desktop, opening the tool slides crop right into the
-        space the annotation buttons leave (see "Control row motion" in the
-        script). The mobile column is the same order read bottom up from the
-        button.
+        rotate and mode buttons, crop, annotations, space measurements, view
+        mode, projection, display, and the menu button. On desktop, opening the
+        tool slides crop right into the space the annotation and measurement
+        buttons leave (see "Control row motion" in the script). The mobile
+        column is the same order read bottom up from the button.
 
         The crop buttons sit in a wrapper only so that on mobile they can stack
         bottom up from crop, so the tool grows away from the button rather than
@@ -913,6 +921,50 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
           </div>
         </Transition>
 
+        <!-- Space measurement toggle: sits just before annotations counting
+        outward from the menu button, hidden while cropping like annotations. -->
+        <Transition
+          name="ctrl-out"
+          @before-leave="pinForLeave"
+          @leave-cancelled="unpin"
+        >
+          <div
+            v-if="props.modelUrl && !cropEditing"
+            class="ctrl-group measure-group"
+          >
+            <button
+              class="ctrl-btn ctrl-measure"
+              :class="{ active: measureVisible }"
+              :title="
+                measureVisible ? 'Hide space measurements' : 'Measure space'
+              "
+              :aria-label="
+                measureVisible ? 'Hide space measurements' : 'Measure space'
+              "
+              :aria-pressed="measureVisible"
+              @click="toggleMeasure"
+            >
+              <!-- Angled ruler with graduation ticks. -->
+              <svg
+                viewBox="0 0 16 16"
+                width="18"
+                height="18"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.3"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <g transform="rotate(-45 8 8)">
+                  <rect x="1.5" y="5.25" width="13" height="5.5" rx="1" />
+                  <path d="M4.75 5.25v2.1M8 5.25v2.85M11.25 5.25v2.1" />
+                </g>
+              </svg>
+            </button>
+          </div>
+        </Transition>
+
         <!-- View mode: single circle that changes icon -->
         <div class="ctrl-group view-mode-group">
           <button
@@ -1146,6 +1198,12 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
       </Transition>
     </div>
 
+    <MeasureLayer
+      :measurement="roomMeasurement"
+      :visible="measureVisible && !loading && !cropEditing"
+      :project-segment="projectSegment"
+    />
+
     <AnnotationsLayer
       v-if="annotations"
       :annotations="annotations"
@@ -1266,8 +1324,16 @@ canvas {
 .ctrl-add:hover {
   background: rgba(255, 255, 255, 0.15);
 }
+.ctrl-measure {
+  color: #ffffff;
+}
+.ctrl-measure:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+}
 .ctrl-add.active,
-.ctrl-crop.active {
+.ctrl-crop.active,
+.ctrl-measure.active {
   background: #ff0000;
   color: #ffffff;
 }
@@ -1396,11 +1462,14 @@ canvas {
 .view-mode-group {
   --reach: 2;
 }
-.annotation-group {
+.measure-group {
   --reach: 3;
 }
-.crop-group {
+.annotation-group {
   --reach: 4;
+}
+.crop-group {
+  --reach: 5;
 }
 .overlay-right.cropping .crop-group {
   --reach: 3;

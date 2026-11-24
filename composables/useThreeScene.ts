@@ -26,6 +26,10 @@ import type {
   CropGizmoTool,
   RotateAxis,
 } from "~/composables/cropGizmo";
+import type {
+  RoomMeasureGizmo,
+  RoomMeasurement,
+} from "~/composables/roomMeasure";
 
 export type ViewMode = "orbit" | "pov";
 export type Projection = "perspective" | "orthographic";
@@ -159,6 +163,8 @@ export function useThreeScene(
   const projection = ref<Projection>("perspective");
   const createMode = ref(false);
   const markersVisible = ref(true);
+  const measureVisible = ref(false);
+  const roomMeasurement = shallowRef<RoomMeasurement | null>(null);
   /** Whether the admin crop tool is open. */
   const cropEditing = ref(false);
   /**
@@ -407,6 +413,9 @@ export function useThreeScene(
   }
 
   let gizmo: CropGizmo | null = null;
+  let measureGizmo: RoomMeasureGizmo | null = null;
+  let measureModule: typeof import("~/composables/roomMeasure") | null = null;
+  let measureToken = 0;
 
   // Six planes held in local space, and the world-space array the materials
   // actually read, refreshed from the model's matrix every frame. Two arrays
@@ -628,6 +637,7 @@ export function useThreeScene(
     updateCropPlanes();
     syncRoundOutlines();
     gizmo?.update();
+    measureGizmo?.update();
     // The orthographic frustum follows the dolly, which moves every frame
     // that damping is still settling.
     if (camera && isOrthographic()) camera.updateProjectionMatrix();
@@ -1234,12 +1244,64 @@ export function useThreeScene(
     camera.updateProjectionMatrix();
   }
 
+  async function syncMeasurement() {
+    const token = ++measureToken;
+    if (
+      !measureVisible.value ||
+      cropEditing.value ||
+      loading.value ||
+      !currentModel ||
+      !scene ||
+      !renderer
+    ) {
+      measureGizmo?.setVisible(false);
+      return;
+    }
+    if (!measureModule) {
+      measureModule = await import("~/composables/roomMeasure");
+    }
+    if (
+      token !== measureToken ||
+      !measureVisible.value ||
+      cropEditing.value ||
+      loading.value ||
+      !currentModel ||
+      !scene ||
+      !renderer
+    ) {
+      measureGizmo?.setVisible(false);
+      return;
+    }
+    if (!measureGizmo) {
+      measureGizmo = measureModule.createRoomMeasureGizmo({
+        scene,
+        renderer,
+        getModel: () => currentModel,
+      });
+    }
+    if (!roomMeasurement.value) {
+      const { keep, removals } = roundsOf(committedCrop);
+      roomMeasurement.value = measureModule.extractRoomMeasurement(
+        currentModel,
+        {
+          keep,
+          removals,
+          fallbackBox: appliedBox,
+        },
+      );
+      measureGizmo.setMeasurement(roomMeasurement.value);
+    }
+    measureGizmo.setVisible(Boolean(roomMeasurement.value));
+  }
+
   async function loadModel(url: string) {
     if (!scene) return;
     loading.value = true;
     error.value = null;
     rateLimited.value = false;
     userInteracted = false;
+    roomMeasurement.value = null;
+    measureGizmo?.setVisible(false);
     const myId = ++loadId;
 
     const profile = createLoadProfiler(url);
@@ -1305,7 +1367,10 @@ export function useThreeScene(
         error.value = (e as Error).message ?? "Failed to load model";
       }
     } finally {
-      if (myId === loadId) loading.value = false;
+      if (myId === loadId) {
+        loading.value = false;
+        void syncMeasurement();
+      }
     }
   }
 
@@ -1327,12 +1392,14 @@ export function useThreeScene(
    * rebuild every shader in the middle of the drag.
    */
   function startCrop(options: { sceneDelayMs?: number } = {}) {
-    if (!gizmo || !currentModel || !camera || !controls) return;
+    // No gizmo check: it is loaded on first use, by setUpCropScene below.
+    if (!currentModel || !camera || !controls) return;
     // Mutually exclusive with placing an annotation: both want the pointer, and
     // a click meant for a handle must not leave a marker behind it.
     createMode.value = false;
     cropEditing.value = true;
     cropReady.value = false;
+    measureGizmo?.setVisible(false);
     userInteracted = true;
 
     // Captured now, before anything in the scene moves, so Cancel restores the
@@ -1470,6 +1537,7 @@ export function useThreeScene(
     }
     applyCommittedClip();
     restoreViewBeforeCrop();
+    void syncMeasurement();
   }
 
   /** Forgets the edit's draft state, for closing the tool either way. */
@@ -1868,6 +1936,8 @@ export function useThreeScene(
     cropReady.value = false;
     gizmo.hide();
     clearDraft();
+    roomMeasurement.value = null;
+    void syncMeasurement();
   }
 
   function setMode(next: ViewMode) {
@@ -2133,6 +2203,8 @@ export function useThreeScene(
     offCanvas.width = 800;
     offCanvas.height = 800;
 
+    const hadMeasure = measureGizmo?.visible ?? false;
+    if (hadMeasure) measureGizmo?.setVisible(false);
     let offRenderer: THREE.WebGLRenderer | null = null;
     try {
       offRenderer = new THREE.WebGLRenderer({
@@ -2177,6 +2249,7 @@ export function useThreeScene(
       updateCropPlanes();
       return dataUrl;
     } finally {
+      if (hadMeasure) measureGizmo?.setVisible(true);
       offRenderer?.dispose();
     }
   }
@@ -2207,6 +2280,63 @@ export function useThreeScene(
       .sub(draftPivot)
       .applyQuaternion(relativeRotation)
       .add(draftPivot);
+  }
+
+  const segStartView = new THREE.Vector3();
+  const segEndView = new THREE.Vector3();
+  const segMidClip = new THREE.Vector4();
+
+  function projectSegment(
+    start: THREE.Vector3,
+    end: THREE.Vector3,
+  ): { x: number; y: number; visible: boolean } {
+    if (!camera || !renderer || !currentModel) {
+      return { x: 0, y: 0, visible: false };
+    }
+    const canvas = renderer.domElement;
+    const width = canvas.clientWidth;
+    const height = canvas.clientHeight;
+    if (!width || !height) return { x: 0, y: 0, visible: false };
+
+    segStartView.copy(start);
+    segEndView.copy(end);
+    currentModel.localToWorld(segStartView);
+    currentModel.localToWorld(segEndView);
+    segStartView.applyMatrix4(camera.matrixWorldInverse);
+    segEndView.applyMatrix4(camera.matrixWorldInverse);
+
+    if (!isOrthographic()) {
+      const nearZ = -Math.max(camera.near * 1.5, 0.05);
+      const aBehind = segStartView.z > nearZ;
+      const bBehind = segEndView.z > nearZ;
+      if (aBehind && bBehind) return { x: 0, y: 0, visible: false };
+      if (aBehind || bBehind) {
+        const dz = segEndView.z - segStartView.z;
+        if (Math.abs(dz) < 1e-6) return { x: 0, y: 0, visible: false };
+        const t = (nearZ - segStartView.z) / dz;
+        if (aBehind) segStartView.lerp(segEndView, t);
+        else segEndView.lerp(segStartView, 1 - t);
+      }
+    }
+
+    segMidClip.set(
+      0.5 * (segStartView.x + segEndView.x),
+      0.5 * (segStartView.y + segEndView.y),
+      0.5 * (segStartView.z + segEndView.z),
+      1,
+    );
+    segMidClip.applyMatrix4(camera.projectionMatrix);
+    if (segMidClip.w <= 0) return { x: 0, y: 0, visible: false };
+
+    const ndcX = segMidClip.x / segMidClip.w;
+    const ndcY = segMidClip.y / segMidClip.w;
+    const visible =
+      ndcX >= -1.08 && ndcX <= 1.08 && ndcY >= -1.08 && ndcY <= 1.08;
+    return {
+      x: (ndcX * 0.5 + 0.5) * width,
+      y: (-ndcY * 0.5 + 0.5) * height,
+      visible,
+    };
   }
 
   function project(point: THREE.Vector3): {
@@ -2326,6 +2456,7 @@ export function useThreeScene(
   function dispose() {
     loadId++;
     cropStartToken++;
+    measureToken++;
     cancelAnimationFrame(raf);
     cancelAnimationFrame(tweenRaf);
     detachListeners?.();
@@ -2338,6 +2469,7 @@ export function useThreeScene(
     }
     if (currentModel) disposeObject(currentModel);
     gizmo?.dispose();
+    measureGizmo?.dispose();
     controls?.dispose();
     renderer?.dispose();
     renderer = null;
@@ -2346,6 +2478,7 @@ export function useThreeScene(
     controls = null;
     currentModel = null;
     gizmo = null;
+    measureGizmo = null;
   }
 
   watch(
@@ -2365,6 +2498,10 @@ export function useThreeScene(
     if (url && scene) loadModel(url);
   });
 
+  watch(measureVisible, () => {
+    void syncMeasurement();
+  });
+
   watch([mode, cropEditing], ([nextMode, cropping]) => {
     if (nextMode === "pov" || cropping) projection.value = "perspective";
     camera?.updateProjectionMatrix();
@@ -2380,6 +2517,8 @@ export function useThreeScene(
     projection,
     createMode,
     markersVisible,
+    measureVisible,
+    roomMeasurement,
     cropEditing,
     cropReady,
     cropTool,
@@ -2393,6 +2532,7 @@ export function useThreeScene(
     setProjection,
     flyTo,
     project,
+    projectSegment,
     captureThumb,
     startCrop,
     cancelCrop,
