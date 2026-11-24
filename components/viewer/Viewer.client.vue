@@ -42,6 +42,7 @@ const {
   error,
   rateLimited,
   mode,
+  projection,
   createMode,
   markersVisible,
   cropEditing,
@@ -54,6 +55,7 @@ const {
   cropConfirmed,
   cropRoundPending,
   setMode,
+  setProjection,
   flyTo,
   project,
   captureThumb,
@@ -553,6 +555,22 @@ function toggleViewMode() {
   showToast(next === "pov" ? "POV view" : "Orbit view");
 }
 
+// Orthographic is orbit only, so asking for it from POV goes to orbit too.
+function toggleProjection() {
+  const next =
+    projection.value === "orthographic" ? "perspective" : "orthographic";
+  if (next === "orthographic" && mode.value === "pov") setMode("orbit");
+  setProjection(next);
+  showToast(next === "orthographic" ? "Orthographic view" : "Perspective view");
+}
+const projectionTitle = computed(() =>
+  cropEditing.value
+    ? "Perspective while cropping"
+    : projection.value === "orthographic"
+      ? "Switch to perspective"
+      : "Switch to orthographic",
+);
+
 function toggleMarkers() {
   markersVisible.value = !markersVisible.value;
   showToast(markersVisible.value ? "Annotations on" : "Annotations off");
@@ -600,12 +618,13 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
           cropping: canCrop && cropEditing,
         }"
       >
-        <!-- Counting out from the menu button: display mode, view mode,
-        annotations, then crop (admins) with the crop tool's buttons beyond it.
+        <!-- Counting out from the menu button: display mode, projection, view
+        mode, annotations, then crop (admins) with the crop tool's buttons
+        beyond it.
 
         DOM order is the desktop order, left to right: the crop tool's reset,
-        rotate and mode buttons, crop, annotations, view mode, display, and the
-        menu button. On desktop, opening the tool slides crop right into the
+        rotate and mode buttons, crop, annotations, view mode, projection,
+        display, and the menu button. On desktop, opening the tool slides crop right into the
         space the annotation buttons leave (see "Control row motion" in the
         script). The mobile column is the same order read bottom up from the
         button.
@@ -935,6 +954,50 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
                 d="M783.802469 632.907852C916.770765 607.446914 1011.358025 543.149827 1011.358025 467.753086c0-42.085136-29.50637-80.693728-78.569877-111.059753l34.866568-34.866568C1026.439901 361.34558 1061.925926 412.204247 1061.925926 467.753086c0 100.819753-116.67279 186.191012-278.123457 216.064v-50.909234z"
                 fill="#ffffff"
               />
+            </svg>
+          </button>
+        </div>
+
+        <!-- Projection: the same cube drawn each way, showing the one in use.
+        Held at perspective while cropping, which the crop tool needs. -->
+        <div class="ctrl-group projection-group">
+          <button
+            class="ctrl-btn"
+            :title="projectionTitle"
+            :aria-label="projectionTitle"
+            :aria-pressed="projection === 'orthographic'"
+            :disabled="cropEditing"
+            @click="toggleProjection"
+          >
+            <!-- Perspective: the near edge tallest, the rest receding -->
+            <svg
+              v-if="projection === 'perspective'"
+              viewBox="0 0 16 16"
+              width="18"
+              height="18"
+              fill="none"
+              stroke="#ffffff"
+              stroke-width="1.2"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M8 2.6L14.2 5 12.5 11.1 8 14.5 3.5 11.1 1.8 5z" />
+              <path d="M1.8 5L8 7.9 14.2 5M8 7.9v6.6" />
+            </svg>
+            <!-- Orthographic: isometric, every edge parallel to its pair -->
+            <svg
+              v-else
+              viewBox="0 0 16 16"
+              width="18"
+              height="18"
+              fill="none"
+              stroke="#ffffff"
+              stroke-width="1.2"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M8 1.75L13.4 4.875v6.25L8 14.25 2.6 11.125v-6.25z" />
+              <path d="M2.6 4.875L8 8l5.4-3.125M8 8v6.25" />
             </svg>
           </button>
         </div>
@@ -1317,31 +1380,35 @@ canvas {
 /* Each pill's distance from the button, counting outwards. It sets both the
    stagger and how far the pill travels, so further ones come from further
    away and the row reads as coming out of the button. The same in the desktop
-   row and the mobile column: display, view mode, annotations, crop, then the
+   row and the mobile column: display, projection, view mode, annotations,
+   crop, then the
    crop tool's buttons, which take the annotations' place while it is open. */
 .theme-group {
   --reach: 0;
 }
-.view-mode-group {
+.projection-group {
   --reach: 1;
 }
-.annotation-group {
+.view-mode-group {
   --reach: 2;
+}
+.annotation-group {
+  --reach: 3;
 }
 .crop-group {
-  --reach: 3;
-}
-.overlay-right.cropping .crop-group {
-  --reach: 2;
-}
-.crop-mode-group {
-  --reach: 3;
-}
-.crop-rotate-group {
   --reach: 4;
 }
-.crop-reset-group {
+.overlay-right.cropping .crop-group {
+  --reach: 3;
+}
+.crop-mode-group {
+  --reach: 4;
+}
+.crop-rotate-group {
   --reach: 5;
+}
+.crop-reset-group {
+  --reach: 6;
 }
 /* Folding: all together, quickly. Visibility flips only once the fade ends, so
    nothing vanishes mid-fade, and while hidden the pills can be neither clicked
@@ -1500,8 +1567,8 @@ canvas {
   }
   /* The menu as a column up the right-hand edge, rising from the button in the
   bottom-right corner. A plain top-down column of the DOM order, so the button
-  (last) is at the bottom, then display, view mode and the annotation pill above
-  it, then the crop stack, which keeps its own bottom-up `order` below. Only as
+  (last) is at the bottom, then display, projection, view mode and the
+  annotation pill above it, then the crop stack, which keeps its own bottom-up `order` below. Only as
   wide as its widest pill, so it covers none of the layout's bottom nav. */
   .overlay-right {
     position: absolute;

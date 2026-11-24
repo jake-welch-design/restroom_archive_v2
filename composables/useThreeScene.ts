@@ -29,6 +29,7 @@ import {
 } from "~/composables/cropGizmo";
 
 export type ViewMode = "orbit" | "pov";
+export type Projection = "perspective" | "orthographic";
 
 /** What a finished crop edit hands back for saving. */
 export interface CropResult {
@@ -150,6 +151,13 @@ export function useThreeScene(
   /** The last load failed on the scan route's per-IP burst limit (a 429). */
   const rateLimited = ref(false);
   const mode = ref<ViewMode>("orbit");
+  /**
+   * Perspective or orthographic. Orthographic is an orbit view only: POV puts
+   * the eye inside the room, where a parallel projection has nothing to show,
+   * and the crop gizmo sizes and picks its handles by the field of view. Either
+   * of those switches it back to perspective (see the watcher below).
+   */
+  const projection = ref<Projection>("perspective");
   const createMode = ref(false);
   const markersVisible = ref(true);
   /** Whether the admin crop tool is open. */
@@ -485,6 +493,15 @@ export function useThreeScene(
     // to reinterpret an XYZ Euler as YXZ.
     camera.rotation.order = "YXZ";
     camera.position.set(0, 0, 4);
+    // One camera for both projections, so the framing, the tweens, the pan and
+    // dolly steps and the crop tool keep reading a field of view. Orthographic
+    // only swaps the matrix that every one of those updates ends in.
+    const cam = camera;
+    const updatePerspective = cam.updateProjectionMatrix.bind(cam);
+    cam.updateProjectionMatrix = () => {
+      updatePerspective();
+      if (isOrthographic()) toOrthographic(cam);
+    };
 
     controls = new OrbitControls(camera, canvas);
     controls.enableDamping = true;
@@ -594,7 +611,51 @@ export function useThreeScene(
     updateCropPlanes();
     syncRoundOutlines();
     gizmo?.update();
+    // The orthographic frustum follows the dolly, which moves every frame
+    // that damping is still settling.
+    if (camera && isOrthographic()) camera.updateProjectionMatrix();
     if (renderer && scene && camera) renderer.render(scene, camera);
+  }
+
+  function isOrthographic(): boolean {
+    return (
+      projection.value === "orthographic" &&
+      mode.value === "orbit" &&
+      !cropEditing.value
+    );
+  }
+
+  /**
+   * Replaces the camera's perspective matrix with an orthographic one that
+   * shows the plane through the orbit target at the size perspective did, so
+   * switching keeps what is in focus where it was. The distance to the target
+   * is the zoom: OrbitControls' dolly shrinks it, and the frustum with it.
+   *
+   * The near plane sits as far behind the eye as the far plane is in front of
+   * it. A parallel view has no vanishing point to keep geometry away from, so
+   * zooming in past a wall shows the wall rather than slicing it open.
+   */
+  function toOrthographic(cam: THREE.PerspectiveCamera) {
+    const distance = controls
+      ? cam.position.distanceTo(controls.target)
+      : orbitDistance;
+    const halfHeight =
+      (distance * Math.tan((cam.fov * Math.PI) / 360)) / cam.zoom;
+    const halfWidth = halfHeight * cam.aspect;
+    cam.projectionMatrix.makeOrthographic(
+      -halfWidth,
+      halfWidth,
+      halfHeight,
+      -halfHeight,
+      -cam.far,
+      cam.far,
+    );
+    cam.projectionMatrixInverse.copy(cam.projectionMatrix).invert();
+  }
+
+  function setProjection(next: Projection) {
+    projection.value = next;
+    camera?.updateProjectionMatrix();
   }
 
   /** What the scan's materials read; see ScanShading in scanModel.ts. */
@@ -1830,7 +1891,17 @@ export function useThreeScene(
     const ndcX = ((clientX - rect.left) / rect.width) * 2 - 1;
     const ndcY = -((clientY - rect.top) / rect.height) * 2 + 1;
     const raycaster = new THREE.Raycaster();
-    raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera);
+    if (isOrthographic()) {
+      // setFromCamera goes by the camera's class, which is still perspective.
+      // A parallel ray instead, from the near plane through the pointer.
+      raycaster.ray.origin.set(ndcX, ndcY, -1).unproject(camera);
+      raycaster.ray.direction
+        .set(0, 0, -1)
+        .transformDirection(camera.matrixWorld);
+      raycaster.camera = camera;
+    } else {
+      raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera);
+    }
     const hit = firstVisibleHit(raycaster.intersectObject(currentModel, true));
     if (!hit) return null;
     // Store in model-local space so the point tracks the model as it auto-rotates
@@ -1856,6 +1927,10 @@ export function useThreeScene(
     // The pivot must not move under a crop drag: OrbitControls sizes its steps
     // from it, and the gizmo's drag plane is built once at pointerdown.
     if (cropEditing.value) return;
+    // Orthographic needs none of this: the radius is its zoom, so the steps
+    // already scale with what is on screen, and moving the pivot would jump
+    // the zoom.
+    if (isOrthographic()) return;
 
     const radius = camera.position.distanceTo(controls.target);
     // Cap it so a long ray across the scan can't fling the pivot somewhere that
@@ -2269,6 +2344,11 @@ export function useThreeScene(
     if (url && scene) loadModel(url);
   });
 
+  watch([mode, cropEditing], ([nextMode, cropping]) => {
+    if (nextMode === "pov" || cropping) projection.value = "perspective";
+    camera?.updateProjectionMatrix();
+  });
+
   onBeforeUnmount(() => dispose());
 
   return {
@@ -2276,6 +2356,7 @@ export function useThreeScene(
     error,
     rateLimited,
     mode,
+    projection,
     createMode,
     markersVisible,
     cropEditing,
@@ -2289,6 +2370,7 @@ export function useThreeScene(
     cropRoundPending,
     loadModel,
     setMode,
+    setProjection,
     pickPoint,
     getCameraSnapshot,
     flyTo,
