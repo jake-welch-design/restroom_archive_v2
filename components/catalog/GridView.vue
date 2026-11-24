@@ -117,7 +117,11 @@ function onTileClick(slug: string, e: MouseEvent) {
   <div
     ref="gridWrapRef"
     class="grid-wrap thin-scroll"
-    :class="{ 'list-sized': listSized, single: columns === 1 }"
+    :class="{
+      'list-sized': listSized,
+      single: columns === 1,
+      triple: columns === 3,
+    }"
     :style="
       scrollbarWidth === null ? undefined : { '--sbw': `${scrollbarWidth}px` }
     "
@@ -404,6 +408,30 @@ function onTileClick(slug: string, e: MouseEvent) {
   .list-sized .tile-info,
   .list-sized .desc-text {
     font-size: 12px;
+  }
+}
+
+/* Three columns chosen on a phone: tiles about a third of the screen wide,
+   too narrow for the grid's 12px tile type, which wraps a name onto three
+   lines and covers most of the scan. A size down, with the padding taken in to
+   match. Only for a chosen count; the phone's automatic two columns keep the
+   usual sizes. */
+@media (max-width: 750px) {
+  .triple .tile-info {
+    padding: 7px 8px 18px;
+    gap: 1px;
+    font-size: 10px;
+  }
+  .triple .tile-info.selected {
+    padding: 0;
+  }
+  .triple .expanded {
+    padding: 7px 8px;
+    gap: 7px;
+  }
+  .triple .desc-text,
+  .triple .submitter-line {
+    font-size: 10px;
   }
 }
 </style>
