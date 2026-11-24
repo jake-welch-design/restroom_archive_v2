@@ -1,10 +1,10 @@
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { useDb, schema } from "~~/server/utils/db";
-import { verifyPassword } from "~~/server/utils/hash";
+import { verifyUserPassword } from "~~/server/utils/hash";
 import { requireActiveUser } from "~~/server/utils/requireActiveUser";
 import { rateLimitByUser } from "~~/server/utils/rateLimit";
-import { now } from "~~/server/utils/sqlTime";
+import { deleteUserAccount } from "~~/server/utils/deleteUserAccount";
 
 const Body = z.object({
   password: z.string().min(1),
@@ -44,46 +44,14 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const ok = await verifyPassword(password, row.passwordHash);
+  const ok = await verifyUserPassword(password, row.passwordHash);
   if (!ok)
     throw createError({
       statusCode: 401,
       statusMessage: "Password is incorrect",
     });
 
-  // Mirror admin delete: published restrooms stay in the archive (unattributed),
-  // annotations are removed, the user row is dropped.
-  await db
-    .update(schema.restrooms)
-    .set({ submittedBy: null, updatedAt: now() })
-    .where(eq(schema.restrooms.submittedBy, user.id));
-
-  await db
-    .update(schema.restrooms)
-    .set({ removalRequestedBy: null })
-    .where(eq(schema.restrooms.removalRequestedBy, user.id));
-
-  await db
-    .update(schema.annotationReports)
-    .set({ reporterId: null })
-    .where(eq(schema.annotationReports.reporterId, user.id));
-
-  await db
-    .update(schema.annotationReports)
-    .set({ resolvedBy: null })
-    .where(eq(schema.annotationReports.resolvedBy, user.id));
-
-  await db
-    .update(schema.annotations)
-    .set({ hiddenBy: null })
-    .where(eq(schema.annotations.hiddenBy, user.id));
-
-  await db
-    .delete(schema.annotations)
-    .where(eq(schema.annotations.authorId, user.id));
-
-  await db.delete(schema.users).where(eq(schema.users.id, user.id));
-
+  await deleteUserAccount(db, user.id);
   await clearUserSession(event);
 
   return { ok: true };

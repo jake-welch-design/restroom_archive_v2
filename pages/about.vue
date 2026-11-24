@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { apiErrorMessage } from "~~/shared/utils/apiError";
 import { waitForTurnstileToken } from "~/composables/useTurnstileToken";
 const { toAbsolute } = useAbsoluteUrl();
+const { resolved: resolvedTheme } = useTheme();
 
-const siteUrl = "https://restroomarchive.com";
+const aboutUrl = toAbsolute("/about")!;
 const description =
   "The Restroom Archive is an ongoing repository of publicly accessible restrooms.";
 
@@ -12,7 +12,7 @@ useSeoMeta({
   description,
   ogTitle: "Info – The Restroom Archive",
   ogDescription: description,
-  ogUrl: `${siteUrl}/about`,
+  ogUrl: aboutUrl,
   ogImage: toAbsolute("/metatag.jpg"),
   twitterTitle: "Info – The Restroom Archive",
   twitterDescription: description,
@@ -20,7 +20,7 @@ useSeoMeta({
 });
 
 useHead({
-  link: [{ rel: "canonical", href: `${siteUrl}/about` }],
+  link: [{ rel: "canonical", href: aboutUrl }],
 });
 
 // Running totals, read as the closing sentence of the bio. Cheap server-side
@@ -54,10 +54,10 @@ const statsSentence = computed(() => {
 const legalOpen = ref(false);
 
 // The same walkthrough the account page opens, reached from here as well: this
-// is where somebody who isn't an Archivist yet is reading about becoming one,
-// and the guide answers "what am I signing up for" before the account does.
-// Opened straight from this page rather than linked to /account, which would
-// land them on a sign-in form instead of the thing they asked to see.
+// is where somebody who is not an Archivist yet reads about becoming one, and
+// the guide shows what signing up entails before the account page does. Opened
+// straight from this page rather than linked to /account, which would land on a
+// sign-in form instead of the walkthrough.
 const guideOpen = ref(false);
 
 // `/about?guide` opens it on arrival: the Weekly Report's "Submission Guide"
@@ -80,7 +80,7 @@ function closeGuide() {
 // Payment Links, which take no amount from the URL, so a field on this page
 // could not carry a value through to the checkout. The donor picks the amount
 // on Stripe's own page instead. Adding the EUR link and PayPal is a matter of
-// extending this list -- the markup below reads whatever is in it.
+// extending this list; the markup below reads whatever is in it.
 const supportLinks = [
   {
     label: "Send a one-time donation",
@@ -88,25 +88,22 @@ const supportLinks = [
   },
 ];
 
-// Contact form
 const contactName = ref("");
 const contactEmail = ref("");
 const contactSubject = ref("");
 const contactBody = ref("");
 const contactTurnstileToken = ref("");
-const contactLoading = ref(false);
-const contactError = ref("");
+const contactAction = useAsyncAction("Something went wrong.");
 const contactSubmitted = ref(false);
 
 async function submitContact() {
   if (!(await waitForTurnstileToken(contactTurnstileToken))) {
-    contactError.value = "Still verifying. Please wait a moment and try again.";
+    contactAction.error =
+      "Still verifying. Please wait a moment and try again.";
     return;
   }
-  contactError.value = "";
-  contactLoading.value = true;
-  try {
-    await $fetch("/api/contact", {
+  const ok = await contactAction.run(() =>
+    $fetch("/api/contact", {
       method: "POST",
       body: {
         name: contactName.value,
@@ -115,13 +112,12 @@ async function submitContact() {
         body: contactBody.value,
         turnstileToken: contactTurnstileToken.value,
       },
-    });
+    }),
+  );
+  if (ok) {
     contactSubmitted.value = true;
-  } catch (e: unknown) {
-    contactError.value = apiErrorMessage(e, "Something went wrong.");
+  } else {
     contactTurnstileToken.value = "";
-  } finally {
-    contactLoading.value = false;
   }
 }
 </script>
@@ -191,15 +187,6 @@ async function submitContact() {
           <WeeklyReportSignup id-prefix="about-wr" hide-label />
         </div>
       </section>
-      <!-- 
-      <section>
-        <h1>Controls</h1>
-        <p>
-          Drag to rotate, right-click to pan, and scroll to zoom. Use the switch
-          to show or hide annotations. Click the cube/eye icon to change the
-          view mode.
-        </p>
-      </section> -->
 
       <section>
         <h1>Become an Archivist</h1>
@@ -283,18 +270,20 @@ async function submitContact() {
           <NuxtTurnstile
             v-model="contactTurnstileToken"
             class="turnstile"
-            :options="{ theme: 'light', appearance: 'interaction-only' }"
+            :options="{ theme: resolvedTheme, appearance: 'interaction-only' }"
           />
 
-          <p v-if="contactError" class="form-error">{{ contactError }}</p>
+          <p v-if="contactAction.error" class="form-error">
+            {{ contactAction.error }}
+          </p>
 
           <button
             type="submit"
             class="primary-btn"
-            :disabled="contactLoading || !contactTurnstileToken"
+            :disabled="contactAction.loading || !contactTurnstileToken"
           >
             {{
-              contactLoading
+              contactAction.loading
                 ? "Sending…"
                 : !contactTurnstileToken
                   ? "Verifying…"
@@ -344,8 +333,16 @@ async function submitContact() {
       </footer>
     </article>
 
-    <LegalDialog :open="legalOpen" @close="legalOpen = false" />
-    <AccountArchivistGuideDialog :open="guideOpen" @close="closeGuide" />
+    <LazyLegalDialog
+      v-if="legalOpen"
+      :open="legalOpen"
+      @close="legalOpen = false"
+    />
+    <LazyAccountArchivistGuideDialog
+      v-if="guideOpen"
+      :open="guideOpen"
+      @close="closeGuide"
+    />
   </div>
 </template>
 
@@ -434,7 +431,7 @@ async function submitContact() {
   font-size: 14px;
 }
 
-/* InfoTooltip's circle, in the colour of the button text around it -- as in
+/* InfoTooltip's circle, in the colour of the button text around it, matching
    AccountArchivistGuide, whose button this one echoes. */
 .guide-icon {
   width: 13px;
@@ -448,8 +445,6 @@ async function submitContact() {
   line-height: 1;
 }
 
-/* Weekly Report signup: as narrow as the contact form, and in the prose's
-   rhythm, so it reads as part of the bio rather than a banner across it. */
 /* The blurb runs the full prose width; only the field and its button are held
    to the contact form's width. The page's 2px input padding left the
    placeholder touching the border, so this field gets room on the left. */
@@ -470,7 +465,6 @@ async function submitContact() {
   margin: 24px 0 32px;
 }
 
-/* Contact */
 .contact-form {
   display: flex;
   flex-direction: column;
@@ -512,13 +506,11 @@ async function submitContact() {
   line-height: 1.4;
 }
 
-/* Support */
 .support {
   margin-top: 1.2em;
   border: 1px solid var(--ink);
   padding: 16px;
   font-size: 12px;
-  /* max-width: 346px; */
 }
 
 .support h1 {

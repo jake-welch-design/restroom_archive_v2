@@ -57,7 +57,7 @@ defineEmits<{ (e: "update:modelValue", id: string): void }>();
 
 <style scoped>
 /* Support step of the account type scale (12px), one notch under the 15px
-   main tabs it sits beneath. See the scale comment in pages/account.vue. */
+   main tabs it sits beneath. See the scale comment in assets/css/account.css. */
 .subtabs {
   display: flex;
   flex-wrap: wrap;
@@ -128,7 +128,7 @@ defineEmits<{ (e: "update:modelValue", id: string): void }>();
 
 /* --- The plain variant ----------------------------------------------------- */
 /* Third level: no borders, no fill, an underline on the active item. Sits
-   directly under the segmented row it belongs to — the tighter top margin is
+   directly under the segmented row it belongs to: the tighter top margin is
    what makes the pair read as one nested control rather than two rows of
    equals. */
 .subtabs.is-plain {
@@ -181,7 +181,7 @@ defineEmits<{ (e: "update:modelValue", id: string): void }>();
 }
 
 /* On a phone the row is too long to sit on one line, and left to itself it
-   wraps mid-group — the admin tabs get split across both lines with the
+   wraps mid-group: the admin tabs get split across both lines with the
    `gap-before` indent stranded in the middle of the second. Break at the group
    boundary instead, so the queues make up one row and the admin tabs the next,
    both flush left with a clear 11px between them. Same window breakpoint as the
@@ -192,7 +192,7 @@ defineEmits<{ (e: "update:modelValue", id: string): void }>();
     display: block;
     flex-basis: 100%;
     /* The rows' whole separation: the buttons' border-overlap margin is off
-       below, so this is the gap you see. */
+       below, so this sets the visible gap. */
     height: 11px;
   }
   .subtab-btn {

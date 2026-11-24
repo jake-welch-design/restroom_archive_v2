@@ -23,7 +23,11 @@ const open = ref(false);
     Submission Guide
     <span class="guide-icon" aria-hidden="true">?</span>
     <Teleport to="body">
-      <AccountArchivistGuideDialog :open="open" @close="open = false" />
+      <LazyAccountArchivistGuideDialog
+        v-if="open"
+        :open="open"
+        @close="open = false"
+      />
     </Teleport>
   </button>
 </template>

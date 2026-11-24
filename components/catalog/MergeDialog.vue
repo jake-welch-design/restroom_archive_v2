@@ -25,17 +25,17 @@ const emit = defineEmits<{ close: []; merged: [] }>();
 
 const dialog = ref<HTMLDialogElement | null>(null);
 
-watch(
-  () => props.open,
-  (open) => {
-    const el = dialog.value;
-    if (!el) return;
-    if (open && !el.open) {
-      reset();
-      el.showModal();
-    } else if (!open && el.open) el.close();
-  },
-);
+function syncDialog(open: boolean) {
+  const el = dialog.value;
+  if (!el) return;
+  if (open && !el.open) {
+    reset();
+    el.showModal();
+  } else if (!open && el.open) el.close();
+}
+
+onMounted(() => syncDialog(props.open));
+watch(() => props.open, syncDialog);
 
 function onBackdrop(e: MouseEvent) {
   if (e.target === dialog.value) emit("close");

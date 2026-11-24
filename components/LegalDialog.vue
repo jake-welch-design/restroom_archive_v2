@@ -14,17 +14,17 @@ const emit = defineEmits<{ close: [] }>();
 
 const dialog = ref<HTMLDialogElement | null>(null);
 
-watch(
-  () => props.open,
-  (open) => {
-    const el = dialog.value;
-    if (!el) return;
-    // showModal() on an already-open dialog throws, and close() on a closed one
-    // is a no-op that still fires `close`, which would loop back through emit.
-    if (open && !el.open) el.showModal();
-    else if (!open && el.open) el.close();
-  },
-);
+function syncDialog(open: boolean) {
+  const el = dialog.value;
+  if (!el) return;
+  // showModal() on an already-open dialog throws, and close() on a closed one
+  // is a no-op that still fires `close`, which would loop back through emit.
+  if (open && !el.open) el.showModal();
+  else if (!open && el.open) el.close();
+}
+
+onMounted(() => syncDialog(props.open));
+watch(() => props.open, syncDialog);
 
 // Clicking the backdrop resolves to the <dialog> itself as the event target;
 // clicks on anything inside resolve to that child. Comparing against the

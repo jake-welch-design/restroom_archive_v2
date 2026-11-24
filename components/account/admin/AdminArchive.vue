@@ -8,7 +8,7 @@
  * which is the question an admin is asking when a published entry turns out not
  * to belong there.
  *
- * Removal is irreversible — the scan is deleted, not delisted — so it goes
+ * Removal is irreversible (the scan is deleted, not delisted), so it goes
  * through AdminRemovalForm, which insists on a reason and states the
  * consequence, rather than through a `confirm()` that says neither.
  */
@@ -48,14 +48,6 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: "submitter", label: "Submitter" },
 ];
 
-function submitterName(e: ArchiveEntry) {
-  return (
-    e.submitter?.displayName ||
-    e.submitter?.username ||
-    ""
-  ).toLowerCase();
-}
-
 // The status filter is applied before search and sort rather than inside them,
 // so the pill counts describe the whole archive while the list below describes
 // what the search has left of the selected pill.
@@ -90,7 +82,7 @@ const { query, sortKey, sortDir, visible, isEmptyFromSearch } = useListControls<
         return compareStamped(a, b, a.createdAt, b.createdAt);
       case "submitter":
         return (
-          submitterName(a).localeCompare(submitterName(b)) ||
+          userSortKey(a.submitter).localeCompare(userSortKey(b.submitter)) ||
           a.name.localeCompare(b.name)
         );
       default:
@@ -241,24 +233,3 @@ function removalNote(e: ArchiveEntry) {
     </ul>
   </div>
 </template>
-
-<style scoped>
-/* Sits in the control strip's `below` slot, where the accounts tally sits: a
-   qualifier on the search field above it rather than a second toolbar. */
-.filter-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-/* Dimmed rather than a second colour: the count qualifies the label, it is not
-   a badge for a backlog the way the sub-tab counts are. */
-.filter-count {
-  margin-left: 5px;
-  color: var(--faint);
-}
-
-.btn-sm.active .filter-count {
-  color: inherit;
-}
-</style>

@@ -1,10 +1,10 @@
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { useDb, schema } from "~~/server/utils/db";
-import { verifyPassword } from "~~/server/utils/hash";
+import { verifyUserPassword } from "~~/server/utils/hash";
 import { issueMobileToken } from "~~/server/utils/mobileToken";
 import { rateLimitByIp } from "~~/server/utils/rateLimit";
-import { toSessionUser } from "~~/server/utils/sessionUser";
+import { SESSION_USER_COLUMNS } from "~~/server/utils/sessionUser";
 
 const Body = z.object({
   email: z.string().email(),
@@ -18,32 +18,36 @@ export default defineEventHandler(async (event) => {
   const body = await readValidatedBody(event, Body.parse);
   const db = useDb(event);
 
-  const user = await db
-    .select()
+  const row = await db
+    .select({
+      ...SESSION_USER_COLUMNS,
+      passwordHash: schema.users.passwordHash,
+    })
     .from(schema.users)
     .where(eq(schema.users.email, body.email.toLowerCase()))
     .get();
 
-  const valid = user
-    ? await verifyPassword(body.password, user.passwordHash)
+  const valid = row
+    ? await verifyUserPassword(body.password, row.passwordHash)
     : false;
-  if (!user || !valid) {
+  if (!row || !valid) {
     throw createError({
       statusCode: 401,
       statusMessage: "Invalid email or password",
     });
   }
 
-  if (user.bannedAt) {
+  if (row.bannedAt) {
     throw createError({
       statusCode: 403,
       statusMessage: "This account has been banned.",
     });
   }
 
+  const { passwordHash: _pw, ...sessionUser } = row;
   const { token, expiresAt } = await issueMobileToken(
     event,
-    user.id,
+    sessionUser.id,
     body.deviceLabel,
   );
 
@@ -51,7 +55,6 @@ export default defineEventHandler(async (event) => {
     ok: true,
     token,
     expiresAt,
-    user: toSessionUser(user),
+    user: sessionUser,
   };
 });
-

@@ -1,30 +1,29 @@
 import { and, eq, isNotNull, sql } from "drizzle-orm";
-import { z } from "zod";
 import { useDb, schema } from "~~/server/utils/db";
 import { requireRole } from "~~/server/utils/requireRole";
 import { adminMessagePatch } from "~~/server/utils/adminMessage";
 import { recordAdminAction } from "~~/server/utils/auditLog";
 import { getRouterId } from "~~/server/utils/routeParams";
 import { now } from "~~/server/utils/sqlTime";
-
-const Body = z.object({
-  message: z.string().max(500).optional(),
-});
+import {
+  OptionalMessageBody,
+  readOptionalBody,
+} from "~~/server/utils/validation";
 
 /**
  * Lifts a ban: the account signs in again and its submissions return.
  *
  * The mirror of ban.post.ts, and the reason that handler records
- * `pre_ban_status`. Restoring is not "publish everything they submitted" — the
- * account may have had entries awaiting review, rejected, or removed on request
- * — so each row goes back to the status the ban took it from.
+ * `pre_ban_status`. Restoring is not "publish everything they submitted" (the
+ * account may have had entries awaiting review, rejected, or removed on
+ * request), so each row goes back to the status the ban took it from.
  */
 export default defineEventHandler(async (event) => {
   requireRole(event, "admin");
 
   const id = getRouterId(event);
 
-  const body = await readValidatedBody(event, Body.parse);
+  const body = await readOptionalBody(event, OptionalMessageBody);
 
   const db = useDb(event);
 
@@ -39,7 +38,7 @@ export default defineEventHandler(async (event) => {
 
   // One batch, so D1's implicit transaction keeps the two halves together. Run
   // sequentially, a failure on the restore left the account unbanned with every
-  // submission still hidden — and, because the throw came first, no audit entry
+  // submission still hidden, and because the throw came first, no audit entry
   // recording that the ban had been lifted at all.
   await db.batch([
     // No check that the account is actually banned, and no self guard: clearing

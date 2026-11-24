@@ -28,30 +28,29 @@ export default defineEventHandler(async (event) => {
   if (!user) return { ok: true };
 
   const currentUtc = new Date().toISOString().replace("T", " ").slice(0, 19);
-
-  await db
-    .update(schema.passwordResetTokens)
-    .set({ usedAt: currentUtc })
-    .where(eq(schema.passwordResetTokens.userId, user.id));
-
   const token = generateToken();
   const expiresAt = new Date(Date.now() + 60 * 60 * 1000)
     .toISOString()
     .replace("T", " ")
     .slice(0, 19);
 
-  await db.insert(schema.passwordResetTokens).values({
-    userId: user.id,
-    tokenHash: hashToken(token),
-    expiresAt,
-  });
+  await db.batch([
+    db
+      .update(schema.passwordResetTokens)
+      .set({ usedAt: currentUtc })
+      .where(eq(schema.passwordResetTokens.userId, user.id)),
+    db.insert(schema.passwordResetTokens).values({
+      userId: user.id,
+      tokenHash: hashToken(token),
+      expiresAt,
+    }),
+  ]);
 
   try {
-    await sendPasswordResetEmail(user.email, token);
+    await sendPasswordResetEmail(event, user.email, token);
   } catch {
     // Keep timing and status uniform regardless of mail transport state.
   }
 
   return { ok: true };
 });
-

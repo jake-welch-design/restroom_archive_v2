@@ -6,6 +6,7 @@ import { recordAdminAction } from "~~/server/utils/auditLog";
 import { serializeDescriptors } from "~~/server/utils/descriptors";
 import { getRouterId } from "~~/server/utils/routeParams";
 import { now } from "~~/server/utils/sqlTime";
+import { formatCoords } from "~~/shared/utils/regions";
 
 /**
  * Merges this scan's catalog entry into another, so the other gains its
@@ -24,12 +25,6 @@ const Body = z.object({
   lat: z.number().min(-90).max(90).nullable(),
   lng: z.number().min(-180).max(180).nullable(),
 });
-
-/** The display string stored alongside lat/lng, as submit and edit write it. */
-function formatCoords(lat: number | null, lng: number | null) {
-  if (lat == null || lng == null) return "";
-  return `${Math.abs(lat).toFixed(2)} ${lat >= 0 ? "N" : "S"}, ${Math.abs(lng).toFixed(2)} ${lng >= 0 ? "E" : "W"}`;
-}
 
 export default defineEventHandler(async (event) => {
   requireRole(event, "admin");

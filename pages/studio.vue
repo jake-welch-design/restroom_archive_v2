@@ -550,12 +550,19 @@ const RATE_LIMIT_WAIT_MS = 60_000;
 const RATE_LIMIT_TRIES = 6;
 
 function sleep(ms: number, signal: AbortSignal) {
+  if (signal.aborted) {
+    return Promise.reject(new DOMException("Aborted", "AbortError"));
+  }
   return new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(resolve, ms);
-    signal.addEventListener("abort", () => {
+    const onAbort = () => {
       clearTimeout(timer);
       reject(new DOMException("Aborted", "AbortError"));
-    });
+    };
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    signal.addEventListener("abort", onAbort, { once: true });
   });
 }
 
@@ -817,7 +824,15 @@ const exportingName = computed(() =>
 watch(
   canvasEl,
   (canvas) => {
-    if (!canvas || stage) return;
+    if (!canvas) {
+      if (stage) {
+        cancelAnimationFrame(raf);
+        stage.dispose();
+        stage = null;
+      }
+      return;
+    }
+    if (stage) return;
     stage = createTurntableStage(canvas);
     turnOrigin = performance.now();
     raf = requestAnimationFrame(tick);
@@ -1179,7 +1194,6 @@ const zoomPercent = computed(() => Math.round(settings.value.zoom * 100));
             </div>
           </section>
 
-          <!-- The batch. -->
           <section class="studio-list" aria-label="Restrooms">
             <div class="list-head">
               <span class="settings-group-label">Restrooms</span>
@@ -1239,7 +1253,6 @@ const zoomPercent = computed(() => Math.round(settings.value.zoom * 100));
                 v-for="e in visible"
                 :key="e.slug"
                 class="simple-row check-row"
-                :class="{ focused: e.slug === focusSlug }"
               >
                 <input
                   :id="`studio-check-${e.slug}`"

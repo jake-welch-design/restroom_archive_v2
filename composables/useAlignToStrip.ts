@@ -4,8 +4,8 @@
  *
  * This is the mirror image of what `Catalog.vue` does. There, the controls
  * strip is the source of truth and the tab measures itself against it. Pages
- * with no controls strip of their own (About, Account) leave the tab where it
- * is and align to it instead. The idea is the same either way: measure the real
+ * with no controls strip of their own (Account) leave the tab where it is and
+ * align to it instead. The idea is the same either way: measure the real
  * rendered geometry rather than matching it with hand-tuned constants that
  * drift across platforms and fonts.
  *

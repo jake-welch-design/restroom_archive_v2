@@ -11,13 +11,16 @@ export function hashToken(token: string): string {
 
 const scryptAsync = promisify(scrypt);
 
-export async function hashPassword(plain: string): Promise<string> {
+// Named `hashUserPassword` / `verifyUserPassword` rather than `hashPassword` /
+// `verifyPassword` so Nitro does not collide with nuxt-auth-utils' server
+// auto-imports (which use a different hash format and reversed argument order).
+export async function hashUserPassword(plain: string): Promise<string> {
   const salt = randomBytes(16).toString("hex");
   const derived = (await scryptAsync(plain, salt, 64)) as Buffer;
   return `scrypt:${salt}:${derived.toString("hex")}`;
 }
 
-export async function verifyPassword(
+export async function verifyUserPassword(
   plain: string,
   stored: string,
 ): Promise<boolean> {

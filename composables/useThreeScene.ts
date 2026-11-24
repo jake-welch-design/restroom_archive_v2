@@ -5,6 +5,7 @@ import type { Ref } from "vue";
 import type { CameraMode } from "~/types/annotation";
 import {
   MAX_CROP_REMOVALS,
+  clampInsideEdges,
   type Crop,
   type CropBox,
   type CropMode,
@@ -20,19 +21,17 @@ import {
   type ScanShading,
 } from "~/composables/scanModel";
 import { isLevelled, type Level, type Vec3 } from "~~/shared/utils/levelling";
-import {
-  clampInsideEdges,
-  createCropGizmo,
-  type CropGizmo,
-  type CropGizmoTool,
-  type RotateAxis,
+import type {
+  CropGizmo,
+  CropGizmoTool,
+  RotateAxis,
 } from "~/composables/cropGizmo";
 
 export type ViewMode = "orbit" | "pov";
 export type Projection = "perspective" | "orthographic";
 
 /** What a finished crop edit hands back for saving. */
-export interface CropResult {
+interface CropResult {
   /** The new crop, or null when it was cleared back to the scan's own bounds. */
   crop: Crop | null;
   /**
@@ -511,6 +510,34 @@ export function useThreeScene(
       userInteracted = true;
     });
 
+    sizeToContainer(canvas);
+
+    const preventDragStart = (e: Event) => e.preventDefault();
+    canvas.addEventListener("pointerdown", onPointerDown);
+    canvas.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    canvas.addEventListener("pointercancel", onPointerCancel);
+    canvas.addEventListener("wheel", onWheel, { passive: false });
+    canvas.addEventListener("dragstart", preventDragStart);
+    detachListeners = () => {
+      canvas.removeEventListener("pointerdown", onPointerDown);
+      canvas.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      canvas.removeEventListener("pointercancel", onPointerCancel);
+      canvas.removeEventListener("wheel", onWheel);
+      canvas.removeEventListener("dragstart", preventDragStart);
+    };
+
+    animate();
+  }
+
+  let detachListeners: (() => void) | null = null;
+
+  async function ensureGizmo(): Promise<CropGizmo | null> {
+    if (gizmo) return gizmo;
+    const { createCropGizmo } = await import("~/composables/cropGizmo");
+    if (gizmo) return gizmo;
+    if (!scene || !camera || !renderer || !controls) return null;
     gizmo = createCropGizmo({
       scene,
       camera,
@@ -558,17 +585,7 @@ export function useThreeScene(
         if (cropMode.value === "remove" || draftRemovals.length) syncPovGuide();
       },
     });
-
-    sizeToContainer(canvas);
-
-    canvas.addEventListener("pointerdown", onPointerDown);
-    canvas.addEventListener("pointermove", onPointerMove);
-    window.addEventListener("pointerup", onPointerUp);
-    canvas.addEventListener("pointercancel", onPointerCancel);
-    canvas.addEventListener("wheel", onWheel, { passive: false });
-    canvas.addEventListener("dragstart", (e) => e.preventDefault());
-
-    animate();
+    return gizmo;
   }
 
   function sizeToContainer(canvas: HTMLCanvasElement) {
@@ -688,11 +705,6 @@ export function useThreeScene(
   }
 
   /**
-   * Whether a box is the scan's own bounds, to within a millimetre an admin
-   * could not have aimed for. That case is stored as no crop at all rather than
-   * as a box that happens to match, so Reset genuinely clears the columns.
-   */
-  /**
    * Whether the removal box on screen would leave nothing behind.
    *
    * Only a removal can do that, and only by covering everything the confirmed
@@ -715,18 +727,6 @@ export function useThreeScene(
     );
   }
 
-  /**
-   * The bounding box of the geometry a `remove` crop leaves behind.
-   *
-   * Needed because in `remove` mode the drawn box is the part being deleted, so
-   * it cannot be what the viewer centres and frames on. Walking every vertex is
-   * the only way to find the real extent of what survives, and it is the whole
-   * point of the tool: an artefact floating metres from the room inflates the
-   * measured bounds, and only re-measuring without it pulls the framing in.
-   *
-   * Runs once, in the admin's browser, when a crop is saved. The result is
-   * stored, so no visitor ever pays for it.
-   */
   /**
    * Turns the level node to `rotation` about `pivot`.
    *
@@ -1255,7 +1255,10 @@ export function useThreeScene(
       const loader = new GLTFLoader();
       loader.setDRACOLoader(getDracoLoader());
       const gltf = await loader.loadAsync(url);
-      if (myId !== loadId) return;
+      if (myId !== loadId || !scene) {
+        disposeObject(gltf.scene);
+        return;
+      }
       profile?.phase("fetch+parse");
 
       currentModel = new THREE.Group();
@@ -1349,10 +1352,17 @@ export function useThreeScene(
     else setUpCropScene(token);
   }
 
-  function setUpCropScene(token: number) {
+  async function setUpCropScene(token: number) {
     // A cancel or another open since startCrop ran makes this one stale.
-    if (token !== cropStartToken || !cropEditing.value) return;
-    if (!gizmo || !currentModel) return;
+    if (token !== cropStartToken || !cropEditing.value || !currentModel) return;
+    const activeGizmo = await ensureGizmo();
+    if (
+      !activeGizmo ||
+      token !== cropStartToken ||
+      !cropEditing.value ||
+      !currentModel
+    )
+      return;
 
     // The box is dragged from outside it. From POV's vantage point inside the
     // scan the faces surround the camera and most handles are behind it.
@@ -1388,7 +1398,7 @@ export function useThreeScene(
       committedCrop?.povX != null && committedCrop.povZ != null
         ? { x: committedCrop.povX, z: committedCrop.povZ }
         : null;
-    gizmo.show(initial, originalBounds);
+    activeGizmo.show(initial, originalBounds);
     applyEditingClip();
     syncConfirmed();
     // A stored crop already knows its frame, so reopening one does not walk
@@ -1437,12 +1447,12 @@ export function useThreeScene(
 
   /** Abandons the edit. The model was never re-centred, so only clipping moves. */
   function cancelCrop() {
-    if (!gizmo) return;
+    if (!cropEditing.value) return;
     // Drops a scene setup still waiting on its delay.
     cropStartToken++;
     cropReady.value = false;
     cropEditing.value = false;
-    gizmo.hide();
+    gizmo?.hide();
     clearDraft();
     // Turn the scan back if a rotation was being tried, and re-measure against
     // the rotation that is actually in force.
@@ -2296,6 +2306,7 @@ export function useThreeScene(
 
   function onPointerCancel(e: PointerEvent) {
     activePointers.delete(e.pointerId);
+    gizmo?.onPointerUp();
     povState.dragging = false;
   }
 
@@ -2313,8 +2324,18 @@ export function useThreeScene(
   }
 
   function dispose() {
+    loadId++;
+    cropStartToken++;
     cancelAnimationFrame(raf);
     cancelAnimationFrame(tweenRaf);
+    detachListeners?.();
+    detachListeners = null;
+    for (const child of [...roundOutlines.children]) {
+      const helper = child as THREE.Box3Helper;
+      roundOutlines.remove(helper);
+      helper.geometry.dispose();
+      (helper.material as THREE.Material).dispose();
+    }
     if (currentModel) disposeObject(currentModel);
     gizmo?.dispose();
     controls?.dispose();
@@ -2368,11 +2389,8 @@ export function useThreeScene(
     cropEmptiesScan,
     cropConfirmed,
     cropRoundPending,
-    loadModel,
     setMode,
     setProjection,
-    pickPoint,
-    getCameraSnapshot,
     flyTo,
     project,
     captureThumb,

@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { useDb, schema } from "~~/server/utils/db";
 import { requireActiveUser } from "~~/server/utils/requireActiveUser";
@@ -52,10 +52,17 @@ export default defineEventHandler(async (event) => {
 
   const db = useDb(event);
 
+  const statuses =
+    user.role === "admin" ? ["published", "pending"] : ["published"];
   const restroom = await db
     .select({ id: schema.restrooms.id })
     .from(schema.restrooms)
-    .where(eq(schema.restrooms.slug, slug))
+    .where(
+      and(
+        eq(schema.restrooms.slug, slug),
+        inArray(schema.restrooms.status, statuses),
+      ),
+    )
     .get();
 
   if (!restroom)
@@ -82,7 +89,7 @@ export default defineEventHandler(async (event) => {
       rotationY: body.cameraMode === "pov" ? body.rotationY : null,
       modelRotationY: body.modelRotationY,
     })
-    .returning()
+    .returning({ id: schema.annotations.id })
     .get();
 
   return { ok: true, id: row.id };

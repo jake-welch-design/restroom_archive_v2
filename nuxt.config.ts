@@ -5,7 +5,6 @@ export default defineNuxtConfig({
   modules: ["nuxt-auth-utils", "@nuxtjs/turnstile", "@nuxt/eslint"],
 
   css: [
-    "maplibre-gl/dist/maplibre-gl.css",
     "~/assets/css/theme.css",
     "~/assets/css/a11y.css",
     "~/assets/css/scrollbars.css",
@@ -44,7 +43,7 @@ export default defineNuxtConfig({
           "default-src 'self'",
           // 'wasm-unsafe-eval' is what lets the Draco decoder run. DRACOLoader
           // fetches the decoder, then compiles it as WebAssembly inside a
-          // blob: Worker, and a blob: Worker inherits this document's policy --
+          // blob: Worker, and a blob: Worker inherits this document's policy,
           // so without it Chrome blocks the compile and a Draco-compressed scan
           // fails to open even though the loader is wired up correctly. It
           // permits compiling WebAssembly and nothing else; it does not bring
@@ -52,29 +51,34 @@ export default defineNuxtConfig({
           "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://challenges.cloudflare.com",
           "style-src 'self' 'unsafe-inline'",
           "img-src 'self' data: blob: https:",
+          "media-src 'self'",
           "font-src 'self' data:",
           "connect-src 'self' https: blob:",
           "worker-src 'self' blob:",
           "frame-src https://challenges.cloudflare.com",
+          "frame-ancestors 'none'",
           "object-src 'none'",
           "base-uri 'self'",
           "form-action 'self'",
         ].join("; "),
       },
     },
+    "/.well-known/apple-app-site-association": {
+      headers: { "Content-Type": "application/json" },
+    },
+    // Client-only admin WebGL/WebCodecs turntable studio: skip SSR so Three.js
+    // and MediaBunny stay out of the Cloudflare Pages Worker bundle.
+    "/studio": { ssr: false, headers: { "X-Robots-Tag": "noindex" } },
     // No shared cache on `/`. What the homepage renders depends on the visitor:
     // the `viewMode` cookie picks list/grid/map, and the session decides whether
     // the header offers Login or Account. Cached, every visitor got the first
-    // render — list, logged out — and a grid user's client then hydrated grid
+    // render (list, logged out), and a grid user's client then hydrated grid
     // markup onto list markup. Vue patched what it could and left the leftovers
     // loose in the panel, whose extra height let `scrollIntoView` scroll the
     // whole panel and carry the header and view controls off the top of the
     // screen. The response also re-sent that render's `Set-Cookie: viewMode=list`
     // to everyone, quietly overwriting the preference it was meant to remember.
     "/": { ssr: true },
-    "/r/**": { ssr: true },
-    "/about": { ssr: true },
-    "/account": { ssr: true },
   },
 
   runtimeConfig: {
@@ -93,8 +97,6 @@ export default defineNuxtConfig({
       },
     },
     public: {
-      modelsBaseUrl: "",
-      thumbsBaseUrl: "",
       siteUrl: "",
       // CARTO basemap tile key. Public by necessity: the browser requests the
       // tiles directly, so the key ships in the bundle. It's scoped to

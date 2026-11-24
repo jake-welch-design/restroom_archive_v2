@@ -38,5 +38,5 @@ export function useTagFilter() {
     return activeTags.filter((active) => active.toLowerCase() !== needle);
   }
 
-  return { isTagActive, toggleTag, removeTag };
+  return { isTagActive, toggleTag };
 }

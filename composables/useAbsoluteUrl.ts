@@ -1,9 +1,8 @@
 /**
  * Resolves a path to an absolute URL for use in meta tags and canonical
  * links. Prefers the configured public site URL over the request's own
- * origin: a cached route rule (`swr`, `isr`) can be revalidated by an
- * internal Nitro fetch with no real Host header, which otherwise resolves
- * `useRequestURL()` to `http://localhost` and leaks into the rendered page.
+ * origin: an internal Nitro SSR subrequest can lack the public Host header and
+ * otherwise resolve `useRequestURL()` to `http://localhost`.
  */
 export function useAbsoluteUrl() {
   const config = useRuntimeConfig();

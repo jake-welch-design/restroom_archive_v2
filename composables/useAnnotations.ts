@@ -11,6 +11,7 @@ export function useAnnotations(slug: Ref<string | null | undefined>) {
     () => `/api/restrooms/${slug.value}/annotations`,
     {
       default: () => [],
+      deep: false,
       server: false,
       immediate: !!slug.value,
       watch: false,

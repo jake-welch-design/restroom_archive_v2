@@ -3,6 +3,7 @@
 export function useDescriptorSuggestions() {
   return useFetch<string[]>("/api/restrooms/descriptors", {
     key: "descriptor-suggestions",
+    deep: false,
     default: () => [],
   });
 }

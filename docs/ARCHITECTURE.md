@@ -7,8 +7,8 @@ way they are. For setup and scripts, see the [README](../README.md).
 
 ## 1. The layout model
 
-The application renders one persistent shell, `layouts/default.vue`, for every
-route. It holds two things side by side:
+Every public and account route renders inside one persistent shell,
+`layouts/default.vue`, holding two panes side by side:
 
 ```
 ┌──────────────────────────┬───────────────────────────────┐
@@ -24,58 +24,61 @@ route. It holds two things side by side:
                    .expand-tab collapses the panel
 ```
 
-**The viewer lives in the layout, not in a page.** That is the single most
-consequential structural decision here, and everything below follows from it:
+Only two admin tools opt out with `definePageMeta({ layout: false })`:
+`pages/studio.vue` (`/studio`, the turntable MP4/GIF exporter) and
+`pages/newsletter.vue` (`/newsletter`, the Weekly Report composer), each needing
+a full-viewport workspace with its own preview pane. `app.vue` also mounts
+`<WeeklyReportDialog />` alongside `<NuxtLayout>` for the first-visit signup
+prompt.
 
-- Loading a photogrammetry GLB is expensive. Mounting the viewer per route would
-  re-download and re-parse the scan on every navigation.
+**The viewer lives in the layout, not in a page.** Everything below follows from
+that choice:
+
+- Loading a photogrammetry or LiDAR GLB is expensive. Mounting the viewer per
+  route would re-download and re-parse the scan on every navigation.
 - WebGL context creation and teardown is not free either, and browsers cap how
   many live contexts a page may have.
-- The submission wizard needs to preview an unsaved local scan in the same
-  surface the archive uses. Because the viewer is layout-level, the wizard can
-  take it over by writing a blob URL to shared state (§3).
+- The submission wizard previews an unsaved local scan in the same surface the
+  archive uses. Because the viewer is layout-level, the wizard can take it over
+  by writing a blob URL to shared state (§3).
 
-The consequence is that navigation never disturbs the viewer. Selecting a
-restroom changes a shared ref; the viewer swaps its model and disposes the old
-one's GPU resources.
+Navigation between layout routes never disturbs the viewer. Selecting a restroom
+changes a shared ref; the viewer swaps its model and disposes the old one's GPU
+resources.
 
 ### The mobile sheet
 
 Below 750px the two panes stack: the catalog becomes a top-anchored sheet whose
 height is a fraction of the viewport, and `.expand-tab` becomes its grabber.
 
-Two CSS variables, both published by the layout script, drive it:
+Two CSS variables published by the layout script drive it:
 
 - `--panel-frac`: the sheet's height as a fraction of the viewport.
 - `--push-frac`: how far the viewer is pushed down.
 
 `--push-frac` stops at the sheet's resting height (0.55) while `--panel-frac`
 keeps going. Past that point the sheet slides _over_ the viewer rather than
-squeezing it, which means the default view is exactly the un-dragged layout and
-the viewer is not re-laid-out on every drag frame.
+squeezing it, so the default view matches the un-dragged layout and the viewer
+is not re-laid-out on every drag frame.
 
-The drag's upper bound is measured, not fixed: `maxSheetFrac` reads the viewer's
-bottom control row and stops the grabber before it would collide.
+The drag's upper bound is measured off the live controls via `maxSheetFrac`:
+when the viewer's control menu is folded it clears `.ctrl-more`, and when the
+menu opens (`useViewerControls`) the sheet eases back down to clear
+`.overlay-right`. Opening the admin crop tool on mobile closes the sheet
+completely (`sheetClosedForCrop`) so the crop gizmo gets the whole viewport, and
+restores the sheet afterward unless the user reopened it manually.
 
 ---
 
 ## 2. Strip geometry
 
-This is the least self-evident mechanism in the codebase, and the one most
-likely to look like an accident.
-
-**The problem.** The `.expand-tab` that collapses the catalog panel has to line
-up exactly with the panel's header strip: it starts just under the controls
-row's top border and ends level with the sub-header's bottom border. Hand-tuned
-pixel constants do not survive contact with reality, because the strip's real
-height depends on font metrics and native control sizing, both of which differ
-across platforms and shift again when a web font swaps in.
-
-**The solution.** Measure the rendered geometry and publish it. Which side does
-the measuring depends on whether the page has a strip of its own.
+The `.expand-tab` that collapses the catalog panel lines up with the panel's
+header strip: starting just under the controls row's top border and ending level
+with the sub-header's bottom border. Hand-tuned pixel constants drift across
+platforms and font swaps, so the geometry is measured and published instead:
 
 ```
-Catalog (has a controls strip)          Account / About (no strip)
+Catalog (has a controls strip)          Account (no strip)
 ────────────────────────────────        ──────────────────────────────
 Catalog.vue measures its own DOM        useAlignToStrip reads stripGeom
         │                                        │
@@ -88,34 +91,25 @@ Catalog.vue measures its own DOM        useAlignToStrip reads stripGeom
   and --tab-height                        var(--strip-align-height)
 ```
 
-Both directions measure rather than assume; they differ only in which element is
-the source of truth.
-
 Details worth knowing before changing any of it:
 
 - `measureStrip` **sums** the two strip rows rather than spanning from the first
   one's top to the last one's bottom. The filter panel opens _between_ them, and
   a span would swallow it and stretch the tab.
-- `useAlignToStrip` uses `min-height`, not `height`, so the row only ever grows.
-  Content taller than the strip keeps its natural height rather than being
-  clipped.
-- Both re-measure on `document.fonts.ready`, because the web-font swap is a
-  primary source of cross-platform drift.
-- Both observe the target as well as the root. The page root is a fixed-height
-  flex column, so it does not resize when the header row's content wraps.
-- On the mobile sheet the tab moves to the panel's bottom edge, so there is
-  nothing to align to. Both sides drop the variable there.
+- `useAlignToStrip` uses `min-height`, not `height`, so content taller than the
+  strip keeps its natural height rather than being clipped.
+- Both re-measure on `document.fonts.ready` to catch web-font swaps.
+- Both observe the target element as well as the root.
+- On the mobile sheet the tab moves to the panel's bottom edge, so both sides
+  drop the alignment variable below 750px.
 
 ---
 
 ## 3. State and data flow
 
-Composables fall into two groups, and the difference matters.
+### Shared singletons (`useState` / `useCookie`)
 
-### Shared singletons (`useState`)
-
-One instance per request, shared by every caller. Use these for state two
-unrelated components must agree on.
+One instance per request, shared by every caller:
 
 | Composable                                   | Holds                                                                              |
 | -------------------------------------------- | ---------------------------------------------------------------------------------- |
@@ -123,689 +117,294 @@ unrelated components must agree on.
 | `useCatalogRows`                             | The filtered, sorted rows, so the viewer's next/previous match what the list shows |
 | `useStripGeom`                               | The measured header strip (§2)                                                     |
 | `useSubmissionPreview`                       | The wizard's or admin queue's viewer takeover                                      |
-| `useAccountNav`                              | Where the account page is pointed: tab, admin group, section per group             |
-| `useRestrooms`, `useStats`, `useAnnotations` | Keyed `useFetch` results                                                           |
+| `useAccountNav`                              | Account tab, submissions sub-tab, admin group, and remembered section per group    |
+| `useViewerControls`                          | Viewer control menu open state, column height, and active crop state               |
+| `useTheme`                                   | Light / dark / system display preference (`theme` cookie + `data-theme` on `html`) |
+| `useRestrooms`, `useStats`, `useAnnotations` | Keyed `useFetch` results (`deep: false` on read-only lists)                        |
 
-### Per-caller helpers
+### Per-caller helpers and shared modules
 
 Fresh state each call: `useAsyncAction`, `useAdminAction`, `useTurnstileToken`,
-`useThreeScene`, `useAlignToStrip`, `useTagFilter`.
+`useThreeScene`, `useAlignToStrip`, `useTagFilter`, `useListControls`.
+`useAsyncAction` and `useAdminAction` return `reactive(...)` so templates read
+`action.loading` without `.value`.
 
-`useAsyncAction` and `useAdminAction` both return `reactive(...)` rather than an
-object of refs, so templates read `action.loading` without `.value`. Nested refs
-in a plain object do not unwrap in templates.
+Plain modules in `composables/` shared by explicit import: `scanModel.ts` (GLB +
+Draco loading, unlit materials, bounds, disposal), `cropGizmo.ts` (lazy-loaded
+admin crop/level gizmo), `turntableStage.ts` and `studioExport.ts` (`/studio`
+turntable rendering and MediaBunny/`gifenc` encoding), and `emailImage.ts`
+(image compression for newsletter uploads).
 
 ### Keyed fetches
 
-Every list on the account page is read twice: the page counts it for a tab badge
-and a child component renders it. `composables/useAccountData.ts` declares them
-all with an explicit `key`, which is what makes those two callers share one
-request and one cache entry. Without the key they would fetch separately and
-drift apart after a refresh.
-
-They also share three options, all deliberate:
-
-- `server: false`, because none of it is public and SSR would put private data
-  into a payload that route rules may allow to be cached.
-- `immediate: false`, because at setup time the session has not resolved and the
-  request would go out unauthenticated.
-- `default: () => []`, so `.length` is safe before the first response.
+Every list on the account page is read twice (counted for a badge and rendered
+in a section). `composables/useAccountData.ts` declares them with explicit keys
+and `server: false`, `immediate: false`, `deep: false`, `default: () => []`.
 
 ### The empty-URL trap
 
-This one has bitten before. Given:
-
-```ts
-useFetch(() => (slug.value ? `/api/restrooms/${slug.value}/annotations` : ""));
-```
-
-an empty URL does **not** skip the request. It resolves relative to the current
-page and returns that page's HTML, which then fails to parse as the expected
-array. `useAnnotations` works around it by setting `watch: false` and driving
-`execute()` from its own watcher, clearing the data when the slug goes falsy.
+An empty URL in `useFetch(() => slug.value ? ... : "")` resolves relative to the
+current page and fetches its HTML instead of skipping the request.
+`useAnnotations` sets `watch: false` and drives `execute()` from its own
+watcher, clearing the array when `slug` goes falsy.
 
 ### Viewer takeover
 
-`useSubmissionPreview` exposes two refs that look similar and are not:
+`useSubmissionPreview` exposes three refs:
 
-- `previewModelUrl` answers "what should the viewer show". Set by the wizard
-  while a scan is loaded, and by the admin queue while a pending row is
-  expanded. Non-null also hides the panel toggle, so the panel cannot be tucked
-  away mid-preview.
-- `hasUnsavedSubmission` is narrower: true only while the wizard has unsaved form
-  progress. It gates the "leaving loses your submission" confirmation, which must
-  not fire for the admin's read-only preview.
-- `previewEntry` says whether the preview is of a real entry. The admin queue
-  sets it to the expanded row's id, slug and crop, which is what lets the viewer
-  offer the crop tool during review (§4). The wizard clears it: an unsaved scan
-  has no id to crop against.
+- `previewModelUrl`: what the viewer should load (set by the wizard or the admin
+  pending queue; non-null also hides the panel collapse tab).
+- `hasUnsavedSubmission`: true only while the wizard holds unsaved progress,
+  gating navigation confirmation.
+- `previewEntry`: id, slug, and crop when previewing a real database entry in
+  the admin queue, enabling the crop tool during review.
 
 ### The admin tab's two nav rows
 
-The Admin tab nests two levels below the main tabs: a **group**, and the
-**sections** inside it. `pages/account.vue` owns both, and `ADMIN_GROUP_SECTIONS`
-is the single declaration of what exists:
+`composables/useAccountNav.ts` declares the groups and their sections (with
+actionable queues placed first so each group opens on its backlog):
 
 | Group         | Sections                                      |
 | ------------- | --------------------------------------------- |
 | `submissions` | Pending, Archived, Rejected, Removal requests |
-| `accounts`    | Directory, Upgrades                           |
+| `accounts`    | Upgrades, Directory                           |
 | `annotations` | All annotations, Reports                      |
-| `audit`       | — (one list, so no second row renders)        |
+| `audit`       | (single list, so no second row renders)       |
 
-The groups are the _subject_ each list is about. The earlier flat row had grown
-to nine buttons in two clusters that did not correspond to anything: `upgrades`
-sat beside `removals` although one is about accounts and the other about
-entries, and the three restroom lists were split across the row's gap. The
-queue/browse distinction moves inside the groups, where the badge already says
-which is which.
+**Navigation inside the app must use `NuxtLink`, never a bare `href`.** A plain
+anchor triggers a full page load, dropping every `useState` singleton and
+tearing down the persistent WebGL viewer.
 
-Both rows are `AccountSubTabs`, in its two variants: the group row is
-`segmented` (the bordered block), the section row is `plain` (text with an
-underline on the active item). Rendering both as the same segmented block left
-nothing but position to say which one contained the other.
+### Search and list controls
 
-State notes worth knowing before editing this:
+Public catalog search (`shared/utils/catalogSearch.ts`) tokenizes across name,
+location, full country/subdivision names, description, tags, submitter, and
+date, preserving the user's chosen sort order within equal match tiers and
+falling back to bounded typo tolerance only when a word has no exact or prefix
+match. Matched spans are highlighted via `SearchHighlight.vue`.
 
-- **The position is a `useState` singleton**, `useAccountNav`, not page-local
-  refs. It has to outlive the page: the header links back to a bare `/account`
-  with no query, so plain refs sent an admin who stepped out to the catalog to
-  check one entry back to the Profile tab, two rows of sub-tabs from where they
-  were. Persistence is per session — a genuinely fresh load with no query opens
-  on Profile.
-- **Declaration order matters.** The nav state is destructured high in the
-  setup, above `setTab` and the pending-queue watch, both of which read it during
-  setup. Moved down with the rest of the sub-tab code it is a temporal dead zone,
-  and the page renders a 500.
-- **A section is remembered per group** (`adminSectionByGroup`), so leaving a
-  group and coming back returns to where you were rather than to its first
-  section.
-- **One watcher owns the URL.** `syncQueryToState` is the only thing that writes
-  `?tab=`, `?group=` and `?section=`; the setters just move state. The params are
-  rebuilt rather than merged, so a tab with no group or section drops the
-  previous tab's rather than leaving `group` stranded on Profile.
-- **A link beats memory.** `applyQuery` seeds from the URL where the URL says
-  anything, so `?tab=profile` lands on Profile even if the last visit ended on
-  Admin. A section is only accepted against the group it belongs to, so
-  `?group=accounts&section=rejected` opens Accounts at its own remembered section
-  instead of one that would render nothing.
-
-A corollary: **navigation inside the app must be `NuxtLink`, never a bare
-`href`.** A plain anchor is a full page load, which drops every `useState`
-singleton and the viewer's loaded scan with them. The site title in
-`CatalogHeader` was such an anchor, so reaching the catalog by the logo lost the
-position that the Catalog link beside it preserved.
-
-### Admin list controls
-
-Every admin section carries the same search-and-sort strip, from
-`AdminListControls` (the markup) and `useListControls` (the state). Each caller
-supplies only the two genuinely per-list things: what a search matches against,
-and how two rows compare on a given key.
-
-Searching does not reorder by relevance the way the public catalog's fuzzy
-search does. An admin searching is narrowing a list they still want ordered by
-whatever they chose, so the match is a plain substring test and the sort stays in
-force. Sections that also have a status filter (Archived, Rejected) put those
-pills in the strip's `below` slot, where the accounts tally sits — a qualifier on
-the search field rather than a second toolbar.
+Admin lists use `AdminListControls` and `useListControls` for substring
+filtering while keeping the chosen sort key in force.
 
 ---
 
-## 4. The viewer
+## 4. The viewer and studio
 
-`composables/useThreeScene.ts` owns the Three.js scene. `Viewer.client.vue`
-owns the controls and annotation UI around it.
+`composables/scanModel.ts` owns the scan pipeline shared by both the live viewer
+(`composables/useThreeScene.ts` + `Viewer.client.vue`) and the admin video
+studio (`composables/turntableStage.ts` + `pages/studio.vue`).
 
-### Two camera modes
+### Camera modes and projection
 
-- **Orbit**: `OrbitControls`, 70° field of view. Auto-rotates slowly until the
+- **Orbit**: `OrbitControls`, 70° perspective FOV by default, with an
+  **Orthographic** toggle in the viewer controls. Auto-rotates slowly until the
   first interaction.
-- **POV**: controls disabled, camera at eye height inside the scan, drag to look
-  around, wheel and pinch adjust the field of view between 30° and 110°.
+- **POV**: camera at eye height inside the scan (`povX`, `povY`, `povZ` when
+  configured on the crop, or just above the frame's centre), drag to look
+  around, wheel and pinch adjust FOV between 30° and 110°. Entering POV or the
+  crop tool switches orthographic views back to perspective automatically.
 
-### Scans are photographed, not lit
+### Draco compression
 
-Photogrammetry bakes real-world lighting into the base colour texture. Rendering
-that with a PBR material means Three re-lights an already-lit image: dark
-surfaces pick up ambient and environment fill, and the scan reads faded.
+`getDracoLoader` in `composables/scanModel.ts` attaches a single shared
+`DRACOLoader` pointing at `/draco/` (`draco_wasm_wrapper.js` and
+`draco_decoder.wasm`, vendored from
+`node_modules/three/examples/jsm/libs/draco/gltf/`). Keeping the decoder in
+`public/draco/` serves it same-origin from static assets without a third-party
+CSP exception; `'wasm-unsafe-eval'` in `nuxt.config.ts` allows compiling the
+WASM module inside `DRACOLoader`'s `blob:` worker.
 
-`toUnlitMaterial` converts every material to `MeshBasicMaterial`, which shows the
-texture exactly as authored. Tone mapping is off for the same reason. This also
-sidesteps a specific failure mode: glTF's `metallicFactor` defaults to 1, and
-scans exported without it render black under a PBR material. With metalness out
-of the pipeline entirely, the question does not arise.
+When upgrading `three` in `package.json`, re-copy both files from
+`node_modules/three/examples/jsm/libs/draco/gltf/` into `public/draco/` (listed
+in `.prettierignore` so Prettier never reformats the minified wrapper) and
+update the pinned `three@` CDN URL in `scripts/render-thumbs.ts`.
 
-### Disposal
+### Unlit materials and GPU disposal
 
-`material.dispose()` does **not** cascade to textures. Skipping the manual
-texture disposal leaves photogrammetry-sized textures resident on the GPU after
-every model swap, which degrades quickly. `disposeMaterial` walks each material's
-keys and disposes anything that is a texture.
-
-`toUnlitMaterial` is the deliberate exception: it hands the textures to the new
-material and disposes only the old material shell.
+Photogrammetry and LiDAR scans bake real-world lighting into their base colour
+textures. `scanModel.ts` converts materials to unlit `MeshBasicMaterial` with
+`NoToneMapping`, transferring textures and disposing old material shells. On
+model swap or unmount, `disposeObject` disposes geometries, materials, and every
+attached texture so GPU memory does not accumulate across browsing sessions.
 
 ### Orbit pivot re-anchoring
 
-`OrbitControls` sizes both its dolly step and its pan step from the distance
-between the camera and `controls.target`. The pivot, not the geometry, decides
-how fast the viewer moves.
-
-For a room scan the target sits at the bounding box's centre, which is empty
-air. Zoom in past a wall and the radius collapses toward zero while the surfaces
-on screen are still metres away. Every wheel tick then dollies a fraction of that
-tiny radius and a full drag pans almost nothing, which reads as the viewer
-seizing up.
-
-`reanchorOrbitTarget` fixes the pivot rather than the speeds: it casts a ray
-along the camera's forward axis and pushes the target onto whatever surface it
-hits, so the radius tracks what is actually on screen. The camera is never
-touched, and `OrbitControls` recomputes its offset from the live target on each
-update, so the view is identical before and after.
-
-Because raycasting a photogrammetry mesh is O(triangles) with no BVH, the probe
-is guarded three ways: an exact early-out when the radius is already large enough
-that no hit could matter, a 250ms throttle, and a forced run only on interaction
-start.
+`reanchorOrbitTarget` raycasts along the camera's forward axis (throttled and
+guarded by an early-out when the orbit radius is already large) and moves
+`controls.target` onto the visible surface so zooming past a room's midpoint
+never collapses dolly and pan speeds.
 
 ### Annotations
 
-An annotation stores a point **and** the camera that framed it: mode, field of
-view, orbit position and target or POV rotation, and the model's rotation at the
-time. Selecting one calls `flyTo`, which tweens all of it so the reader arrives
-at the exact view the author was describing.
+Annotations store a 3D point in levelled model-local space plus the camera
+snapshot that framed it. `AnnotationsLayer.vue` projects visible markers in a
+`requestAnimationFrame` loop using a `shallowRef` map and dirty-checking so
+stationary cameras trigger zero Vue re-renders.
 
-The point is stored in **model-local** space, so markers track the model as it
-auto-rotates. `project()` converts back to world space before projecting to
-screen coordinates.
+### Multi-round cropping, levelling, and POV placement
 
-This is why hiding an annotation is reversible and deleting is not: the camera
-snapshot is part of the content.
+Admins can level tilted scans, trim stray geometry across multiple rounds, and
+position the POV eye without modifying the `.glb` in R2. `cropGizmo.ts` is
+dynamically imported the first time an admin opens the crop tool so public
+visitors do not download or instantiate the gizmo.
 
-### Cropping
-
-Admins can trim stray geometry off a scan and re-centre it, from the viewer on
-any entry or from the pending queue during review. The crop is stored on the
-restroom row; the GLB in R2 is never modified.
-
-**Two modes, and therefore two boxes.** `keep` trims everything outside the
-box. `remove` deletes what is inside it, which is the mode the job usually
-wants: an artefact floating metres from the room, boxed and dropped. That is
-why a crop stores two boxes rather than one:
-
-- `box` is what the admin drew and what the clipping planes cut against.
-- `frame` is what the viewer centres and frames on. In `keep` mode it is the
-  box. In `remove` mode it cannot be, because the box is the part being thrown
-  away and centring on the hole would be exactly wrong. There it is the
-  bounding box of the geometry that survives, measured by walking every vertex
-  once, in the admin's browser, at save time. Measuring it is the whole point:
-  the artefact inflated the scan's measured bounds, and only re-measuring
-  without it pulls the framing in. Storing the result is what keeps that cost
-  off every visitor.
-
-**Why a box fixes so much.** `frameOn` derives everything about framing from
-one bounding box: the offset that centres the model, the orbit distance, the
-near and far planes, `controls.minDistance`, the pivot probe's fallback radius
-and where POV starts. Without a crop that box is measured from the whole scan,
-so a single floating fragment inflates it and drags all of them off. A stored
-crop simply replaces the measured box with `frame`.
-
-**The box is in the GLB's local space**, not the viewer's centred world space.
-World space is local space minus the centre of whichever box is applied, so a
-crop stored in world space would compose with the previous crop's offset on
-every re-edit.
-
-**Hiding the rest is clipping, not geometry surgery.** Six planes on each
-material cut against the box. Three discards a fragment on a plane's negative
-side, and the two modes differ in two things that only work together:
-
-- `keep` faces the planes inward with `clipIntersection` off, so a fragment
-  behind any one plane, outside the box, is discarded.
-- `remove` faces them outward with `clipIntersection` on, so only a fragment
-  behind all six, strictly inside the box, is discarded.
-
-Turning `clipIntersection` on without flipping the planes discards nothing:
-"behind all six inward planes" means left of the box and right of it at once.
-The first version of `remove` shipped exactly that way and removed nothing.
-Three consequences:
-
-- Clipping planes are world-space and the model turns (auto-rotate, and `flyTo`
-  restoring an annotation's model rotation), so the planes are held in local
-  space and re-derived from the model's matrix every frame.
-- Clipping happens at the fragment stage, so the raycaster still hits the hidden
-  triangles. `pickPoint` and the pivot probe both go through `firstVisibleHit`,
-  which skips hits on the side the crop removed; otherwise an annotation could
-  land on geometry nobody can see.
-- Both the plane count and `clipIntersection` are compiled into the shader, so
-  turning clipping on or changing mode rebuilds the program. Moving a plane does
-  not, which is why dragging a face costs nothing.
-
-**Re-centring and levelling move stored annotations.** Annotation points are in
-levelled local space, so a change of levelling rotation moves them; orbit
-cameras (`orbit_pos_*`, `orbit_target_*`) are in world space, so any change of
-centre or rotation moves them; POV annotations store only a view direction,
-which a rotation turns. `reframeAnnotation` in `shared/utils/levelling.ts` does
-all of it, and with no rotation it reduces to shifting orbit cameras by
-`C_old − C_new`. The client sends both centres, since only it can measure them;
-`POST /api/admin/restrooms/[id]/crop` takes the rotation before from the stored
-row and the rotation after from the crop, reads the entry's annotations from
-the database and rewrites them in one batch with the crop. Reading them there
-rather than taking them from the client means one added since the admin's page
-loaded is moved too. Skipping this leaves every saved view pointing past its
-subject.
-
-**Levelling** turns a scan exported off its axis upright. The model the viewer
-positions is a wrapper group around a level node around the GLB's scene:
-
-```
-world = Ry(θ) · L − C          wrapper: position −C, rotation.y θ
-L     = R · (q − p) + p        level node: rotation R about pivot p
-```
-
-`L` is levelled local space, where every crop box, the eye height and every
-annotation point live. For a scan never levelled the node is the identity, so
-nothing stored before levelling existed moves. The rotation and its pivot are
-stored as the crop's `level`; the pivot is fixed when a scan is first rotated,
-at the centre of the scan as exported, and kept after, so rotations compose
-without the levelled space drifting. Details worth knowing:
-
-- The maths is checked against three.js itself: 2,000 random trials of the
-  scene graph against `reframeAnnotation`, every error around 10⁻¹⁴.
-- Ring drags do not intersect the pointer with the ring's plane. That falls
-  apart as a ring turns edge-on, where the ray grazes the plane and a plain drag
-  along a visible ring does nothing. A ring facing the camera turns by circling
-  the pointer round its centre; any other turns by dragging its near side,
-  measured along eye × axis, so the near side keeps pace with the pointer.
-- Quarter turns snap within 3°, for scans that arrive lying on their side. Zero
-  does not, so corrections of a degree or two are not swallowed.
-- The level grid is depth-tested, so a floor that is not level visibly crosses
-  it. It re-seats at the scan's new floor after each drag.
-- Rotating changes the scan's bounds, so coming back to the box after a rotation
-  fits a fresh `keep` box to the levelled scan. A removal box is not carried
-  through a rotation, which could only grow it: level first, then crop.
-- While a rotation is being tried, markers and the stranded-annotation count use
-  `toDraftSpace`, the same move the server will make, so markers stay on their
-  surfaces as the scan turns.
-- Bounds are measured by walking vertices once a scan is levelled, because a
-  rotated mesh's transformed bounding box is up to √2 too loose. Visitors skip
-  that: a levelled scan always has a stored frame, and that frame, not the
-  measurement, is what the viewer centres on.
-- `scripts/render-thumbs.ts` builds the same wrapper and level node, or a later
-  `npm run thumbs` would render levelled scans tilted.
-
-**Thumbnails are re-rendered on save**, and `thumbUrl` carries `?v=` from
-`updated_at`. The thumbnail key is stable and served `immutable`, so without
-the version the corrected image would sit behind a year-long cache.
-`scripts/render-thumbs.ts` honours the crop too, or a later `npm run thumbs`
-would quietly regenerate uncropped thumbnails.
-
-**The gizmo** lives in `composables/cropGizmo.ts`: a wireframe box with thick
-corner brackets and six face handles, dragged in the scene. Details that look
-arbitrary and are not:
-
-- Handles are camera-facing sprites. Handles drawn flat on their faces shrink to
-  an unclickable sliver when the camera looks along the face.
-- Brackets use `LineSegments2`, because WebGL ignores `linewidth` on ordinary
-  lines and a one-pixel bracket is barely distinguishable from an edge.
-- The walls are faintly filled and, unlike the rest of the gizmo, depth-tested
-  against the scan. A wall is hidden wherever geometry stands in front of it, so
-  it reads as glass cutting through the room and shows where the cut falls. They
-  use `polygonOffset`, because a wall at the scan's full bounds lies on its
-  outermost geometry and would otherwise z-fight into a shimmer. The wall being
-  dragged is brought up.
-- The group follows the model's matrix instead of being parented to the model,
-  which would put the handles inside the object annotations raycast against.
-- Hovering a handle disables `OrbitControls` before the press, so dragging a
-  handle never also spins the camera; dragging anywhere else still orbits.
-- Opening the tool frames the whole box (the ordinary framing lets corners fall
-  off a narrow viewer) and closing it without confirming restores the previous
-  view.
-- Switching to `remove` while the box still covers everything pulls it in to a
-  quarter of each axis, because the honest rendering of that state is a black
-  viewport.
-
-**The controls are icon buttons in the viewer's own control row**, not a panel.
-The crop button opens the tool and, pressed again, saves; there is no separate
-save. While the tool is open a reset button, a rotate button that switches the
-scene between the box and the levelling rings, and a one-press `+`/`−` mode
-toggle appear beside it, and a "Cropping" note, "Rotating" with a live angle
-while a ring is dragged, sits in the annotation hint's place. The rotate button
-lights white rather than red, since red already marks the button that saves, and
-the `+`/`−` toggle is disabled while the box it applies to is not shown. Saving
-from rotate mode closes the rotation first, and Reset clears the rotation along
-with everything else.
-Details that look arbitrary and are not:
-
-- **On desktop the crop buttons slide into the annotation buttons' place.** The
-  row is anchored to the right, so when the annotation buttons go, view mode and
-  crop move right. They slide rather than jump, so the eye follows the crop
-  button to where it is pressed again. The slide is written out by hand in
-  `Viewer.client.vue` rather than using `TransitionGroup`, because the buttons
-  that move sit in the mobile stack's wrapper and are not siblings of the ones
-  that leave. Leaving buttons are pinned absolutely where they stood as they
-  fade, so they drop out of the layout at once and the slide does not finish
-  with a jump. On the mobile sheet the same buttons stack up the left edge from
-  the corner, with `order` putting the new ones above crop, and nothing slides.
-- **The box appears after the controls have moved, not with them.** The first
-  open in a session compiles shaders, the scan's with clipping and the gizmo's
-  own, which stalls the main thread for several frames. `startCrop` takes a
-  `sceneDelayMs`, so `cropEditing` flips at once and the scene work follows once
-  the slide is done; `cropReady` covers the gap, and the tool's buttons ignore
-  presses until it is set. Saving waits the same way before rendering the
-  thumbnail, which builds a second renderer and compiles everything again.
-  Measured in a software renderer, where compiles are slowest, the first open
-  stalled 291ms mid-slide before this and 17ms at worst after.
-- **A second press with nothing changed closes the tool** instead of saving.
-  `cropHasChanges` compares the draft with the crop in force, so opening and
-  closing costs no request, thumbnail or audit entry.
-- **Toggling to `remove` and straight back restores the box.** Switching to
-  `remove` with the box at full bounds shrinks it to a quarter so the scan does
-  not vanish; switching back to `keep` before dragging it puts the original box
-  back. Left shrunk, one idle round trip of the toggle followed by a press would
-  save a crop that trims away most of the scan.
-- **Escape abandons an edit.** Reset returns the box to full bounds _and_ the
-  mode to `keep`, since full bounds means "no crop" one way round and "delete
-  everything" the other.
-
-**The POV eye** is set in the same tool. POV stands at the frame's centre, so in
-a tall room it inherits the room's midpoint height. A vertical guide runs through
-the frame's centre from floor to ceiling, and dragging the dot on it sets the
-crop's optional `povY`. Details worth knowing:
-
-- Every POV placement (entering POV, re-framing in it, flying to a POV
-  annotation) goes through `povPosition`. Missing one would put the camera at
-  the old height on that path only.
-- `povY` is an absolute local height, not an offset from the centre, so a later
-  re-crop that moves the centre leaves the eye where it was put. Model rotation
-  is about Y alone, which is why local height converts to world height by
-  subtracting the centre's Y.
-- Absent means the old default, 0.2 above the centre, so every scan and every
-  crop saved before this looks exactly as it did.
-- Moving the eye alone is saved as a `keep` crop at full bounds. `clipBoxOf`
-  treats that box as no clipping, so a scan with only its eye moved stays off
-  the clipping shader.
-- POV annotations store view angles but no position, so moving the eye changes
-  where they are seen from while keeping the direction they look.
+- **Two boxes plus additional removals**: `box` (`keep` or `remove`) is cut by
+  six Three.js clipping planes; `frame` is the surviving geometry bounds used to
+  centre and frame the scan; `removed` (`CropBox[]`, up to `MAX_CROP_REMOVALS`)
+  holds additional confirmed removal boxes cut in the fragment shader via custom
+  GLSL spliced through `onBeforeCompile` (`shared/utils/cropShader.ts`, shared
+  with `scripts/render-thumbs.ts`).
+- **Levelling**: wraps the GLB scene in a level node (`L = R · (q - p) + p`)
+  beneath the centred wrapper group. Saving a crop or level change rewrites all
+  stored annotations for that entry on the server (`shared/utils/levelling.ts`)
+  in a single D1 batch and re-renders the thumbnail (`?v=` keyed off
+  `updated_at` to bust the immutable cache).
 
 ---
 
-## 5. Authentication and roles
+## 5. Authentication, moderation, and alerts
 
-### Two ranks, one gate
+### Web sessions and mobile Bearer tokens
 
-| Rank      | Can                              | Granted by                    |
-| --------- | -------------------------------- | ----------------------------- |
-| Annotator | Read, annotate                   | Signing up                    |
-| Archivist | The above, plus submit scans     | An admin approving a request  |
-| Admin     | Everything, including moderation | An admin promoting an account |
+- **Web**: sealed cookies via `nuxt-auth-utils`.
+- **Mobile**: `Authorization: Bearer <token>` backed by SHA-256 token hashes in
+  `api_tokens` (`server/utils/mobileToken.ts`), accepted by
+  `server/middleware/auth.ts` whenever no cookie session is present, with
+  `last_used_at` writes throttled to once per hour.
 
-"Annotator" and "Archivist" are the same `role` value (`archivist`); what
-separates them is whether `approved_at` is set. Only `admin` is a distinct role.
-`useAuth().canSubmit` is the single place that rule is expressed.
+`server/middleware/auth.ts` refreshes `event.context.user` from D1 on
+authenticated API/page requests (skipping R2 blob streams, `/api/stats`,
+`/sitemap.xml`, and public contact/newsletter routes so Grid View and scan loads
+do not trigger redundant D1 lookups), and expires `admin_message` after 24
+hours. `server/plugins/session.ts` reuses `event.context.user` when refreshing
+`/api/_auth/session`. Password hashes use `hashUserPassword` and
+`verifyUserPassword` in `server/utils/hash.ts` (`scrypt:<salt>:<hex>`), and
+password changes or resets revoke existing `api_tokens`.
 
-### The guard ladder
+### Roles and guards
 
-Server endpoints compose three guards, each adding one question:
+"Annotator" and "Archivist" share `role = 'archivist'`, separated by
+`approved_at` (`useAuth().canSubmit`). Server endpoints layer `requireRole`,
+`requireActiveUser` (not banned or muted), and `requireApproved`.
 
-```
-requireRole(event, minimum)        Is the caller who they need to be?
-        ▼
-requireActiveUser(event, minimum)  ...and in good standing? (not banned, not muted)
-        ▼
-requireApproved(event)             ...and approved to submit?
-```
+### Rate limiting and admin notifications
 
-Read endpoints deliberately stop at `requireRole`, so a muted user can still
-browse the archive they cannot post to.
+`server/utils/rateLimit.ts` uses a single `INSERT ... ON CONFLICT DO UPDATE ...
+RETURNING count` statement against `rate_limits`, with probabilistic (~1%)
+wall-clock `expires_at` cleanup offloaded via `waitUntil`.
 
-### Session freshness
-
-The session cookie is a snapshot from sign-in. Two pieces keep it honest:
-
-- `server/middleware/auth.ts` re-reads the user on every request and populates
-  `event.context.user`. This is what makes a ban, mute, role change or revoked
-  approval take effect on the caller's _next request_ rather than their next
-  sign-in.
-- `server/plugins/session.ts` hooks the session fetch so the same freshness
-  reaches the client's own view of the user.
-
-`server/utils/sessionUser.ts` owns the projection both use, and `types/auth.d.ts`
-derives the `#auth-utils` `User` type from it rather than restating the fields.
-That is not tidiness: a hand-written copy previously drifted a field ahead of
-every query that populated it, which was five of the repository's type errors.
-
-### Rate limiting
-
-`server/utils/rateLimit.ts` uses a fixed-window counter in a `rate_limits` table,
-keyed by IP or user id plus an action name. Applied to sign-in (10/hour), sign-up
-and password reset requests (5/hour), the contact form (5/hour), and submission
-access requests (3/day).
-
-Cleanup is probabilistic: roughly 1% of calls delete windows older than ten, so
-the table does not grow without bound and no scheduled job is needed.
+Admin notifications (`server/utils/notify.ts` + `server/utils/telegram.ts`) send
+Telegram messages via `waitUntil` to opted-in admins when submissions, access
+requests, or safety reports arrive. Admins link their Telegram chat from
+`Profile -> Alerts` using one-time codes verified via `getUpdates` (no webhook).
 
 ---
 
 ## 6. Data model
 
-Six tables in `server/db/schema.ts`.
+Eleven tables in `server/db/schema.ts`:
 
-| Table                   | Holds                                                         |
-| ----------------------- | ------------------------------------------------------------- |
-| `users`                 | Accounts, roles, moderation state, the standing admin message |
-| `restrooms`             | Catalog entries and their R2 keys                             |
-| `annotations`           | Comment text, its 3D point, and the camera that framed it     |
-| `annotation_reports`    | Reports against annotations, unique per reporter              |
-| `password_reset_tokens` | Hashed, single-use, one-hour tokens                           |
-| `admin_audit_log`       | Append-only record of admin actions                           |
+| Table                   | Holds                                                                     |
+| ----------------------- | ------------------------------------------------------------------------- |
+| `users`                 | Accounts, roles, moderation state, Telegram alert link/opt-in             |
+| `restrooms`             | Catalog entries, `country`, `establishment` group key, crop JSON, R2 keys |
+| `annotations`           | Comment text, 3D point, and framing camera snapshot                       |
+| `annotation_reports`    | Reports against annotations, unique per `(annotation_id, reporter_id)`    |
+| `restroom_reports`      | Safety reports against restroom entries, unique per reporter              |
+| `user_blocks`           | Per-user blocks (`blocker_id`, `blocked_id`), filtering annotations       |
+| `api_tokens`            | Hashed Bearer tokens for mobile clients                                   |
+| `password_reset_tokens` | Hashed, single-use, one-hour password reset tokens                        |
+| `admin_audit_log`       | Append-only record of admin actions                                       |
+| `weekly_report_issues`  | Sent Weekly Report newsletter issues (JSON payload + rendered HTML)       |
+| `rate_limits`           | Fixed-window rate-limit counters with wall-clock `expires_at`             |
 
-### Restroom status
+### Multi-scan establishments (versions)
 
-```
-                submit
-                  │
-      ┌───────────┴───────────┐
-      │ (admin)               │ (archivist)
-      ▼                       ▼
-  published ◄───publish─── pending ◄──unreject──┐
-      │                       │                 │
-      │                       └──reject──► rejected
-      │
-      ├──ban submitter──► hidden ──lift ban──► back to the previous status
-      │
-      └──remove (grants a request)──► removed
-```
+Multiple scans of the same physical restroom share an `establishment` key
+(`shared/utils/versions.ts`, migration `0031`). List and Grid views render each
+scan as its own row with `ArchiveDate` offering a date switcher across sibling
+scans; MapView renders one pin per establishment; `/api/stats` counts distinct
+establishments. Admins combine and split scans via `MergeDialog.vue` and
+`/api/admin/restrooms/[id]/merge` and `/separate`.
 
-Two things this diagram deliberately does not show, because they are not
-statuses:
+### Restroom lifecycle and rejection grace period
 
-- **A removal request is not a status.** It is recorded in
-  `restrooms.removal_requested_by`, and the entry stays `published` until an
-  admin acts. Client code that filtered on a `removal_requested` status was
-  checking a value nothing ever wrote.
-- **`hidden` versus `rejected`.** `hidden` is applied in bulk when a submitter is
-  banned; `rejected` is a per-entry decision. The submitter's own list shows both
-  as "Rejected", because from their side the difference is not meaningful.
+Statuses are `pending`, `published`, `rejected`, `hidden` (bulk-applied on
+submitter ban, storing the prior status in `pre_ban_status` so unbanning
+restores each row accurately), and `removed` (immediate R2 blob deletion).
 
-`hidden` is the one status that carries its own way back. Banning writes each
-entry's outgoing status to `restrooms.pre_ban_status`, and lifting the ban reads
-it back and clears it, so an account restored after a ban returns to exactly the
-mix of published, pending, rejected and removed entries it had. This is why the
-restore is not simply "publish everything they submitted": that would put an
-unreviewed entry into the archive, and a `removed` one back as a listing whose
-blobs are gone. Only the ban writes `pre_ban_status`, so an entry an admin
-rejected or removed on its own terms is left where the admin put it.
-
-A restroom may also carry a crop, in the nullable `crop` column (migrations
-`0025` and `0026`): a mode and two boxes as JSON, read through `parseCrop` in
-`shared/utils/crop.ts`, the way `descriptors` is read through
-`parseDescriptors`. It is not a status and does not interact with any of the
-above; §4 covers what it does.
-
-`removed` deletes the R2 blobs immediately, through `deleteRestroomBlobs`, as
-does a submitter dismissing their own entry. The database row survives so the
-submitter can still see what happened to it.
-
-### The rejection grace period
-
-`rejected` does **not** delete the blobs. Rejection sets `restrooms.rejected_at`
-and leaves the scan in R2 for `REJECTION_GRACE_DAYS` (30, in
-`shared/utils/rejection.ts`), during which an admin can undo it from the Admin
-tab's Rejected section. `unreject` returns the entry to `pending` rather than to
-`published`: the pending queue is the only thing that previews a scan, so the
-re-review happens on the path that already exists.
-
-Two columns rather than one, and neither is `updated_at`:
-
-- **`rejected_at`** is the clock. `updated_at` could not be it, because a ban, an
-  unban, or any other write to the row moves that column and would drag the
-  deadline with it.
-- **`scan_purged_at`** is what actually makes a rejection final. The elapsed
-  time is advisory — it drives the countdown in the interface — but the guard on
-  `unreject` reads `scan_purged_at`, so the interface can never offer a restore
-  that would produce an entry pointing at a deleted model.
-
-Both NULL means an entry rejected before this existed, whose scan went at
-rejection time. That reads correctly as "not restorable" with no backfill.
-
-The purge is a sweep in `server/utils/purgeRejections.ts`, hung off
-`GET /api/admin/restrooms` and `GET /api/admin/restrooms/rejected` rather than a
-schedule, because the application is deployed to Cloudflare Pages and Pages has
-no cron triggers. Same idea as the rate limiter's cleanup — expiry rides along
-on traffic — but deterministic rather than probabilistic, and attached to the
-endpoint that backs a tab badge, so it runs whenever an admin opens their
-account page. It is bounded per request, it never deletes the row, and it keys
-on `rejected_at` across every status rather than on `status = 'rejected'`:
-a banned submitter's entries all sit at `hidden`, and a status filter would let
-those keep their blobs for as long as the ban lasted.
-
-### Annotation moderation
-
-Hiding sets `hidden_at` and `hidden_by`, and resolves every open report on that
-annotation in the same operation. Hiding is reversible; deletion is only
-available to the annotation's author and to admins.
-
-Reports are unique per `(annotation_id, reporter_id)`, so one person cannot
-inflate a count.
+Rejecting a pending scan sets `rejected_at` and retains its R2 blobs for
+`REJECTION_GRACE_DAYS` (30 days, `shared/utils/rejection.ts`) until swept by
+`server/utils/purgeRejections.ts` (`scan_purged_at`), allowing admins to undo
+accidental rejections from `AdminRejected`.
 
 ---
 
 ## 7. Migrations
 
-**Read this before adding a table.** The workflow is not what the tooling
-suggests.
+All migrations in `server/db/migrations/NNNN_description.sql` are hand-written
+SQL applied with Wrangler (`npm run db:migrate:local` and
+`npm run db:migrate:remote`). When adding a table or column:
 
-Migrations `0000` and `0001` were generated by drizzle-kit. Everything from
-`0002` onward is **hand-written SQL**, applied with:
-
-```sh
-npm run db:migrate:remote   # wrangler d1 migrations apply
-```
-
-Wrangler tracks what it has applied in its own `d1_migrations` table. The Drizzle
-journal at `server/db/migrations/meta/_journal.json` still lists only the first
-two, and is effectively abandoned.
-
-Three consequences:
-
-1. **`server/db/schema.ts` is the ORM's view, not the authority.** The live
-   schema is. `npm run db:schema:dump` prints it.
-2. **The two have already diverged.** `rate_limits` exists in migration `0011`
-   and in production, and is absent from `schema.ts`. `server/utils/rateLimit.ts`
-   consequently uses raw D1 `prepare()` calls rather than Drizzle.
-3. **`npm run db:generate` would produce a migration diffed against a stale
-   journal.** Do not reach for it without understanding that.
-
-### Adding a table or column
-
-1. Write the SQL by hand as `server/db/migrations/NNNN_description.sql`.
-2. Add the matching definition to `server/db/schema.ts`, so queries stay typed.
-3. Apply locally (`db:migrate:local`), then to production (`db:migrate:remote`).
-
-Keeping step 2 is what stops the divergence widening. `rate_limits` is the
-standing example of skipping it.
+1. Write `server/db/migrations/NNNN_description.sql`.
+2. Add the matching definition to `server/db/schema.ts` so Drizzle queries stay
+   typed and aligned with live D1 (`npm run db:schema:dump`).
+3. Apply locally, verify, then apply to production.
 
 ---
 
-## 8. Deployment and configuration
+## 8. Deployment, R2 streaming, and configuration
 
-### Route rules
+### Route rules and CSP
 
-`nuxt.config.ts` sets security headers on every route, including a
-Content-Security-Policy that permits Turnstile's frame and script, `blob:` for
-worker and connect sources (MapLibre and the GLB loader need it), and `https:`
-images so R2 can serve from its own origin.
+`nuxt.config.ts` sets strict security headers on `/**`, including a
+Content-Security-Policy permitting Turnstile, `'wasm-unsafe-eval'` for the Draco
+WASM worker, `blob:` workers/connections for MapLibre and GLB loading,
+`media-src 'self'` for guide videos, and `frame-ancestors 'none'`. `/` is
+server-rendered without shared edge caching because its markup depends on the
+visitor's `viewMode` and `theme` cookies as well as session state; `/studio`
+runs client-only (`ssr: false`) to keep Three.js and MediaBunny out of the SSR
+Worker bundle.
 
-Rendering differs per route: `/` is SWR-cached for 60 seconds; `/r/**`, `/about`
-and `/account` are server-rendered for their metadata.
+### R2 streaming and AI rights reservation
 
-### R2 access
-
-Scans and thumbnails are served two ways:
-
-- **Directly from R2**, when `NUXT_PUBLIC_MODELS_BASE_URL` or
-  `NUXT_PUBLIC_THUMBS_BASE_URL` is set to a public bucket origin.
-- **Proxied through the worker**, at `/api/r2/models/**` and
-  `/api/r2/thumbs/**`, when they are not.
-
-The proxy is the fallback, and it costs a worker invocation and the bandwidth per
-scan. Setting the public URLs once a bucket has a custom domain is the intended
-end state; the proxy routes can then be removed.
-
-API responses return **relative** URLs. Absolute ones cannot be built reliably
-during SSR, because Nitro's internal fetch reports `localhost` as the host. The
-client resolves them against `document.baseURI`.
+Scans (`/api/r2/models/**`) and thumbnails (`/api/r2/thumbs/**`) stream through
+the Worker rather than a raw public R2 domain. Keeping `/api/r2/models/**`
+behind the Worker enforces `SCAN_BURST_LIMIT` (100 scans per 5 minutes per IP)
+and attaches `X-Robots-Tag: noai, noimageai, noindex` and `TDM-Reservation: 1`
+alongside `/robots.txt` and `/ai.txt`.
 
 ---
 
 ## 9. Conventions
 
-- **Formatting is Prettier's**, enforced by `npm run format:check`. ESLint
-  carries correctness rules only, with `eslint-config-prettier` disabling
-  everything stylistic.
-- **`shared/utils/` is imported explicitly**, not auto-imported, because both the
-  app and the server layer use it and the two have different auto-import scopes.
-- **Global stylesheets hold what components share.** A parent's scoped styles do
-  not reach a child's markup, so anything used across the component boundary
-  lives in `assets/css/`. `forms.css` and `account.css` document their own type
-  scales.
+- **Formatting is Prettier's**, enforced by `npm run format:check` (with
+  vendored `public/draco` excluded in `.prettierignore`). ESLint enforces
+  correctness rules only (`@typescript-eslint/no-unused-vars`,
+  `@typescript-eslint/no-explicit-any`, `no-console`).
+- **Display modes (`light`, `dark`, `system`)** run through CSS custom
+  properties in `assets/css/theme.css` keyed off `<html data-theme="...">` from
+  the `theme` cookie (`composables/useTheme.ts`), avoiding first-paint flashes.
+  The 3D viewer canvas stays black and `/studio` and `/newsletter` lock
+  `data-theme="light"`.
+- **`shared/utils/` is imported explicitly**, never auto-imported, because app
+  and server layers have separate auto-import scopes.
+- **Global stylesheets** in `assets/css/` hold shared tokens, forms, tabs, and
+  account styles; MapLibre's stylesheet is imported inside `MapView.client.vue`
+  so only map visitors download it.
 - **Comments explain why, never what.** They are impersonal and use no em
   dashes.
-- **Sizing follows the panel, not the window.** Most breakpoints are
-  `@container panel (max-width: …)`, because the catalog panel is roughly half
-  the viewport: at a 1120px window it is 560px wide, which is as tight as a
-  phone. Only genuinely layout-level switches, such as the mobile sheet, use
-  `@media`.
+- **Sizing follows the panel, not the window**, via `@container panel
+(max-width: ...)` for panel UI and `@media` only for viewport-level switches
+  like the 750px mobile sheet.
 
 ---
 
 ## 10. Known rough edges
 
-Recorded rather than fixed, because each is a product decision rather than a
-refactoring one.
-
-- **`/` is SWR-cached while its markup varies by cookie.** `nuxt.config.ts` sets
-  `"/": { swr: 60 }`, but `Catalog.vue` chooses list, grid or map from the
-  `viewMode` cookie during server rendering. A cached response rendered for one
-  view mode is therefore served to a visitor whose cookie asks for another.
-  Vue patches the difference during hydration, so the visible result is correct
-  and the only symptom is a "Hydration completed but contains mismatches"
-  console warning, reproducible by changing view mode and then reloading within
-  the cache window. Fixing it means picking one of three trade-offs: drop the
-  SWR rule and pay full server rendering on the busiest route, render the view
-  switcher client-only and accept a flash, or move the preference out of a
-  cookie into local storage and out of the server-rendered markup entirely.
-
-- **`/api/stats` counts every non-banned account as an "archivist"**, including
-  annotators who have never been approved to submit. The About page's closing
-  sentence therefore overstates the contributor count.
-- **`users.email_verified_at` is written and never read.**
-  `server/api/me/email.patch.ts` clears it on an email change, but no flow ever
-  verifies an address or gates on the column. Either build the verification flow
-  or drop the column.
-- **`restrooms.coords` is a display string derived from lat/lng** and is no
-  longer returned by any endpoint. It remains `NOT NULL`, so writes still
-  populate it. Dropping it needs a migration.
-- **The `/api/r2/**` proxy routes** are a stand-in for a public bucket origin,
-  as described in §8.
+- **`users.email_verified_at` is cleared on email change and never populated.**
+  No verification flow currently writes or gates on the column; either build
+  verification or drop the column in a future migration.
+- **`restrooms.coords` is a legacy `NOT NULL` display string** derived from
+  `lat`/`lng` (`formatCoords` in `shared/utils/regions.ts`) and is no longer
+  returned by any API endpoint. Dropping it requires a table-rebuild migration.

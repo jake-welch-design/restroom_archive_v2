@@ -1,14 +1,12 @@
+import type { H3Event } from "h3";
 import { escapeHtml } from "~~/shared/utils/html";
+import { publicUrls } from "~~/server/utils/urls";
 
 const FROM_EMAIL = "noreply@restroomarchive.com";
 const FROM_NAME = "The Restroom Archive";
 const HEADER_IMG =
   "https://pub-1b76864877c9442db2b46c539ae89ecc.r2.dev/assets/metatag.png";
 const CONTACT_EMAIL = "hello@restroomarchive.com";
-
-function siteUrl() {
-  return useRuntimeConfig().public.siteUrl || "https://restroomarchive.com";
-}
 
 function template(body: string) {
   return `<!doctype html>
@@ -31,12 +29,13 @@ function template(body: string) {
 }
 
 async function send(
+  event: H3Event,
   to: string,
   subject: string,
   html: string,
   replyTo: string = CONTACT_EMAIL,
 ) {
-  const apiKey = useRuntimeConfig().plunkApiKey;
+  const apiKey = useRuntimeConfig(event).plunkApiKey;
   if (!apiKey) {
     throw createError({
       statusCode: 500,
@@ -56,9 +55,9 @@ async function send(
       body: html,
       // No `subscribed` flag. Plunk creates or updates a contact for every
       // recipient, and passing `true` here used to mark everyone who got a
-      // password reset as subscribed -- and would re-subscribe someone who
-      // had unsubscribed from the Weekly Report the next time they reset a
-      // password. Omitted, new contacts start unsubscribed and existing ones
+      // password reset as subscribed (and would re-subscribe someone who had
+      // unsubscribed from the Weekly Report the next time they reset a
+      // password). Omitted, new contacts start unsubscribed and existing ones
       // keep their state; transactional mail is delivered either way.
       name: FROM_NAME,
       from: FROM_EMAIL,
@@ -75,9 +74,15 @@ async function send(
   }
 }
 
-export async function sendPasswordResetEmail(to: string, token: string) {
-  const link = `${siteUrl()}/reset-password?token=${encodeURIComponent(token)}`;
+export async function sendPasswordResetEmail(
+  event: H3Event,
+  to: string,
+  token: string,
+) {
+  const { site } = publicUrls(event);
+  const link = `${site}/reset-password?token=${encodeURIComponent(token)}`;
   await send(
+    event,
     to,
     "Reset your Restroom Archive password",
     template(`
@@ -100,13 +105,17 @@ export async function sendPasswordResetEmail(to: string, token: string) {
   );
 }
 
-export async function sendContactEmail(opts: {
-  name: string;
-  email: string;
-  subject: string;
-  body: string;
-}) {
+export async function sendContactEmail(
+  event: H3Event,
+  opts: {
+    name: string;
+    email: string;
+    subject: string;
+    body: string;
+  },
+) {
   await send(
+    event,
     CONTACT_EMAIL,
     `[Contact] ${opts.subject}`,
     template(`

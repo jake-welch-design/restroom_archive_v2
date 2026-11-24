@@ -75,10 +75,6 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: "action", label: "Action" },
 ];
 
-function actorName(e: AuditLogEntry) {
-  return (e.actor?.displayName || e.actor?.username || "").toLowerCase();
-}
-
 const { query, sortKey, sortDir, visible, isEmptyFromSearch } = useListControls<
   AuditLogEntry,
   SortKey
@@ -101,7 +97,10 @@ const { query, sortKey, sortDir, visible, isEmptyFromSearch } = useListControls<
   compare: (a, b, key) => {
     switch (key) {
       case "actor":
-        return actorName(a).localeCompare(actorName(b)) || a.id - b.id;
+        return (
+          userSortKey(a.actor).localeCompare(userSortKey(b.actor)) ||
+          a.id - b.id
+        );
       case "action":
         return (
           actionLabel(a.action).localeCompare(actionLabel(b.action)) ||

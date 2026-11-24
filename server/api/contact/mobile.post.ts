@@ -14,8 +14,7 @@ export default defineEventHandler(async (event) => {
 
   const body = await readValidatedBody(event, Body.parse);
 
-  await sendContactEmail(body);
+  await sendContactEmail(event, body);
 
   return { ok: true };
 });
-

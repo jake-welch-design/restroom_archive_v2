@@ -24,20 +24,21 @@ export default defineEventHandler(async (event) => {
       statusMessage: "Annotation not found",
     });
 
-  await db
-    .update(schema.annotations)
-    .set({ hiddenAt: now(), hiddenBy: actor.id })
-    .where(eq(schema.annotations.id, id));
-
-  await db
-    .update(schema.annotationReports)
-    .set({ resolvedAt: now(), resolvedBy: actor.id })
-    .where(
-      and(
-        eq(schema.annotationReports.annotationId, id),
-        isNull(schema.annotationReports.resolvedAt),
+  await db.batch([
+    db
+      .update(schema.annotations)
+      .set({ hiddenAt: now(), hiddenBy: actor.id })
+      .where(eq(schema.annotations.id, id)),
+    db
+      .update(schema.annotationReports)
+      .set({ resolvedAt: now(), resolvedBy: actor.id })
+      .where(
+        and(
+          eq(schema.annotationReports.annotationId, id),
+          isNull(schema.annotationReports.resolvedAt),
+        ),
       ),
-    );
+  ]);
 
   await recordAdminAction(event, "annotation.hide", "annotation", id);
 

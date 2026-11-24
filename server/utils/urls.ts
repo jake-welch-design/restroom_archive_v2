@@ -4,8 +4,6 @@ export function publicUrls(event: H3Event) {
   const config = useRuntimeConfig(event);
   const origin = getRequestURL(event).origin;
   return {
-    models: config.public.modelsBaseUrl || `${origin}/api/r2/models`,
-    thumbs: config.public.thumbsBaseUrl || `${origin}/api/r2/thumbs`,
     site: config.public.siteUrl || origin,
   };
 }
@@ -21,7 +19,7 @@ export function publicUrls(event: H3Event) {
  * Cropping breaks that assumption. It re-renders the thumbnail at the new
  * framing and overwrites the same key, so without a version in the URL the
  * corrected image would sit behind a year-long immutable cache and every
- * visitor -- including the admin who just cropped it -- would keep seeing the
+ * visitor, including the admin who just cropped it, would keep seeing the
  * old framing.
  *
  * `updated_at` is the version because it already moves on every write to the

@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { useDb, schema } from "~~/server/utils/db";
 import { parseDescriptors } from "~~/server/utils/descriptors";
 import { getRouterString } from "~~/server/utils/routeParams";
@@ -9,6 +9,8 @@ export default defineEventHandler(async (event) => {
   const slug = getRouterString(event, "slug");
 
   const db = useDb(event);
+  const isAdmin = event.context.user?.role === "admin";
+  const statuses = isAdmin ? ["published", "pending"] : ["published"];
 
   const row = await db
     .select({
@@ -34,7 +36,12 @@ export default defineEventHandler(async (event) => {
     })
     .from(schema.restrooms)
     .leftJoin(schema.users, eq(schema.restrooms.submittedBy, schema.users.id))
-    .where(eq(schema.restrooms.slug, slug))
+    .where(
+      and(
+        eq(schema.restrooms.slug, slug),
+        inArray(schema.restrooms.status, statuses),
+      ),
+    )
     .get();
 
   if (!row)

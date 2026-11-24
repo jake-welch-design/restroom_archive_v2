@@ -12,7 +12,8 @@ import {
   MAX_GLB_MB,
   formatFileSize,
 } from "~~/shared/utils/uploadLimits";
-import { isCountryCode } from "~~/shared/utils/regions";
+import { formatDayMonthYear } from "~~/shared/utils/formatDate";
+import { formatCoords, isCountryCode } from "~~/shared/utils/regions";
 
 // Where a notification about a new submission sends the admin who taps it.
 // The account page reads tab, group and section off the query string, so this
@@ -43,41 +44,46 @@ function isGlb(bytes: Uint8Array): boolean {
   );
 }
 
-const MetaSchema = z.object({
-  name: z.string().min(1).max(200),
-  location: z.string().min(1).max(200),
-  // Checked against the list the wizard's select is built from, so the column
-  // can only ever hold a code the archive recognises. `location` is the display
-  // string composed alongside it and is not parsed back into a country.
-  country: z
-    .string()
-    .refine(isCountryCode, "Please choose a country from the list"),
-  isoDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD"),
-  lat: z.coerce.number().min(-90).max(90).optional(),
-  lng: z.coerce.number().min(-180).max(180).optional(),
-  // Required, matching the wizard: a whitespace-only body is not a description,
-  // so trim before the length check rather than after storing it.
-  description: z
-    .string({ required_error: "Description is required" })
-    .trim()
-    .min(1, "Description is required")
-    .max(1000),
-  descriptors: z.string().max(2000).optional(),
-});
+const OptionalCoord = (min: number, max: number) =>
+  z.preprocess(
+    (v) => (v === "" || v == null ? undefined : v),
+    z.coerce.number().min(min).max(max).optional(),
+  );
+
+const MetaSchema = z
+  .object({
+    name: z.string().min(1).max(200),
+    location: z.string().min(1).max(200),
+    // Checked against the list the wizard's select is built from, so the column
+    // can only ever hold a code the archive recognises. `location` is the display
+    // string composed alongside it and is not parsed back into a country.
+    country: z
+      .string()
+      .refine(isCountryCode, "Please choose a country from the list"),
+    isoDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD"),
+    lat: OptionalCoord(-90, 90),
+    lng: OptionalCoord(-180, 180),
+    // Required, matching the wizard: a whitespace-only body is not a description,
+    // so trim before the length check rather than after storing it.
+    description: z
+      .string({ required_error: "Description is required" })
+      .trim()
+      .min(1, "Description is required")
+      .max(1000),
+    descriptors: z.string().max(2000).optional(),
+  })
+  .refine((d) => (d.lat == null) === (d.lng == null), {
+    message: "Give both a latitude and a longitude, or neither.",
+  });
 
 function toSlug(str: string) {
-  return str
+  const ascii = str
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
-}
-
-function formatDisplayDate(isoDate: string) {
-  const d = new Date(isoDate + "T00:00:00Z");
-  const day = String(d.getUTCDate()).padStart(2, "0");
-  const month = d.toLocaleString("en-US", { month: "short", timeZone: "UTC" });
-  const year = d.getUTCFullYear();
-  return `${day} ${month} ${year}`;
+  return ascii || "restroom";
 }
 
 export default defineEventHandler(async (event) => {
@@ -195,7 +201,7 @@ export default defineEventHandler(async (event) => {
   if (existing)
     throw createError({
       statusCode: 409,
-      statusMessage: "A restroom with this name/location/date already exists",
+      statusMessage: "A restroom with this name and date already exists",
     });
 
   const models = useR2(event, "MODELS");
@@ -219,12 +225,9 @@ export default defineEventHandler(async (event) => {
       // A place of its own until an admin files it as a version of another.
       // The slug is unique, so a submission never joins a group by accident.
       establishment: slug,
-      date: formatDisplayDate(isoDate),
+      date: formatDayMonthYear(isoDate),
       isoDate,
-      coords:
-        lat != null && lng != null
-          ? `${Math.abs(lat).toFixed(2)} ${lat >= 0 ? "N" : "S"}, ${Math.abs(lng).toFixed(2)} ${lng >= 0 ? "E" : "W"}`
-          : "",
+      coords: formatCoords(lat, lng),
       lat: lat ?? null,
       lng: lng ?? null,
       file: fileKey,
@@ -233,7 +236,10 @@ export default defineEventHandler(async (event) => {
       status: user.role === "admin" ? "published" : "pending",
       submittedBy: user.id,
     })
-    .returning()
+    .returning({
+      slug: schema.restrooms.slug,
+      status: schema.restrooms.status,
+    })
     .get();
 
   // Only entries that actually land in the queue are worth a notification. An

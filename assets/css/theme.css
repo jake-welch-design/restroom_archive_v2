@@ -4,12 +4,12 @@
 
    Dark (the display button in the viewer's controls) follows the Weekly
    Report email's dark scheme in shared/utils/weeklyReport.ts: a straight
-   inversion — black body, white ink and rules, #999 muted, #1a1a1a surfaces,
-   #111 canvas. The 3D viewer side is
-   already black and stays out of this: its overlays keep literal colors.
+   inversion (black body, white ink and rules, #999 muted, #1a1a1a surfaces,
+   #111 canvas). The 3D viewer side is already black and stays out of this: its
+   overlays keep literal colors.
 
    Set on <html data-theme="light|dark|system"> by `useTheme`, from a cookie
-   so the server renders the right theme and there's no flash on load. */
+   so the server renders the right theme and there is no flash on load. */
 :root {
   --ink: #000;
   --ink-strong: #333;
@@ -31,7 +31,8 @@
   --surface-1: #f9f9f9;
   --paper: #fff;
   --danger: #c33;
-  --danger-strong: #e33;
+  --warn-surface: #fff4e5;
+  --select-caret: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='6'%3E%3Cpath d='M1 1l3.5 3.5L8 1' fill='none' stroke='%23000' stroke-width='1.2'/%3E%3C/svg%3E");
   /* Divider between the panel and the always-black viewer. White against
      black already draws that edge in light mode, so it's off there. */
   --panel-edge: transparent;
@@ -72,7 +73,8 @@
   --surface-1: #141414;
   --paper: #000;
   --danger: #e05050;
-  --danger-strong: #ff6b6b;
+  --warn-surface: #2a1f0d;
+  --select-caret: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='6'%3E%3Cpath d='M1 1l3.5 3.5L8 1' fill='none' stroke='%23fff' stroke-width='1.2'/%3E%3C/svg%3E");
   /* The one grey for content dividers: list rows, the open row's inner
      separators, grid tile outlines and the map's frame all share it. */
   --rule-quiet: #333;
@@ -111,7 +113,8 @@
     --surface-1: #141414;
     --paper: #000;
     --danger: #e05050;
-    --danger-strong: #ff6b6b;
+    --warn-surface: #2a1f0d;
+    --select-caret: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='6'%3E%3Cpath d='M1 1l3.5 3.5L8 1' fill='none' stroke='%23fff' stroke-width='1.2'/%3E%3C/svg%3E");
     /* The one grey for content dividers: list rows, the open row's inner
        separators, grid tile outlines and the map's frame all share it. */
     --rule-quiet: #333;

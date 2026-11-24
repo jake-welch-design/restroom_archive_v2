@@ -66,10 +66,10 @@ export function sendAdminNotification(
  * it, and inline otherwise.
  *
  * On Cloudflare, `waitUntil` keeps the worker alive for the notification
- * without holding up the reply -- which for a submission means the archivist
- * is not waiting on Telegram behind a 50 MB upload. Locally there is no
- * execution context, so it falls back to awaiting, which is what the dev
- * server needs to actually perform the send before the process moves on.
+ * without holding up the reply, so the archivist is not waiting on Telegram
+ * behind a 25 MB upload. Locally there is no execution context, so it falls
+ * back to awaiting, which is what the dev server needs to perform the send
+ * before the process moves on.
  */
 function runInBackground(event: H3Event, promise: Promise<unknown>) {
   const ctx = event.context.cloudflare?.context;

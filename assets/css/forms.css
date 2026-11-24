@@ -127,7 +127,7 @@ select.field-input {
   appearance: none;
   border-radius: 0;
   padding-right: 22px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='6'%3E%3Cpath d='M1 1l3.5 3.5L8 1' fill='none' stroke='%23000' stroke-width='1.2'/%3E%3C/svg%3E");
+  background-image: var(--select-caret);
   background-repeat: no-repeat;
   background-position: right 7px center;
   cursor: pointer;

@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { apiErrorMessage } from "~~/shared/utils/apiError";
-
 /**
  * Requests a password reset link.
  *
@@ -9,32 +7,29 @@ import { apiErrorMessage } from "~~/shared/utils/apiError";
  * confirmation below is worded to match.
  */
 const { token: turnstileToken, waitForToken, resetToken } = useTurnstileToken();
+const { resolved: resolvedTheme } = useTheme();
+const action = useAsyncAction("Something went wrong.");
 
 const email = ref("");
-const loading = ref(false);
-const error = ref("");
 const submitted = ref(false);
 
 async function submit() {
   if (!(await waitForToken())) {
-    error.value = "Still verifying. Please wait a moment and try again.";
+    action.error = "Still verifying. Please wait a moment and try again.";
     return;
   }
 
-  error.value = "";
-  loading.value = true;
-  try {
-    await $fetch("/api/auth/forgot-password", {
+  const ok = await action.run(() =>
+    $fetch("/api/auth/forgot-password", {
       method: "POST",
       body: { email: email.value, turnstileToken: turnstileToken.value },
-    });
+    }),
+  );
+  if (ok) {
     submitted.value = true;
-  } catch (e: unknown) {
-    error.value = apiErrorMessage(e, "Something went wrong.");
+  } else {
     // A Turnstile token is single use, so a retry needs a fresh one.
     resetToken();
-  } finally {
-    loading.value = false;
   }
 }
 </script>
@@ -67,18 +62,18 @@ async function submit() {
       <NuxtTurnstile
         v-model="turnstileToken"
         class="turnstile"
-        :options="{ theme: 'light', appearance: 'interaction-only' }"
+        :options="{ theme: resolvedTheme, appearance: 'interaction-only' }"
       />
 
-      <p v-if="error" class="form-error">{{ error }}</p>
+      <p v-if="action.error" class="form-error">{{ action.error }}</p>
 
       <button
         type="submit"
         class="primary-btn"
-        :disabled="loading || !turnstileToken"
+        :disabled="action.loading || !turnstileToken"
       >
         {{
-          loading
+          action.loading
             ? "Sending…"
             : !turnstileToken
               ? "Verifying…"

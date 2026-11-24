@@ -69,17 +69,17 @@ function next() {
 // down.
 watch(index, () => body.value?.scrollTo({ top: 0 }));
 
-watch(
-  () => props.open,
-  (open) => {
-    const el = dialog.value;
-    if (!el) return;
-    // See LegalDialog: showModal() on an open dialog throws, and close() on a
-    // closed one still fires `close`.
-    if (open && !el.open) el.showModal();
-    else if (!open && el.open) el.close();
-  },
-);
+function syncDialog(open: boolean) {
+  const el = dialog.value;
+  if (!el) return;
+  // See LegalDialog: showModal() on an open dialog throws, and close() on a
+  // closed one still fires `close`.
+  if (open && !el.open) el.showModal();
+  else if (!open && el.open) el.close();
+}
+
+onMounted(() => syncDialog(props.open));
+watch(() => props.open, syncDialog);
 
 function onClick(e: MouseEvent) {
   if (e.target === dialog.value) emit("close");
@@ -132,7 +132,6 @@ function onKeydown(e: KeyboardEvent) {
     </div>
 
     <div ref="body" class="guide-body thin-scroll" role="tabpanel">
-      <!-- <p class="guide-step-count">Step {{ index + 1 }} of {{ STEPS.length }}</p> -->
       <h3>{{ step.title }}</h3>
 
       <!-- Media is a <GuideVideo> or <GuideImage>, both taking an asset
@@ -435,12 +434,6 @@ function onKeydown(e: KeyboardEvent) {
   line-height: 1.5;
 }
 
-.guide-step-count {
-  margin: 0 0 4px;
-  font-size: 12px;
-  color: var(--muted);
-}
-
 .guide-body h3 {
   margin: 0 0 1em;
   font-size: 16px;
@@ -453,34 +446,14 @@ function onKeydown(e: KeyboardEvent) {
   font-weight: 700;
 }
 
-.guide-body p,
-.guide-body li {
+.guide-body p {
   font-size: 13px;
   margin: 0 0 0.9em;
-}
-
-.guide-body ul,
-.guide-body ol {
-  margin: 0 0 0.9em;
-  padding-left: 1.2em;
-}
-
-.guide-body li {
-  margin-bottom: 0.4em;
 }
 
 .guide-body a {
   color: var(--ink);
   text-decoration: underline;
-}
-
-.guide-body img,
-.guide-body video {
-  display: block;
-  max-width: 100%;
-  height: auto;
-  margin: 0 0 0.9em;
-  border: 1px solid var(--ink);
 }
 
 .guide-note {
@@ -544,8 +517,7 @@ function onKeydown(e: KeyboardEvent) {
 
 /* Viewport, not container, query: see the note at the end of LegalDialog. */
 @media (max-width: 560px) {
-  .guide-body p,
-  .guide-body li {
+  .guide-body p {
     font-size: 12px;
   }
   .guide-arrow {

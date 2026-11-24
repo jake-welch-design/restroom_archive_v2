@@ -1,7 +1,7 @@
 import { eq, or } from "drizzle-orm";
 import { z } from "zod";
 import { useDb, schema } from "~~/server/utils/db";
-import { hashPassword } from "~~/server/utils/hash";
+import { hashUserPassword } from "~~/server/utils/hash";
 import { issueMobileToken } from "~~/server/utils/mobileToken";
 import { rateLimitByIp } from "~~/server/utils/rateLimit";
 import { toSessionUser } from "~~/server/utils/sessionUser";
@@ -41,7 +41,7 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const passwordHash = await hashPassword(body.password);
+  const passwordHash = await hashUserPassword(body.password);
 
   const user = await db
     .insert(schema.users)
@@ -67,4 +67,3 @@ export default defineEventHandler(async (event) => {
     user: toSessionUser(user),
   };
 });
-

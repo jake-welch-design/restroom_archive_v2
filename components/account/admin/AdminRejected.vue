@@ -8,7 +8,7 @@
  *
  * The whole point of the section is the countdown. Rejection keeps the scan for
  * a grace period instead of deleting it on the spot, and this is the only place
- * that says how much of that period is left — so a misjudged rejection is
+ * that says how much of that period is left, so a misjudged rejection is
  * recoverable while an admin can still see that it is.
  *
  * Restoring sends the entry back to the Submissions queue rather than
@@ -37,8 +37,8 @@ const action = useAdminAction();
 /**
  * A ticking `now`, so a countdown does not go stale in a tab left open.
  *
- * A minute is far finer than the display needs — the coarsest unit shown is an
- * hour — but it is cheap, and it means a row that runs out while an admin is
+ * A minute is far finer than the display needs (the coarsest unit shown is an
+ * hour), but it is cheap, and it means a row that runs out while an admin is
  * looking at it stops claiming to be restorable.
  */
 const nowMs = ref(Date.now());
@@ -111,14 +111,6 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: "submitter", label: "Submitter" },
 ];
 
-function submitterName(e: RejectedSubmission) {
-  return (
-    e.submitter?.displayName ||
-    e.submitter?.username ||
-    ""
-  ).toLowerCase();
-}
-
 const byFilter = computed(() =>
   (entries.value ?? []).filter((e) => matchesFilter(e, statusFilter.value)),
 );
@@ -149,7 +141,7 @@ const { query, sortKey, sortDir, visible, isEmptyFromSearch } = useListControls<
         return a.isoDate.localeCompare(b.isoDate) || a.id - b.id;
       case "submitter":
         return (
-          submitterName(a).localeCompare(submitterName(b)) ||
+          userSortKey(a.submitter).localeCompare(userSortKey(b.submitter)) ||
           a.name.localeCompare(b.name)
         );
       default:
@@ -281,23 +273,6 @@ async function restore(id: number, name: string) {
 </template>
 
 <style scoped>
-/* The archive's filter strip, which this list is a sibling of: a qualifier
-   sitting under the search field rather than a second toolbar. */
-.filter-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.filter-count {
-  margin-left: 5px;
-  color: var(--faint);
-}
-
-.btn-sm.active .filter-count {
-  color: inherit;
-}
-
 /* States the retention rule once, at the top, rather than repeating it on
    every row's countdown. */
 .section-note {

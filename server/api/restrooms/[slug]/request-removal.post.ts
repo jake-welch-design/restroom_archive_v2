@@ -5,9 +5,10 @@ import { requireActiveUser } from "~~/server/utils/requireActiveUser";
 import { rateLimitByUser } from "~~/server/utils/rateLimit";
 import { getRouterString } from "~~/server/utils/routeParams";
 import { now } from "~~/server/utils/sqlTime";
+import { readOptionalBody } from "~~/server/utils/validation";
 
 const Body = z.object({
-  reason: z.string().max(500).optional(),
+  reason: z.string().trim().max(500).optional(),
 });
 
 export default defineEventHandler(async (event) => {
@@ -16,7 +17,7 @@ export default defineEventHandler(async (event) => {
 
   const slug = getRouterString(event, "slug");
 
-  const body = await readValidatedBody(event, Body.parse);
+  const body = await readOptionalBody(event, Body);
 
   const db = useDb(event);
 

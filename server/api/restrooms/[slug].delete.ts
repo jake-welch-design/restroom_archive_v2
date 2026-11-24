@@ -4,8 +4,9 @@ import { requireRole } from "~~/server/utils/requireRole";
 import { getRouterString } from "~~/server/utils/routeParams";
 import { deleteRestroomBlobs } from "~~/server/utils/r2";
 
-// Lets a submitter clear a rejected entry from their "My submissions" list.
-// Admins can also delete in any state. Both paths drop the R2 object.
+// Lets a submitter withdraw a pending submission or clear an inactive entry
+// from their "My submissions" list. Admins can delete in any state. Both paths
+// delete the R2 scan and thumbnail blobs.
 export default defineEventHandler(async (event) => {
   const user = requireRole(event, "archivist");
 
@@ -17,6 +18,7 @@ export default defineEventHandler(async (event) => {
     .select({
       id: schema.restrooms.id,
       file: schema.restrooms.file,
+      thumbKey: schema.restrooms.thumbKey,
       status: schema.restrooms.status,
       submittedBy: schema.restrooms.submittedBy,
     })
@@ -43,7 +45,7 @@ export default defineEventHandler(async (event) => {
   ) {
     throw createError({
       statusCode: 409,
-      statusMessage: "Only pending or rejected submissions can be dismissed.",
+      statusMessage: "Published submissions cannot be dismissed directly.",
     });
   }
 

@@ -1,7 +1,7 @@
 import { eq, and, isNull, gt } from "drizzle-orm";
 import { z } from "zod";
 import { useDb, schema } from "~~/server/utils/db";
-import { hashPassword, hashToken } from "~~/server/utils/hash";
+import { hashUserPassword, hashToken } from "~~/server/utils/hash";
 import { rateLimitByIp } from "~~/server/utils/rateLimit";
 
 const Body = z.object({
@@ -16,16 +16,19 @@ export default defineEventHandler(async (event) => {
   const tokenHash = hashToken(token);
   const db = useDb(event);
 
-  const now = new Date().toISOString().replace("T", " ").slice(0, 19);
+  const currentUtc = new Date().toISOString().replace("T", " ").slice(0, 19);
 
   const row = await db
-    .select()
+    .select({
+      id: schema.passwordResetTokens.id,
+      userId: schema.passwordResetTokens.userId,
+    })
     .from(schema.passwordResetTokens)
     .where(
       and(
         eq(schema.passwordResetTokens.tokenHash, tokenHash),
         isNull(schema.passwordResetTokens.usedAt),
-        gt(schema.passwordResetTokens.expiresAt, now),
+        gt(schema.passwordResetTokens.expiresAt, currentUtc),
       ),
     )
     .get();
@@ -37,17 +40,22 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const newHash = await hashPassword(password);
+  const newHash = await hashUserPassword(password);
 
-  await db
-    .update(schema.users)
-    .set({ passwordHash: newHash })
-    .where(eq(schema.users.id, row.userId));
-
-  await db
-    .update(schema.passwordResetTokens)
-    .set({ usedAt: now })
-    .where(eq(schema.passwordResetTokens.id, row.id));
+  // Batch the password update, token consumption, and revocation of existing
+  // mobile bearer tokens so a reset cannot leave the token reusable or old
+  // device sessions active.
+  await db.batch([
+    db
+      .update(schema.users)
+      .set({ passwordHash: newHash })
+      .where(eq(schema.users.id, row.userId)),
+    db
+      .update(schema.passwordResetTokens)
+      .set({ usedAt: currentUtc })
+      .where(eq(schema.passwordResetTokens.id, row.id)),
+    db.delete(schema.apiTokens).where(eq(schema.apiTokens.userId, row.userId)),
+  ]);
 
   return { ok: true };
 });

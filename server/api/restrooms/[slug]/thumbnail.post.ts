@@ -4,6 +4,7 @@ import { useDb, schema } from "~~/server/utils/db";
 import { requireRole } from "~~/server/utils/requireRole";
 import { getRouterString } from "~~/server/utils/routeParams";
 import { useR2 } from "~~/server/utils/r2";
+import { now } from "~~/server/utils/sqlTime";
 
 // ~1.5 MB decoded; base64 overhead is ~4/3 so cap the string at ~2 MB.
 const MAX_IMAGE_BASE64_CHARS = 2_000_000;
@@ -57,8 +58,17 @@ export default defineEventHandler(async (event) => {
       statusMessage: "File is not a valid image",
     });
   }
-  const thumbKey = `${slug}.jpg`;
+  const db = useDb(event);
+  const existing = await db
+    .select({ id: schema.restrooms.id })
+    .from(schema.restrooms)
+    .where(eq(schema.restrooms.slug, slug))
+    .get();
+  if (!existing) {
+    throw createError({ statusCode: 404, statusMessage: "Restroom not found" });
+  }
 
+  const thumbKey = `${slug}.jpg`;
   const thumbs = useR2(event, "THUMBS");
 
   await thumbs.put(thumbKey, buffer, {
@@ -68,11 +78,12 @@ export default defineEventHandler(async (event) => {
     },
   });
 
-  const db = useDb(event);
+  // Bump `updated_at` alongside `thumb_key` so `versionedThumbUrl` advances
+  // `?v=` and busts the year-long immutable cache when overwriting a thumbnail.
   await db
     .update(schema.restrooms)
-    .set({ thumbKey })
-    .where(eq(schema.restrooms.slug, slug));
+    .set({ thumbKey, updatedAt: now() })
+    .where(eq(schema.restrooms.id, existing.id));
 
   return { ok: true };
 });

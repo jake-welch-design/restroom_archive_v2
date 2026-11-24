@@ -122,14 +122,14 @@ async function dismiss(slug: string, id: number, status: string) {
 }
 
 /**
- * After the wizard publishes or queues a submission, both the user's own list
- * and, for an admin whose submissions skip review, the review queue and the
- * public catalog are out of date.
+ * After the wizard publishes or queues a submission, refresh the user's own
+ * list and, for an admin, the pending review queue (`SubmitWizard` already
+ * refreshes the public catalog).
  */
 async function onSubmitted() {
   await refresh();
   if (isAdmin.value) {
-    await Promise.all([refreshRestroomQueue(), refreshNuxtData("restrooms")]);
+    await refreshRestroomQueue();
   }
 }
 </script>
@@ -141,7 +141,7 @@ async function onSubmitted() {
     </p>
 
     <div v-show="props.section === 'new'">
-      <SubmitWizard v-if="canSubmit" @submitted="onSubmitted" />
+      <LazySubmitWizard v-if="canSubmit" @submitted="onSubmitted" />
 
       <div v-else-if="submissionRequested" class="awaiting">
         <p>

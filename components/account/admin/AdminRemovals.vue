@@ -3,8 +3,8 @@
  * Submitters asking for their own entry to be taken down.
  *
  * A queue: each row is a person waiting on an answer, so it carries a badge.
- * The two outcomes are not symmetrical — granting deletes the scan and cannot
- * be undone, dismissing only closes the request — which is why one is behind a
+ * The two outcomes are not symmetrical (granting deletes the scan and cannot
+ * be undone, dismissing only closes the request), which is why one is behind a
  * confirm and the other is not.
  */
 import type { RemovalRequest } from "~/types/account";
@@ -20,14 +20,6 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: "date", label: "Scan date" },
   { key: "requester", label: "Requester" },
 ];
-
-function requesterName(r: RemovalRequest) {
-  return (
-    r.requester?.displayName ||
-    r.requester?.username ||
-    ""
-  ).toLowerCase();
-}
 
 const { query, sortKey, sortDir, visible, isEmptyFromSearch } = useListControls<
   RemovalRequest,
@@ -52,7 +44,7 @@ const { query, sortKey, sortDir, visible, isEmptyFromSearch } = useListControls<
         return a.date.localeCompare(b.date) || a.id - b.id;
       case "requester":
         return (
-          requesterName(a).localeCompare(requesterName(b)) ||
+          userSortKey(a.requester).localeCompare(userSortKey(b.requester)) ||
           a.name.localeCompare(b.name)
         );
       default:

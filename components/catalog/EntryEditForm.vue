@@ -330,8 +330,8 @@ onMounted(() => {
 
     <!-- Outside the <form>, so Enter in the dialog's search cannot submit
          the edit. -->
-    <MergeDialog
-      v-if="isAdmin"
+    <LazyMergeDialog
+      v-if="isAdmin && mergeOpen"
       :open="mergeOpen"
       :entry="entry"
       @close="mergeOpen = false"
@@ -415,7 +415,7 @@ onMounted(() => {
    carry a drawn caret instead. */
 select.edit-input {
   padding-right: 16px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='6'%3E%3Cpath d='M1 1l3.5 3.5L8 1' fill='none' stroke='%23000' stroke-width='1.2'/%3E%3C/svg%3E");
+  background-image: var(--select-caret);
   background-repeat: no-repeat;
   background-position: right 1px center;
   cursor: pointer;

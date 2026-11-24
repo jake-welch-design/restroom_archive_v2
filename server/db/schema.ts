@@ -1,5 +1,6 @@
 import {
   integer,
+  primaryKey,
   real,
   sqliteTable,
   text,
@@ -123,6 +124,11 @@ export const restrooms = sqliteTable(
     slugIdx: uniqueIndex("restrooms_slug_unique").on(t.slug),
     isoDateIdx: index("idx_restrooms_iso_date").on(t.isoDate),
     statusIdx: index("idx_restrooms_status").on(t.status),
+    statusIsoDateIdx: index("idx_restrooms_status_iso_date").on(
+      t.status,
+      t.isoDate,
+    ),
+    submittedByIdx: index("idx_restrooms_submitted_by").on(t.submittedBy),
     rejectedAtIdx: index("idx_restrooms_rejected_at").on(t.rejectedAt),
     establishmentIdx: index("idx_restrooms_establishment").on(t.establishment),
   }),
@@ -161,6 +167,7 @@ export const annotations = sqliteTable(
   },
   (t) => ({
     restroomIdx: index("idx_annotations_restroom").on(t.restroomId),
+    authorIdx: index("idx_annotations_author").on(t.authorId),
   }),
 );
 
@@ -267,7 +274,7 @@ export const userBlocks = sqliteTable(
   },
   (t) => ({
     pairIdx: uniqueIndex("idx_user_blocks_pair").on(t.blockerId, t.blockedId),
-    blockerIdx: index("idx_user_blocks_blocker").on(t.blockerId),
+    blockedIdx: index("idx_user_blocks_blocked").on(t.blockedId),
   }),
 );
 
@@ -325,11 +332,20 @@ export const weeklyReportIssues = sqliteTable(
   }),
 );
 
-export type User = typeof users.$inferSelect;
-export type Restroom = typeof restrooms.$inferSelect;
-export type Annotation = typeof annotations.$inferSelect;
-export type AnnotationReport = typeof annotationReports.$inferSelect;
-export type ApiToken = typeof apiTokens.$inferSelect;
-export type UserBlock = typeof userBlocks.$inferSelect;
-export type RestroomReport = typeof restroomReports.$inferSelect;
-export type WeeklyReportIssueRow = typeof weeklyReportIssues.$inferSelect;
+/**
+ * Fixed-window rate-limit counters (migrations 0011 and 0023), queried via raw
+ * prepared statements in `server/utils/rateLimit.ts`.
+ */
+export const rateLimits = sqliteTable(
+  "rate_limits",
+  {
+    key: text("key").notNull(),
+    window: integer("window").notNull(),
+    count: integer("count").notNull().default(1),
+    expiresAt: integer("expires_at"),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.key, t.window] }),
+    expiresAtIdx: index("idx_rate_limits_expires_at").on(t.expiresAt),
+  }),
+);

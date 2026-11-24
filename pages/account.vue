@@ -408,7 +408,6 @@ function setAdminSection(value: string) {
 
     <AccountAuthForm v-if="!loggedIn" ref="authFormRef" />
 
-    <!-- Logged-in -->
     <div v-else class="body-section thin-scroll">
       <div v-if="adminMessage" class="admin-message-banner">
         <strong>From admin:</strong> {{ adminMessage }}
@@ -434,8 +433,8 @@ function setAdminSection(value: string) {
         </button>
       </header>
 
-      <!-- Bottom row is what the expand tab frames. Same band position and the
-           same flat, colour-only styling as the Info page's tabs. -->
+      <!-- Bottom row is what the expand tab frames, styled flat and
+           colour-only like the catalog header's nav. -->
       <nav ref="accountTabsEl" class="account-tabs" role="tablist">
         <button
           v-if="isAdmin"
@@ -563,7 +562,6 @@ function setAdminSection(value: string) {
         variant="plain"
       />
 
-      <!-- Profile -->
       <div v-if="accountTab === 'profile'" class="tab-panel" role="tabpanel">
         <AccountProfile />
       </div>
@@ -581,7 +579,7 @@ function setAdminSection(value: string) {
         class="tab-panel"
         role="tabpanel"
       >
-        <AccountAnnotations />
+        <LazyAccountAnnotations />
       </div>
 
       <div
@@ -589,45 +587,39 @@ function setAdminSection(value: string) {
         class="tab-panel"
         role="tabpanel"
       >
-        <!-- Submissions -->
-        <AdminSubmissionsPending
+        <LazyAdminSubmissionsPending
           v-if="adminGroup === 'submissions' && adminSection === 'pending'"
           v-model:expanded-id="expandedPendingId"
         />
-        <AdminArchive
+        <LazyAdminArchive
           v-else-if="
             adminGroup === 'submissions' && adminSection === 'archived'
           "
         />
-        <AdminRejected
+        <LazyAdminRejected
           v-else-if="
             adminGroup === 'submissions' && adminSection === 'rejected'
           "
         />
-        <AdminRemovals
+        <LazyAdminRemovals
           v-else-if="
             adminGroup === 'submissions' && adminSection === 'removals'
           "
         />
-
-        <!-- Accounts -->
-        <AdminAccounts
+        <LazyAdminAccounts
           v-else-if="adminGroup === 'accounts' && adminSection === 'directory'"
         />
-        <AdminUpgrades
+        <LazyAdminUpgrades
           v-else-if="adminGroup === 'accounts' && adminSection === 'upgrades'"
         />
-
-        <!-- Annotations -->
-        <AdminAnnotations
+        <LazyAdminAnnotations
           v-else-if="adminGroup === 'annotations' && adminSection === 'all'"
         />
-        <AdminReports
+        <LazyAdminReports
           v-else-if="adminGroup === 'annotations' && adminSection === 'reports'"
         />
-
         <!-- Audit: one list, no sections -->
-        <AdminAuditLog v-else-if="adminGroup === 'audit'" />
+        <LazyAdminAuditLog v-else-if="adminGroup === 'audit'" />
       </div>
     </div>
   </div>
@@ -709,11 +701,10 @@ function setAdminSection(value: string) {
   border-radius: 3px;
 }
 
-/* Account tabs: the bottom of the band the expand tab frames, in the same
-   position as the Info page's tabs and styled the same flat, colour-only way.
-   The shared `.tab-btn` states already match, so only the underline and the
-   padding are overridden away. `min-height` is what lets the row grow to meet
-   the expand tab; see useAlignToStrip. */
+/* Account tabs: the bottom of the band the expand tab frames, styled flat and
+   colour-only. The shared `.tab-btn` states already match, so only the
+   underline and padding are overridden away. `min-height` is what lets the row
+   grow to meet the expand tab; see useAlignToStrip. */
 .account-tabs {
   display: flex;
   align-items: flex-end;
@@ -734,10 +725,10 @@ function setAdminSection(value: string) {
   border-bottom: 0;
   margin-bottom: 0;
   /* Steps the shared 15px, which is sized for the underlined auth tabs, down to
-     the 14px the Info page's tabs and the catalog's headings use. The tight
-     line-height matters as much as the size: the page's inherited 1.4 was on
-     its own enough to push the row's natural height past `min-height`, so the
-     row grew past the expand tab instead of the tab framing the row. */
+     the 14px the catalog's headings use. The tight line-height matters as much
+     as the size: the page's inherited 1.4 was on its own enough to push the
+     row's natural height past `min-height`, so the row grew past the expand tab
+     instead of the tab framing the row. */
   font-size: 14px;
   line-height: 1;
   white-space: nowrap;
@@ -748,10 +739,8 @@ function setAdminSection(value: string) {
   background: var(--faint);
 }
 
-/* Banners */
-
 .muted-banner {
-  background: #fff4e5;
+  background: var(--warn-surface);
 }
 
 .admin-message-banner {

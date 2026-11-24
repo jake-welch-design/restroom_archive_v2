@@ -16,25 +16,7 @@ const emit = defineEmits<{
   select: [slug: string];
   toggleSort: [key: SortKey];
   toggleTag: [tag: string];
-  removeTag: [tag: string];
 }>();
-
-// Previously-used descriptors across all loaded restrooms, ordered by
-// frequency. Feeds the tag suggestion dropdown when editing an entry.
-const descriptorSuggestions = computed(() => {
-  const counts = new Map<string, { display: string; count: number }>();
-  for (const r of props.rows) {
-    for (const tag of r.descriptors ?? []) {
-      const key = tag.toLowerCase();
-      const existing = counts.get(key);
-      if (existing) existing.count++;
-      else counts.set(key, { display: tag, count: 1 });
-    }
-  }
-  return [...counts.values()]
-    .sort((a, b) => b.count - a.count || a.display.localeCompare(b.display))
-    .map((e) => e.display);
-});
 
 const { isAdmin, user } = useAuth();
 
@@ -90,6 +72,25 @@ onMounted(() => scrollToSelected(props.selectedSlug));
 const editingSlug = ref<string | null>(null);
 const editFullscreen = ref(false);
 
+// Previously-used descriptors across loaded restrooms, ordered by frequency.
+// Computed only while an entry is being edited so search keystrokes do not
+// re-aggregate tags for ordinary visitors.
+const descriptorSuggestions = computed(() => {
+  if (!editingSlug.value) return [];
+  const counts = new Map<string, { display: string; count: number }>();
+  for (const r of props.rows) {
+    for (const tag of r.descriptors ?? []) {
+      const key = tag.toLowerCase();
+      const existing = counts.get(key);
+      if (existing) existing.count++;
+      else counts.set(key, { display: tag, count: 1 });
+    }
+  }
+  return [...counts.values()]
+    .sort((a, b) => b.count - a.count || a.display.localeCompare(b.display))
+    .map((e) => e.display);
+});
+
 function startEdit(r: RestroomSummary, e: Event) {
   e.stopPropagation();
   editFullscreen.value = window.matchMedia("(max-width: 750px)").matches;
@@ -102,7 +103,7 @@ function sortArrow(key: SortKey) {
 }
 
 // The name cell is a real `<a href="/r/:slug">` so the catalog links the pages
-// it lists — without it every entry is an orphan that only the sitemap knows
+// it lists; without it every entry is an orphan that only the sitemap knows
 // about. Selection is still the row's own @click (which rewrites the URL via
 // replaceState), so a plain click must not let the browser navigate on top of
 // it. Modified clicks are left alone: cmd/middle-click opens the entry in a new
@@ -191,7 +192,7 @@ function onNameClick(e: MouseEvent) {
         </div>
 
         <div v-if="r.slug === selectedSlug" class="row-expanded">
-          <EntryEditForm
+          <LazyEntryEditForm
             v-if="editingSlug === r.slug"
             :entry="r"
             :fullscreen="editFullscreen"
@@ -199,7 +200,6 @@ function onNameClick(e: MouseEvent) {
             @close="editingSlug = null"
           />
 
-          <!-- Read view -->
           <div v-else class="description">
             <p class="desc-text">
               <SearchHighlight v-if="r.description" :text="r.description" />
@@ -213,7 +213,6 @@ function onNameClick(e: MouseEvent) {
             />
 
             <DescriptorChips
-              class="row-chips"
               :tags="r.descriptors ?? []"
               :active-tags="activeTags"
               @toggle-tag="emit('toggleTag', $event)"
@@ -340,7 +339,6 @@ function onNameClick(e: MouseEvent) {
   gap: 10px;
 }
 
-/* Read view */
 .desc-text {
   margin: 0;
   color: var(--ink);
@@ -367,7 +365,6 @@ function onNameClick(e: MouseEvent) {
   color: var(--ink);
 }
 
-/* Annotations */
 .annotations-section {
   /* No margin of its own: `.description`'s 10px gap already separates it, and
      adding to that put the divider twice as far below the attribution as the
@@ -379,7 +376,6 @@ function onNameClick(e: MouseEvent) {
 /* Responsive columns via container queries */
 @container (max-width: 560px) {
   .thead {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 8px;
     padding: 8px 12px;
     font-size: 12px;
@@ -388,7 +384,6 @@ function onNameClick(e: MouseEvent) {
     font-size: 12px;
   }
   .row-main {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 8px;
     padding: 6px 12px;
     font-size: 12px;
@@ -404,12 +399,10 @@ function onNameClick(e: MouseEvent) {
 
 @container (max-width: 400px) {
   .thead {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 6px;
     padding: 8px 10px;
   }
   .row-main {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 6px;
     padding: 6px 10px;
   }

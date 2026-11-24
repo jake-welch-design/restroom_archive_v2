@@ -11,3 +11,4 @@ dist
 .DS_Store
 .local-seed.sql
 _*.mjs
+.claude/settings.local.json

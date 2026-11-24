@@ -27,20 +27,18 @@ const activeTags = ref<string[]>([]);
 const filterOpen = ref(false);
 
 const allTags = computed(() => {
-  const seen = new Set<string>();
+  const byLower = new Map<string, string>();
   for (const r of data.value ?? []) {
+    if (r.status === "pending") continue;
     for (const t of r.descriptors ?? []) {
-      seen.add(t);
+      const key = t.toLowerCase();
+      if (!byLower.has(key)) byLower.set(key, t);
     }
   }
-  return [...seen].sort((a, b) => a.localeCompare(b));
+  return [...byLower.values()].sort((a, b) => a.localeCompare(b));
 });
 
-const {
-  isTagActive,
-  toggleTag: computeToggle,
-  removeTag: computeRemove,
-} = useTagFilter();
+const { isTagActive, toggleTag: computeToggle } = useTagFilter();
 
 function toggleTag(tag: string) {
   const next = computeToggle(tag, activeTags.value);
@@ -48,10 +46,6 @@ function toggleTag(tag: string) {
   // where the user needs to see the filter they have just started building.
   if (next.length > activeTags.value.length) filterOpen.value = true;
   activeTags.value = next;
-}
-
-function removeTag(tag: string) {
-  activeTags.value = computeRemove(tag, activeTags.value);
 }
 
 // One group per place, oldest scan first. Admins get pending entries in `data`
@@ -494,14 +488,14 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
     </div>
 
     <div v-if="viewMode === 'map'" class="map-area">
-      <MapView
+      <LazyMapView
         :rows="mapRows"
         :selected-slug="selectedSlug"
         :panel-open="mapPanelVisible && !!selected"
         @select="handleMapSelect"
       />
       <Transition name="slide-up">
-        <MapPanel
+        <LazyMapPanel
           v-if="mapPanelVisible && selected"
           :restroom="selected"
           :scans="selectedRow?.scans"
@@ -528,7 +522,6 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
           @select="select"
           @toggle-sort="toggleSort"
           @toggle-tag="toggleTag"
-          @remove-tag="removeTag"
         />
         <GridView
           v-else-if="viewMode === 'grid'"
@@ -618,10 +611,6 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
   font-size: 14px;
   cursor: pointer;
   padding: 0;
-  color: var(--ink);
-}
-
-.sort-btn.active {
   color: var(--ink);
 }
 
@@ -926,14 +915,13 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
   }
   .filter-wrap.open .filter-panel {
     padding-top: 8px;
-    /* padding-bottom: 8px; */
   }
 }
 
 /* Sheet layout, not a width step: on the top-anchored sheet the open panel
    expands to its natural height so every tag is visible, rather than clipping
    the chips to a couple of rows. Tags are user-submitted and unbounded, so the
-   wrap still stops at 60% of the sheet — past that the panel scrolls instead of
+   wrap still stops at 60% of the sheet; past that the panel scrolls instead of
    pushing the list out of the sheet entirely. */
 @media (max-width: 750px) {
   .filter-wrap.open {

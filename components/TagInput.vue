@@ -115,19 +115,31 @@ function focusInput() {
   inputRef.value?.focus();
 }
 
+let blurTimer: ReturnType<typeof setTimeout> | null = null;
+
 function onFocus() {
+  if (blurTimer) {
+    clearTimeout(blurTimer);
+    blurTimer = null;
+  }
   open.value = true;
 }
 
 // Commit the pending draft and close the dropdown when focus leaves the whole
 // control. A short delay lets a suggestion click register before blur fires.
 function onBlur() {
-  setTimeout(() => {
+  if (blurTimer) clearTimeout(blurTimer);
+  blurTimer = setTimeout(() => {
+    blurTimer = null;
     commit();
     open.value = false;
     activeIndex.value = -1;
   }, 120);
 }
+
+onBeforeUnmount(() => {
+  if (blurTimer) clearTimeout(blurTimer);
+});
 </script>
 
 <template>

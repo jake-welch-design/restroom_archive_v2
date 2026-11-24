@@ -1,5 +1,10 @@
 import type { H3Event } from "h3";
-import type { z } from "zod";
+import { z } from "zod";
+
+/** Shared schema for admin endpoints that accept an optional note. */
+export const OptionalMessageBody = z.object({
+  message: z.string().trim().max(500).optional(),
+});
 
 /**
  * Validates a request body that the client is allowed to omit entirely.

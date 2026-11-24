@@ -20,6 +20,9 @@ Allow: /
 Disallow: /account
 Disallow: /admin
 Disallow: /submit
+Disallow: /studio
+Disallow: /newsletter
+Disallow: /weekly-report
 Disallow: /api/
 
 # Training and dataset crawlers. Blocked outright rather than signalled, since

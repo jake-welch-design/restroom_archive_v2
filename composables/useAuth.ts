@@ -54,7 +54,6 @@ export function useAuth() {
   return {
     user,
     loggedIn,
-    loggedOut: computed(() => !loggedIn.value),
     canSubmit,
     submissionRequested,
     isAdmin,

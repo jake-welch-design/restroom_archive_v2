@@ -18,6 +18,10 @@ import { SESSION_USER_COLUMNS } from "~~/server/utils/sessionUser";
 export default defineNitroPlugin(() => {
   sessionHooks.hook("fetch", async (session, event) => {
     if (!session.user?.id) return;
+    if (event.context.user?.id === session.user.id) {
+      session.user = event.context.user;
+      return;
+    }
     try {
       const db = useDb(event);
       const fresh = await db
@@ -26,7 +30,10 @@ export default defineNitroPlugin(() => {
         .where(eq(schema.users.id, session.user.id))
         .get();
 
-      if (!fresh) return;
+      if (!fresh) {
+        delete session.user;
+        return;
+      }
 
       if (fresh.adminMessage && !isWithinHours(fresh.adminMessageAt, 24)) {
         fresh.adminMessage = null;

@@ -23,7 +23,7 @@ export default defineEventHandler(async (event) => {
       statusMessage: "Turnstile verification failed",
     });
 
-  await sendContactEmail(body);
+  await sendContactEmail(event, body);
 
   return { ok: true };
 });

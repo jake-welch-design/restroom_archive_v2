@@ -5,7 +5,6 @@
  *
  * Single opt-in: a signup joins the list at once (server/api/newsletter).
  */
-import { apiErrorMessage } from "~~/shared/utils/apiError";
 import { useTurnstileToken } from "~/composables/useTurnstileToken";
 import { markWeeklyReportPrompt } from "~/composables/useWeeklyReportPrompt";
 
@@ -21,31 +20,28 @@ const props = defineProps<{
 const emit = defineEmits<{ subscribed: [] }>();
 
 const email = ref("");
-const loading = ref(false);
-const error = ref("");
 const sentTo = ref<string | null>(null);
+const action = useAsyncAction("Something went wrong. Please try again.");
 const { token, resetToken, waitForToken } = useTurnstileToken();
+const { resolved: resolvedTheme } = useTheme();
 
 async function submit() {
   if (!(await waitForToken())) {
-    error.value = "Still verifying. Please wait a moment and try again.";
+    action.error = "Still verifying. Please wait a moment and try again.";
     return;
   }
-  error.value = "";
-  loading.value = true;
-  try {
-    await $fetch("/api/newsletter/subscribe", {
+  const ok = await action.run(() =>
+    $fetch("/api/newsletter/subscribe", {
       method: "POST",
       body: { email: email.value, turnstileToken: token.value },
-    });
+    }),
+  );
+  if (ok) {
     sentTo.value = email.value.trim();
     markWeeklyReportPrompt("subscribed");
     emit("subscribed");
-  } catch (e) {
-    error.value = apiErrorMessage(e, "Something went wrong. Please try again.");
+  } else {
     resetToken();
-  } finally {
-    loading.value = false;
   }
 }
 </script>
@@ -79,9 +75,15 @@ async function submit() {
           <button
             type="submit"
             class="primary-btn wr-btn"
-            :disabled="loading || !token"
+            :disabled="action.loading || !token"
           >
-            {{ loading ? "Subscribing…" : !token ? "Verifying…" : "Subscribe" }}
+            {{
+              action.loading
+                ? "Subscribing…"
+                : !token
+                  ? "Verifying…"
+                  : "Subscribe"
+            }}
           </button>
         </span>
       </div>
@@ -89,10 +91,10 @@ async function submit() {
       <NuxtTurnstile
         v-model="token"
         class="turnstile wr-turnstile"
-        :options="{ theme: 'light', appearance: 'interaction-only' }"
+        :options="{ theme: resolvedTheme, appearance: 'interaction-only' }"
       />
 
-      <p v-if="error" class="form-error">{{ error }}</p>
+      <p v-if="action.error" class="form-error">{{ action.error }}</p>
     </form>
   </div>
 </template>

@@ -32,14 +32,6 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: "submitter", label: "Submitter" },
 ];
 
-function submitterName(r: PendingRestroom) {
-  return (
-    r.submitter?.displayName ||
-    r.submitter?.username ||
-    ""
-  ).toLowerCase();
-}
-
 const { query, sortKey, sortDir, visible, isEmptyFromSearch } = useListControls<
   PendingRestroom,
   SortKey
@@ -66,7 +58,7 @@ const { query, sortKey, sortDir, visible, isEmptyFromSearch } = useListControls<
         return a.isoDate.localeCompare(b.isoDate) || a.id - b.id;
       case "submitter":
         return (
-          submitterName(a).localeCompare(submitterName(b)) ||
+          userSortKey(a.submitter).localeCompare(userSortKey(b.submitter)) ||
           a.name.localeCompare(b.name)
         );
       default:

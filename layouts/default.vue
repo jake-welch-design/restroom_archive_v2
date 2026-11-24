@@ -46,14 +46,12 @@ const PUSH_MAX = DEFAULT_FRAC;
 /** Movement under this many px is a tap, not a drag. */
 const TAP_SLOP = 5;
 
-/** Rendered sheet height. */
 const panelFrac = ref(DEFAULT_FRAC);
 
 function togglePanel() {
   // Closing keeps the current height so the sheet slides out by exactly its own
   // height. Opening always returns to the default, because a height reached by
-  // dragging
-  // is for that session with the sheet, not a new resting place.
+  // dragging is for that session with the sheet, not a new resting place.
   if (!panelOpen.value) panelFrac.value = DEFAULT_FRAC;
   panelOpen.value = !panelOpen.value;
 }
@@ -74,7 +72,6 @@ const isClosed = computed(() => {
 });
 
 const sheetStyle = computed(() => ({
-  // Sheet height.
   "--panel-frac": String(activeFrac.value),
   // How far the viewer is pushed down. It tracks the sheet only up to
   // `PUSH_MAX`. Beyond that the sheet slides over the viewer rather than
@@ -292,9 +289,7 @@ function goPrev() {
 
     <main id="main" class="viewer-panel">
       <p v-show="isClosed" class="corner-title">
-        <a href="/" style="text-decoration: none; color: inherit"
-          >The Restroom Archive</a
-        >
+        <NuxtLink to="/">The Restroom Archive</NuxtLink>
       </p>
       <Viewer
         :model-url="previewModelUrl ?? selected?.modelUrl ?? null"
@@ -348,7 +343,7 @@ function goPrev() {
 
   /* Metrics for the viewer's overlay pills, declared here because `.nav-btn`
      below rebuilds its height from them to sit level with that row. The pills
-     own the size — these are their values, not the nav row's. Custom properties
+     own the size: these are their values, not the nav row's. Custom properties
      cross into the viewer's scoped styles, which a class could not. */
   --ctrl-btn-size: 26px;
   --ctrl-group-pad-y: 4px;
@@ -480,6 +475,8 @@ function goPrev() {
 }
 .corner-title a {
   pointer-events: auto;
+  text-decoration: none;
+  color: inherit;
 }
 
 .bottom-gradient {
@@ -680,9 +677,6 @@ function goPrev() {
   }
   .expand-tab:active .grabber {
     background: var(--faint-hover);
-  }
-  .bottom-nav {
-    bottom: 0.75rem;
   }
 
   .bottom-nav-info {

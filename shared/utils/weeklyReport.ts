@@ -724,7 +724,6 @@ export function renderWeeklyReport(
   blocks.push(
     `<tr><td style="padding:0 32px 32px;" class="gutter"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td class="box" style="border:1px solid ${INK};padding:24px;">` +
       `<div style="${TITLE}padding-bottom:16px;text-align:center;">Contribute to The Restroom Archive</div>` +
-      // `<p style="margin:0 0 16px;${TEXT}">Start scanning and become part of the Archive today.</p>` +
       buttonRow([
         ["Become an archivist", `${siteUrl}/account?signup`],
         ["Learn how to scan", `${siteUrl}/about?guide`],
@@ -744,37 +743,6 @@ export function renderWeeklyReport(
   return shell({
     title: issue.subject,
     preheader: issue.preheader,
-    blocks,
-    footer,
-    siteUrl,
-  });
-}
-
-/**
- * The double opt-in email, sent when someone subscribes
- * (server/utils/email.ts). It is the newsletter's masthead, type and button,
- * so the first thing a subscriber gets already looks like the Weekly Report.
- * No unsubscribe link: until the button is clicked there's nothing to leave.
- */
-export function renderWeeklyReportConfirm(
-  confirmUrl: string,
-  siteUrl: string,
-): string {
-  const blocks = [
-    masthead(siteUrl),
-    rule(),
-    section(
-      `<div style="${TITLE}">Confirm your subscription</div>` +
-        `<div style="padding-top:16px;">${prose("Click below to start getting the Weekly Report: Archive highlights, new submissions and updates. The link works for 7 days.")}</div>` +
-        `<div style="padding-top:16px;">${button("Confirm subscription", confirmUrl)}</div>`,
-    ),
-  ];
-  const footer =
-    `<div style="${LABEL}padding-bottom:8px;text-align:center;" class="muted">Someone signed up with this address.<br>If this wasn’t you, please feel free to ignore this email.</div>` +
-    footerLinks(siteUrl);
-  return shell({
-    title: "Confirm your Weekly Report subscription",
-    preheader: "One click and you’re on the list for the Weekly Report.",
     blocks,
     footer,
     siteUrl,

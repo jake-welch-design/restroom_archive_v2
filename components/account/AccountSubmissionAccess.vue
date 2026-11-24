@@ -13,8 +13,6 @@
  */
 import { SUBMISSION_AGREEMENTS } from "~~/shared/utils/agreements";
 
-const emit = defineEmits<{ requested: [] }>();
-
 const { refreshSession } = useAuth();
 const action = useAsyncAction("Could not submit request.");
 
@@ -47,7 +45,6 @@ async function submit() {
   });
   if (!ok) return;
   showForm.value = false;
-  emit("requested");
 }
 </script>
 

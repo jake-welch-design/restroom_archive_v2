@@ -11,7 +11,7 @@ const props = defineProps<{
   pendingPoint: THREE.Vector3 | null;
   pendingScreenX: number;
   pendingScreenY: number;
-  createMode: boolean;
+  saving?: boolean;
   restroomSlug: string;
 }>();
 
@@ -58,18 +58,54 @@ async function confirmReport(id: number) {
   }
 }
 
-// Reactive projected positions, recomputed every animation frame.
-const positions = ref<Map<number, { x: number; y: number; inFront: boolean }>>(
-  new Map(),
-);
+type ProjectedPos = { x: number; y: number; inFront: boolean };
+
+// Projected screen positions, updated on animation frames only when visible
+// markers or the pending point actually move, avoiding 60fps Vue re-renders
+// while the camera is stationary or when markers are hidden.
+const positions = shallowRef<Map<number, ProjectedPos>>(new Map());
+const pendingPos = shallowRef<ProjectedPos | null>(null);
+const scratchPoint = new THREE.Vector3();
+
+function samePos(a: ProjectedPos | undefined, b: ProjectedPos): boolean {
+  return (
+    !!a &&
+    a.inFront === b.inFront &&
+    Math.abs(a.x - b.x) < 0.1 &&
+    Math.abs(a.y - b.y) < 0.1
+  );
+}
 
 let frameId = 0;
 function tick() {
-  const m = new Map<number, { x: number; y: number; inFront: boolean }>();
-  for (const a of props.annotations) {
-    m.set(a.id, props.project(new THREE.Vector3(a.pointX, a.pointY, a.pointZ)));
+  if (props.pendingPoint) {
+    const nextPending = props.project(props.pendingPoint);
+    if (!samePos(pendingPos.value ?? undefined, nextPending)) {
+      pendingPos.value = nextPending;
+    }
+  } else if (pendingPos.value !== null) {
+    pendingPos.value = null;
   }
-  positions.value = m;
+
+  const needProjection =
+    props.annotations.length > 0 &&
+    (props.markersVisible || props.activeAnnotationId != null);
+
+  if (!needProjection) {
+    if (positions.value.size > 0) positions.value = new Map();
+  } else {
+    const prev = positions.value;
+    let changed = prev.size !== props.annotations.length;
+    const next = new Map<number, ProjectedPos>();
+    for (const a of props.annotations) {
+      scratchPoint.set(a.pointX, a.pointY, a.pointZ);
+      const p = props.project(scratchPoint);
+      next.set(a.id, p);
+      if (!changed && !samePos(prev.get(a.id), p)) changed = true;
+    }
+    if (changed) positions.value = next;
+  }
+
   frameId = requestAnimationFrame(tick);
 }
 
@@ -78,13 +114,18 @@ onMounted(() => {
 });
 onBeforeUnmount(() => cancelAnimationFrame(frameId));
 
-// Compose form
 const composeBody = ref("");
 
+watch(
+  () => props.pendingPoint,
+  (pt) => {
+    if (!pt) composeBody.value = "";
+  },
+);
+
 function onSave() {
-  if (!composeBody.value.trim()) return;
+  if (!composeBody.value.trim() || props.saving) return;
   emit("submitAnnotation", composeBody.value.trim());
-  composeBody.value = "";
 }
 
 function onCancel() {
@@ -118,11 +159,6 @@ const activePos = computed(() =>
     ? (positions.value.get(props.activeAnnotationId) ?? null)
     : null,
 );
-
-const pendingPos = computed(() => {
-  if (!props.pendingPoint) return null;
-  return props.project(props.pendingPoint);
-});
 </script>
 
 <template>
@@ -256,10 +292,10 @@ const pendingPos = computed(() => {
         <button
           type="button"
           class="compose-save"
-          :disabled="!composeBody.trim()"
+          :disabled="!composeBody.trim() || saving"
           @click="onSave"
         >
-          Save
+          {{ saving ? "Saving…" : "Save" }}
         </button>
         <button type="button" class="compose-cancel" @click="onCancel">
           Cancel

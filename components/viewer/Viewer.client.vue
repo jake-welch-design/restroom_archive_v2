@@ -21,13 +21,11 @@ const cropRef = toRef(props, "crop");
 const { loggedIn, isAdmin } = useAuth();
 const { selectedAnnotationId, selectAnnotation } = useSelection();
 
-// Annotation data
 const { data: annotations, refresh: refreshAnnotations } =
   useAnnotations(slugRef);
 
-// Compose mode state
-const pendingPoint = ref<THREE.Vector3 | null>(null);
-const pendingSnapshot = ref<CameraSnapshot | null>(null);
+const pendingPoint = shallowRef<THREE.Vector3 | null>(null);
+const pendingSnapshot = shallowRef<CameraSnapshot | null>(null);
 const pendingScreenX = ref(0);
 const pendingScreenY = ref(0);
 const saving = ref(false);
@@ -101,11 +99,19 @@ watch(loading, (isLoading) => {
   if (!isLoading && modelUrlRef.value) markersVisible.value = true;
 });
 
-// Auto-capture thumbnail after model loads if none exists yet
-watch(loading, (isLoading) => {
-  if (isLoading || props.thumbUrl || !isAdmin.value || !props.slug) return;
-  const slug = props.slug;
-  setTimeout(async () => {
+// Auto-capture thumbnail after model loads if none exists yet. Cancel on
+// model/slug change or unmount so switching entries within 800ms never uploads
+// the new scan's frame under the previous slug.
+let thumbTimer: ReturnType<typeof setTimeout> | null = null;
+watch([loading, slugRef], ([isLoading, slug]) => {
+  if (thumbTimer) {
+    clearTimeout(thumbTimer);
+    thumbTimer = null;
+  }
+  if (isLoading || props.thumbUrl || !isAdmin.value || !slug) return;
+  thumbTimer = setTimeout(async () => {
+    thumbTimer = null;
+    if (props.slug !== slug || loading.value || props.thumbUrl) return;
     const dataUrl = captureThumb();
     if (!dataUrl) return;
     try {
@@ -533,6 +539,8 @@ onMounted(() => {
 });
 onBeforeUnmount(() => {
   rowObserver?.disconnect();
+  if (thumbTimer) clearTimeout(thumbTimer);
+  if (toastTimer) clearTimeout(toastTimer);
   controlsOpen.value = false;
   sharedCropping.value = false;
 });
@@ -1138,28 +1146,26 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
       </Transition>
     </div>
 
-    <ClientOnly>
-      <AnnotationsLayer
-        v-if="annotations"
-        :annotations="annotations"
-        :markers-visible="markersVisible"
-        :active-annotation-id="selectedAnnotationId"
-        :project="project"
-        :pending-point="pendingPoint"
-        :pending-screen-x="pendingScreenX"
-        :pending-screen-y="pendingScreenY"
-        :create-mode="createMode"
-        :restroom-slug="props.slug ?? ''"
-        @select-annotation="selectAnnotation($event)"
-        @close-active="selectAnnotation(null)"
-        @submit-annotation="saveAnnotation($event)"
-        @cancel-create="
-          pendingPoint = null;
-          pendingSnapshot = null;
-          createMode = false;
-        "
-      />
-    </ClientOnly>
+    <AnnotationsLayer
+      v-if="annotations"
+      :annotations="annotations"
+      :markers-visible="markersVisible"
+      :active-annotation-id="selectedAnnotationId"
+      :project="project"
+      :pending-point="pendingPoint"
+      :pending-screen-x="pendingScreenX"
+      :pending-screen-y="pendingScreenY"
+      :saving="saving"
+      :restroom-slug="props.slug ?? ''"
+      @select-annotation="selectAnnotation($event)"
+      @close-active="selectAnnotation(null)"
+      @submit-annotation="saveAnnotation($event)"
+      @cancel-create="
+        pendingPoint = null;
+        pendingSnapshot = null;
+        createMode = false;
+      "
+    />
 
     <div v-if="loading" class="loading-overlay">
       <img src="/toilet-loader.gif" alt="Loading..." width="200" height="200" />
@@ -1181,7 +1187,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
   background: #000;
   overflow: hidden;
   /* A long- or force-press on iOS otherwise selects the whole viewport and
-  opens the callout menu. Nothing in here is text you'd want to copy. */
+  opens the callout menu, where there is no copyable text. */
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
@@ -1216,8 +1222,6 @@ canvas {
   align-items: center;
   gap: 8px;
 }
-/* The three values the layout's nav buttons rebuild their height from, so the
-   bottom row stays level on mobile. Changing them here moves both. */
 /* Present only for the mobile stack below. Without a box of its own, its two
    groups sit in the desktop row exactly as they did before it existed. */
 .ctrl-stack {

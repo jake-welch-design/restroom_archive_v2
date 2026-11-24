@@ -1,21 +1,18 @@
 /**
  * Search-and-sort state for an admin list.
  *
- * Every admin section is the same shape — a list, a substring search over the
- * two or three fields a row is identified by, and a sort with a direction — and
- * each one had grown its own copy of that, or gone without. This holds the
- * state and applies it; the caller supplies the two things that are genuinely
- * per-list: what a search matches against, and how two rows compare on a given
- * key.
+ * Every admin section shares the same shape: a list, a substring search over
+ * the fields a row is identified by, and a sort with a direction. This holds
+ * the state and applies it; the caller supplies the two things that are
+ * genuinely per-list: what a search matches against, and how two rows compare
+ * on a given key.
  *
- * Searching deliberately does not reorder by relevance, the way the public
- * catalog's fuzzy search does. An admin searching is narrowing a list they
- * still want ordered by whatever they chose, so the sort stays in force and the
- * match is a plain substring test.
+ * Searching narrows a list the admin still wants ordered by their chosen key,
+ * so the sort stays in force and the match is a plain substring test.
  */
 import type { MaybeRefOrGetter } from "vue";
 
-export interface ListControlsOptions<T, K extends string> {
+interface ListControlsOptions<T, K extends string> {
   /** The rows to search and sort. A ref, a getter, or a plain array. */
   source: MaybeRefOrGetter<T[] | null | undefined>;
   /**
@@ -70,7 +67,17 @@ export function useListControls<T, K extends string>(
     () => Boolean(query.value.trim()) && !visible.value.length,
   );
 
-  return { query, sortKey, sortDir, all, visible, isEmptyFromSearch };
+  return { query, sortKey, sortDir, visible, isEmptyFromSearch };
+}
+
+/**
+ * Lowercased display name (falling back to username) for sorting admin rows by
+ * account identity.
+ */
+export function userSortKey(
+  u: { username: string; displayName: string | null } | null | undefined,
+): string {
+  return (u?.displayName || u?.username || "").toLowerCase();
 }
 
 /**

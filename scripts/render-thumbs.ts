@@ -8,9 +8,9 @@
 //   npx tsx scripts/render-thumbs.ts --all              # all published rows
 //   npx tsx scripts/render-thumbs.ts --slug <slug>      # single row
 //
-import puppeteer from "puppeteer";
+import puppeteer, { type Browser } from "puppeteer";
 import { execSync } from "node:child_process";
-import { readFileSync, unlinkSync, mkdtempSync } from "node:fs";
+import { readFileSync, rmSync, mkdtempSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import http from "node:http";
@@ -351,28 +351,23 @@ function startServer(
   return server;
 }
 
-// ---------------------------------------------------------------------------
-// Render one thumbnail
-// ---------------------------------------------------------------------------
-async function renderThumb(row: DbRow) {
+async function renderThumb(browser: Browser, row: DbRow) {
   const tmpDir = mkdtempSync(join(tmpdir(), "restroom-thumb-"));
   const glbPath = join(tmpDir, "model.glb");
   const imgPath = join(tmpDir, "thumb.jpg");
 
+  let server: http.Server | null = null;
+  let page: Awaited<ReturnType<Browser["newPage"]>> | null = null;
   try {
     process.stdout.write(`  [${row.slug}] downloading GLB… `);
     downloadGlb(row.file, glbPath);
     console.log("done");
 
     const port = await getFreePort();
-    const server = startServer(glbPath, port, cropOf(row));
+    server = startServer(glbPath, port, cropOf(row));
 
     process.stdout.write(`  [${row.slug}] rendering… `);
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    });
-    const page = await browser.newPage();
+    page = await browser.newPage();
     await page.setViewport({ width: 800, height: 800 });
     await page.goto(`http://127.0.0.1:${port}/`, {
       waitUntil: "networkidle0",
@@ -386,8 +381,6 @@ async function renderThumb(row: DbRow) {
       quality: 85,
       clip: { x: 0, y: 0, width: 800, height: 800 },
     });
-    await browser.close();
-    server.close();
     console.log("done");
 
     process.stdout.write(`  [${row.slug}] uploading… `);
@@ -395,21 +388,18 @@ async function renderThumb(row: DbRow) {
     updateThumbKey(row.slug);
     console.log("done ✓");
   } finally {
-    // Best-effort temp-file cleanup: a failure here must not mask the
+    await page?.close().catch(() => {});
+    server?.close();
+    // Best-effort temp-directory cleanup: a failure here must not mask the
     // outcome of the render itself.
-    for (const path of [glbPath, imgPath]) {
-      try {
-        unlinkSync(path);
-      } catch {
-        // Already gone, or never written.
-      }
+    try {
+      rmSync(tmpDir, { recursive: true, force: true });
+    } catch {
+      // Already gone.
     }
   }
 }
 
-// ---------------------------------------------------------------------------
-// Main
-// ---------------------------------------------------------------------------
 async function main() {
   const rows = fetchRows();
   if (!rows.length) {
@@ -417,8 +407,16 @@ async function main() {
     return;
   }
   console.log(`Rendering thumbnails for ${rows.length} restroom(s)…\n`);
-  for (const row of rows) {
-    await renderThumb(row);
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+  });
+  try {
+    for (const row of rows) {
+      await renderThumb(browser, row);
+    }
+  } finally {
+    await browser.close();
   }
   console.log("\nAll done.");
 }

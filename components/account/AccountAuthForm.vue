@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { apiErrorMessage } from "~~/shared/utils/apiError";
-
 /**
  * The logged-out half of the account page: sign in, or create an account.
  *
@@ -15,6 +13,8 @@ import { apiErrorMessage } from "~~/shared/utils/apiError";
  */
 const { refreshSession } = useAuth();
 const { token: turnstileToken, waitForToken, resetToken } = useTurnstileToken();
+const { resolved: resolvedTheme } = useTheme();
+const action = useAsyncAction("Something went wrong.");
 
 type AuthTab = "signin" | "signup";
 // `/account?signup` opens on Create account: the Weekly Report's "Become an
@@ -30,14 +30,12 @@ const email = ref("");
 const password = ref("");
 const username = ref("");
 const displayName = ref("");
-const error = ref("");
-const loading = ref(false);
 
 const isSignup = computed(() => tab.value === "signup");
 
 function switchTab(next: AuthTab) {
   tab.value = next;
-  error.value = "";
+  action.reset();
   // The sign-up-only fields are dropped on the way back, so a half-filled
   // sign-up is not silently submitted with a later sign-in.
   if (next === "signin") {
@@ -47,20 +45,18 @@ function switchTab(next: AuthTab) {
 }
 
 const submitLabel = computed(() => {
-  if (loading.value) return "…";
+  if (action.loading) return "…";
   if (!turnstileToken.value) return "Verifying…";
   return isSignup.value ? "Create account" : "Sign in";
 });
 
 async function submit() {
   if (!(await waitForToken())) {
-    error.value = "Still verifying. Please wait a moment and try again.";
+    action.error = "Still verifying. Please wait a moment and try again.";
     return;
   }
 
-  error.value = "";
-  loading.value = true;
-  try {
+  const ok = await action.run(async () => {
     const body: Record<string, unknown> = {
       email: email.value,
       password: password.value,
@@ -78,12 +74,10 @@ async function submit() {
     // The session cookie is set by the response; refreshing is what tells the
     // rest of the app the user exists, which swaps this form for the account.
     await refreshSession();
-  } catch (e: unknown) {
-    error.value = apiErrorMessage(e, "Something went wrong.");
+  });
+  if (!ok) {
     // A Turnstile token is single use, so a retry needs a fresh one.
     resetToken();
-  } finally {
-    loading.value = false;
   }
 }
 </script>
@@ -169,15 +163,15 @@ async function submit() {
       <NuxtTurnstile
         v-model="turnstileToken"
         class="turnstile"
-        :options="{ theme: 'light', appearance: 'interaction-only' }"
+        :options="{ theme: resolvedTheme, appearance: 'interaction-only' }"
       />
 
-      <p v-if="error" class="form-error">{{ error }}</p>
+      <p v-if="action.error" class="form-error">{{ action.error }}</p>
 
       <button
         type="submit"
         class="primary-btn"
-        :disabled="loading || !turnstileToken"
+        :disabled="action.loading || !turnstileToken"
       >
         {{ submitLabel }}
       </button>

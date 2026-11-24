@@ -67,5 +67,5 @@ export function useAdminAction() {
 
   // Reactive for the same reason as useAsyncAction: nested refs do not
   // unwrap in templates.
-  return reactive({ runningKey, error, isRunning, run });
+  return reactive({ error, isRunning, run });
 }

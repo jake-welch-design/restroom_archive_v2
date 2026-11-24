@@ -2,7 +2,7 @@ import { eq, or } from "drizzle-orm";
 import { z } from "zod";
 import { useDb, schema } from "~~/server/utils/db";
 import { toSessionUser } from "~~/server/utils/sessionUser";
-import { hashPassword } from "~~/server/utils/hash";
+import { hashUserPassword } from "~~/server/utils/hash";
 import { verifyTurnstile } from "~~/server/utils/turnstile";
 import { validateUsername } from "~~/server/utils/username";
 import { rateLimitByIp } from "~~/server/utils/rateLimit";
@@ -49,7 +49,7 @@ export default defineEventHandler(async (event) => {
       statusMessage: "That email or username is already taken",
     });
 
-  const passwordHash = await hashPassword(body.password);
+  const passwordHash = await hashUserPassword(body.password);
 
   const user = await db
     .insert(schema.users)

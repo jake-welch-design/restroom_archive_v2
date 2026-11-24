@@ -18,7 +18,26 @@ import { SESSION_USER_COLUMNS } from "~~/server/utils/sessionUser";
  * `Authorization: Bearer` token instead. Web browsers never send that header,
  * so the cookie path for the website is untouched.
  */
+// Public asset streams, aggregate stats, sitemap, and unauthenticated form
+// endpoints never read `event.context.user`. Skipping them avoids unsealing
+// the session cookie and querying D1 on every thumbnail and GLB request.
+const SKIP_AUTH_PREFIXES = ["/api/r2/", "/api/newsletter/"];
+const SKIP_AUTH_EXACT = new Set([
+  "/api/stats",
+  "/api/contact",
+  "/api/contact/mobile",
+  "/sitemap.xml",
+]);
+
 export default defineEventHandler(async (event) => {
+  const path = event.path.split("?")[0] ?? event.path;
+  if (
+    SKIP_AUTH_EXACT.has(path) ||
+    SKIP_AUTH_PREFIXES.some((prefix) => path.startsWith(prefix))
+  ) {
+    return;
+  }
+
   const session = await getUserSession(event);
   let userId: number | null = session.user?.id ?? null;
   const fromCookie = userId != null;

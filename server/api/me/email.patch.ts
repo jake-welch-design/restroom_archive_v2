@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { useDb, schema } from "~~/server/utils/db";
-import { verifyPassword } from "~~/server/utils/hash";
+import { verifyUserPassword } from "~~/server/utils/hash";
 import { requireActiveUser } from "~~/server/utils/requireActiveUser";
 import { rateLimitByUser } from "~~/server/utils/rateLimit";
 import {
@@ -36,7 +36,7 @@ export default defineEventHandler(async (event) => {
   if (!row)
     throw createError({ statusCode: 404, statusMessage: "Account not found" });
 
-  const ok = await verifyPassword(currentPassword, row.passwordHash);
+  const ok = await verifyUserPassword(currentPassword, row.passwordHash);
   if (!ok)
     throw createError({
       statusCode: 401,

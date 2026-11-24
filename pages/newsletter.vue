@@ -1,4 +1,3 @@
-:disabled="!!busy"
 <script setup lang="ts">
 /**
  * The Weekly Report composer: builds an issue from the archive, previews the

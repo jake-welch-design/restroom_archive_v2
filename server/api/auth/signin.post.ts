@@ -1,8 +1,8 @@
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { useDb, schema } from "~~/server/utils/db";
-import { toSessionUser } from "~~/server/utils/sessionUser";
-import { verifyPassword } from "~~/server/utils/hash";
+import { SESSION_USER_COLUMNS } from "~~/server/utils/sessionUser";
+import { verifyUserPassword } from "~~/server/utils/hash";
 import { verifyTurnstile } from "~~/server/utils/turnstile";
 import { rateLimitByIp } from "~~/server/utils/rateLimit";
 
@@ -26,30 +26,34 @@ export default defineEventHandler(async (event) => {
 
   const db = useDb(event);
 
-  const user = await db
-    .select()
+  const row = await db
+    .select({
+      ...SESSION_USER_COLUMNS,
+      passwordHash: schema.users.passwordHash,
+    })
     .from(schema.users)
     .where(eq(schema.users.email, body.email.toLowerCase()))
     .get();
 
-  // Use the same error message for missing user and wrong password to prevent enumeration
-  const valid = user
-    ? await verifyPassword(body.password, user.passwordHash)
+  // Same error message for missing user and wrong password to prevent enumeration.
+  const valid = row
+    ? await verifyUserPassword(body.password, row.passwordHash)
     : false;
-  if (!user || !valid)
+  if (!row || !valid)
     throw createError({
       statusCode: 401,
       statusMessage: "Invalid email or password",
     });
 
-  if (user.bannedAt) {
+  if (row.bannedAt) {
     throw createError({
       statusCode: 403,
       statusMessage: "This account has been banned.",
     });
   }
 
-  await setUserSession(event, { user: toSessionUser(user) });
+  const { passwordHash: _pw, ...sessionUser } = row;
+  await setUserSession(event, { user: sessionUser });
 
   return { ok: true };
 });

@@ -3,7 +3,7 @@ import { useDb, schema } from "~~/server/utils/db";
 import { requireRole } from "~~/server/utils/requireRole";
 import { recordAdminAction } from "~~/server/utils/auditLog";
 import { getRouterId } from "~~/server/utils/routeParams";
-import { now } from "~~/server/utils/sqlTime";
+import { deleteUserAccount } from "~~/server/utils/deleteUserAccount";
 
 export default defineEventHandler(async (event) => {
   const actor = requireRole(event, "admin");
@@ -31,31 +31,7 @@ export default defineEventHandler(async (event) => {
       statusMessage: "Cannot delete an admin account",
     });
 
-  // Null out FK references so restrooms stay in the archive (unattributed)
-  await db
-    .update(schema.restrooms)
-    .set({ submittedBy: null, updatedAt: now() })
-    .where(eq(schema.restrooms.submittedBy, id));
-
-  await db
-    .update(schema.restrooms)
-    .set({ removalRequestedBy: null })
-    .where(eq(schema.restrooms.removalRequestedBy, id));
-
-  // Preserve report history made by this user; null out their reporter_id.
-  // (Reports they received cascade-delete with their annotations below.)
-  await db
-    .update(schema.annotationReports)
-    .set({ reporterId: null })
-    .where(eq(schema.annotationReports.reporterId, id));
-
-  // Remove the user's annotations before deleting the account
-  await db
-    .delete(schema.annotations)
-    .where(eq(schema.annotations.authorId, id));
-
-  await db.delete(schema.users).where(eq(schema.users.id, id));
-
+  await deleteUserAccount(db, id);
   await recordAdminAction(event, "user.delete", "user", id);
 
   return { ok: true };

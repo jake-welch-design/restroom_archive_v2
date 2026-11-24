@@ -377,6 +377,23 @@
   align-items: center;
 }
 
+/* Status filter pills in AdminListControls' `below` slot (AdminArchive,
+   AdminRejected): a qualifier on the search field above it. */
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.filter-count {
+  margin-left: 5px;
+  color: var(--faint);
+}
+
+.btn-sm.active .filter-count {
+  color: inherit;
+}
+
 /* --- Panel-width step ----------------------------------------------------- */
 /* Keyed to the panel rather than the window, like the rest of the panel's
    chrome: a 50% panel at a 1120px viewport is as tight as a phone. */

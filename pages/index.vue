@@ -2,8 +2,8 @@
 await useRestrooms();
 
 const { toAbsolute } = useAbsoluteUrl();
+const siteUrl = toAbsolute("/")!;
 
-const siteUrl = "https://restroomarchive.com";
 const description =
   "The Restroom Archive is an ongoing repository of publicly accessible restrooms.";
 

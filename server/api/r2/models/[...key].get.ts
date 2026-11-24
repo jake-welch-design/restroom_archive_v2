@@ -1,5 +1,6 @@
 import { useR2 } from "~~/server/utils/r2";
 import { rateLimitByIp } from "~~/server/utils/rateLimit";
+import { getRouterString } from "~~/server/utils/routeParams";
 
 // Fallback streaming route for GLBs served out of the MODELS R2 binding.
 //
@@ -29,9 +30,7 @@ import { rateLimitByIp } from "~~/server/utils/rateLimit";
 const SCAN_BURST_LIMIT = { max: 100, windowSec: 300 };
 
 export default defineEventHandler(async (event) => {
-  const key = getRouterParam(event, "key");
-  if (!key)
-    throw createError({ statusCode: 400, statusMessage: "Missing key" });
+  const key = getRouterString(event, "key");
 
   // Before the R2 read, so a throttled caller costs a D1 round trip rather than
   // a multi-megabyte object fetch.

@@ -36,27 +36,27 @@ export default defineEventHandler(async (event) => {
   if (!user) return { ok: true };
 
   const now = new Date().toISOString().replace("T", " ").slice(0, 19);
-
-  // Invalidate any existing unused tokens so only the latest link works.
-  await db
-    .update(schema.passwordResetTokens)
-    .set({ usedAt: now })
-    .where(eq(schema.passwordResetTokens.userId, user.id));
-
   const token = generateToken();
   const expiresAt = new Date(Date.now() + 60 * 60 * 1000)
     .toISOString()
     .replace("T", " ")
     .slice(0, 19);
 
-  await db.insert(schema.passwordResetTokens).values({
-    userId: user.id,
-    tokenHash: hashToken(token),
-    expiresAt,
-  });
+  // Invalidate any existing unused tokens and insert the new one in one batch.
+  await db.batch([
+    db
+      .update(schema.passwordResetTokens)
+      .set({ usedAt: now })
+      .where(eq(schema.passwordResetTokens.userId, user.id)),
+    db.insert(schema.passwordResetTokens).values({
+      userId: user.id,
+      tokenHash: hashToken(token),
+      expiresAt,
+    }),
+  ]);
 
   try {
-    await sendPasswordResetEmail(user.email, token);
+    await sendPasswordResetEmail(event, user.email, token);
   } catch {
     // A failed send is not reported either, for the same reason: the difference
     // would be observable. Still returns ok.

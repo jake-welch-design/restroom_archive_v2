@@ -378,13 +378,20 @@ export function isCountryCode(country: string): boolean {
   return COUNTRY_BY_CODE.has(country);
 }
 
-/** True if `code` is a subdivision of `country`. */
-export function isSubdivisionCode(country: string, code: string): boolean {
-  return subdivisionsFor(country)?.some((r) => r.code === code) ?? false;
-}
-
 export function countryName(country: string): string | undefined {
   return COUNTRY_BY_CODE.get(country)?.name;
+}
+
+/**
+ * Formats a latitude/longitude pair for the legacy `restrooms.coords` column,
+ * or empty string when either coordinate is absent.
+ */
+export function formatCoords(
+  lat: number | null | undefined,
+  lng: number | null | undefined,
+): string {
+  if (lat == null || lng == null) return "";
+  return `${Math.abs(lat).toFixed(2)} ${lat >= 0 ? "N" : "S"}, ${Math.abs(lng).toFixed(2)} ${lng >= 0 ? "E" : "W"}`;
 }
 
 /**
@@ -407,7 +414,7 @@ export function composeLocation(
 }
 
 /**
- * The city half of a stored location -- everything before the trailing token.
+ * The city half of a stored location: everything before the trailing token.
  * Only used to seed the edit form from an existing row; nothing depends on it
  * being exactly right, because the row's country is stored separately.
  */

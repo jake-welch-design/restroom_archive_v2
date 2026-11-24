@@ -27,22 +27,23 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: "User not found" });
   }
 
-  const restroomCountRow = await db
-    .select({ n: sql<number>`count(*)` })
-    .from(schema.restrooms)
-    .where(
-      and(
-        eq(schema.restrooms.submittedBy, user.id),
-        eq(schema.restrooms.status, "published"),
-      ),
-    )
-    .get();
-
-  const annotationCountRow = await db
-    .select({ n: sql<number>`count(*)` })
-    .from(schema.annotations)
-    .where(eq(schema.annotations.authorId, user.id))
-    .get();
+  const [restroomCountRow, annotationCountRow] = await Promise.all([
+    db
+      .select({ n: sql<number>`count(*)` })
+      .from(schema.restrooms)
+      .where(
+        and(
+          eq(schema.restrooms.submittedBy, user.id),
+          eq(schema.restrooms.status, "published"),
+        ),
+      )
+      .get(),
+    db
+      .select({ n: sql<number>`count(*)` })
+      .from(schema.annotations)
+      .where(eq(schema.annotations.authorId, user.id))
+      .get(),
+  ]);
 
   const restrooms = Number(restroomCountRow?.n ?? 0);
   const annotations = Number(annotationCountRow?.n ?? 0);

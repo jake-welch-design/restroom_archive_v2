@@ -1,4 +1,4 @@
-import { inArray } from "drizzle-orm";
+import { and, inArray, isNotNull } from "drizzle-orm";
 import { useDb, schema } from "~~/server/utils/db";
 import { parseDescriptors } from "~~/server/utils/descriptors";
 
@@ -14,7 +14,12 @@ export default defineEventHandler(async (event) => {
   const rows = await db
     .select({ descriptors: schema.restrooms.descriptors })
     .from(schema.restrooms)
-    .where(inArray(schema.restrooms.status, statuses))
+    .where(
+      and(
+        inArray(schema.restrooms.status, statuses),
+        isNotNull(schema.restrooms.descriptors),
+      ),
+    )
     .all();
 
   // Aggregate by lowercased key to merge case variants, keeping the first-seen

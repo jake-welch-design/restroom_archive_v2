@@ -48,4 +48,3 @@ export async function revokeMobileToken(
     .delete(schema.apiTokens)
     .where(eq(schema.apiTokens.tokenHash, hashToken(rawToken)));
 }
-

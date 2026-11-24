@@ -1,15 +1,14 @@
 import { and, eq, ne, sql } from "drizzle-orm";
-import { z } from "zod";
 import { useDb, schema } from "~~/server/utils/db";
 import { requireRole } from "~~/server/utils/requireRole";
 import { adminMessagePatch } from "~~/server/utils/adminMessage";
 import { recordAdminAction } from "~~/server/utils/auditLog";
 import { getRouterId } from "~~/server/utils/routeParams";
 import { now } from "~~/server/utils/sqlTime";
-
-const Body = z.object({
-  message: z.string().max(500).optional(),
-});
+import {
+  OptionalMessageBody,
+  readOptionalBody,
+} from "~~/server/utils/validation";
 
 export default defineEventHandler(async (event) => {
   const actor = requireRole(event, "admin");
@@ -21,7 +20,7 @@ export default defineEventHandler(async (event) => {
       statusMessage: "You cannot ban yourself",
     });
 
-  const body = await readValidatedBody(event, Body.parse);
+  const body = await readOptionalBody(event, OptionalMessageBody);
 
   const db = useDb(event);
 

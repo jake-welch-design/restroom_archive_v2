@@ -36,6 +36,7 @@ function privateList<T>(key: string, url: string) {
     key,
     server: false,
     immediate: false,
+    deep: false,
     default: () => [],
   });
 }

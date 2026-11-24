@@ -1,8 +1,6 @@
 <script setup lang="ts">
-import { apiErrorMessage } from "~~/shared/utils/apiError";
-
 /**
- * Sets a new password from a emailed reset link.
+ * Sets a new password from an emailed reset link.
  *
  * The token arrives in the query string. It is validated server side; the
  * check here only distinguishes "this link is malformed" from "this link may
@@ -13,39 +11,32 @@ const token = computed(() => (route.query.token as string | undefined) ?? "");
 
 const newPassword = ref("");
 const confirmPassword = ref("");
-const loading = ref(false);
-const error = ref("");
+const action = useAsyncAction("Could not reset password.");
 const success = ref(false);
 
 async function submit() {
   if (!token.value) {
-    error.value = "No reset token found in this link.";
+    action.error = "No reset token found in this link.";
     return;
   }
   // Mirrors the server's rule so the common mistakes are caught without a
   // round trip. The server still enforces both.
   if (newPassword.value.length < 8) {
-    error.value = "Password must be at least 8 characters.";
+    action.error = "Password must be at least 8 characters.";
     return;
   }
   if (newPassword.value !== confirmPassword.value) {
-    error.value = "Passwords do not match.";
+    action.error = "Passwords do not match.";
     return;
   }
 
-  error.value = "";
-  loading.value = true;
-  try {
-    await $fetch("/api/auth/reset-password", {
+  const ok = await action.run(() =>
+    $fetch("/api/auth/reset-password", {
       method: "POST",
       body: { token: token.value, password: newPassword.value },
-    });
-    success.value = true;
-  } catch (e: unknown) {
-    error.value = apiErrorMessage(e, "Could not reset password.");
-  } finally {
-    loading.value = false;
-  }
+    }),
+  );
+  if (ok) success.value = true;
 }
 </script>
 
@@ -92,10 +83,10 @@ async function submit() {
         />
       </label>
 
-      <p v-if="error" class="form-error">{{ error }}</p>
+      <p v-if="action.error" class="form-error">{{ action.error }}</p>
 
-      <button type="submit" class="primary-btn" :disabled="loading">
-        {{ loading ? "Saving…" : "Reset password" }}
+      <button type="submit" class="primary-btn" :disabled="action.loading">
+        {{ action.loading ? "Saving…" : "Reset password" }}
       </button>
     </form>
   </AuthPageShell>

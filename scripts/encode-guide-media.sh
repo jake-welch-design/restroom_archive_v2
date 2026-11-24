@@ -31,7 +31,7 @@ mkdir -p "$OUT"
 # where 1080 cost 12MB, so it drops to 720 at CRF 28 for 2.6MB and no visible
 # loss at the size it's displayed.
 #
-# Everything drops to 30fps — these are 60fps captures of a guide clip, where
+# Everything drops to 30fps: these are 60fps captures of a guide clip, where
 # the second half of those frames is pure bitrate.
 #
 # -an is belt and braces: the sources have no audio track to begin with, and
@@ -58,7 +58,6 @@ encode() {
 # The 2.0 folder holds the re-recordings from 2026-09-22; the rest are still the
 # originals.
 encode "$SRC/2.0/scanning.mp4" scan-demo 28 36 720:720
-encode "$SRC/reprocess.mp4" reprocess 23 32
 encode "$SRC/2.0/exporting.mp4" export 23 32
 encode "$SRC/Upload.mp4" upload 23 32
 encode "$SRC/2.0/Cropping.mp4" crop 23 32

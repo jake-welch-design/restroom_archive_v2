@@ -79,11 +79,6 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: "annotationCount", label: "Annotations" },
 ];
 
-/** An account with no display name is listed under the handle it does have. */
-function sortName(a: AccountRow) {
-  return (a.displayName || a.username).toLowerCase();
-}
-
 const {
   query,
   sortKey,
@@ -98,7 +93,7 @@ const {
   compare: (a, b, key) => {
     switch (key) {
       case "name":
-        return sortName(a).localeCompare(sortName(b));
+        return userSortKey(a).localeCompare(userSortKey(b));
       case "username":
         return a.username.localeCompare(b.username);
       case "email":
@@ -107,7 +102,8 @@ const {
         // Ties broken by name, because a type sort on its own leaves every
         // account of one type in whatever order they happened to arrive in.
         return (
-          typeRank(a) - typeRank(b) || sortName(a).localeCompare(sortName(b))
+          typeRank(a) - typeRank(b) ||
+          userSortKey(a).localeCompare(userSortKey(b))
         );
       case "submissionCount":
         return a.submissionCount - b.submissionCount;

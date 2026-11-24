@@ -28,10 +28,6 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: "reports", label: "Open reports" },
 ];
 
-function authorName(a: AdminAnnotation) {
-  return (a.author?.displayName || a.author?.username || "").toLowerCase();
-}
-
 const { query, sortKey, sortDir, visible, isEmptyFromSearch } = useListControls<
   AdminAnnotation,
   SortKey
@@ -53,7 +49,10 @@ const { query, sortKey, sortDir, visible, isEmptyFromSearch } = useListControls<
       case "restroom":
         return a.restroom.name.localeCompare(b.restroom.name) || a.id - b.id;
       case "author":
-        return authorName(a).localeCompare(authorName(b)) || a.id - b.id;
+        return (
+          userSortKey(a.author).localeCompare(userSortKey(b.author)) ||
+          a.id - b.id
+        );
       case "reports":
         return a.openReportCount - b.openReportCount || a.id - b.id;
       default:

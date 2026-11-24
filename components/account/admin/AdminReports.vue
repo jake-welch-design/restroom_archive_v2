@@ -20,10 +20,6 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: "author", label: "Annotation author" },
 ];
 
-function nameOf(u: { username: string; displayName: string | null } | null) {
-  return (u?.displayName || u?.username || "").toLowerCase();
-}
-
 const { query, sortKey, sortDir, visible, isEmptyFromSearch } = useListControls<
   AnnotationReport,
   SortKey
@@ -50,12 +46,12 @@ const { query, sortKey, sortDir, visible, isEmptyFromSearch } = useListControls<
         );
       case "reporter":
         return (
-          nameOf(a.reporter).localeCompare(nameOf(b.reporter)) ||
+          userSortKey(a.reporter).localeCompare(userSortKey(b.reporter)) ||
           a.reportId - b.reportId
         );
       case "author":
         return (
-          nameOf(a.author).localeCompare(nameOf(b.author)) ||
+          userSortKey(a.author).localeCompare(userSortKey(b.author)) ||
           a.reportId - b.reportId
         );
       default:

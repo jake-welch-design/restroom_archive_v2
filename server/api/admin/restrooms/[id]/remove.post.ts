@@ -1,16 +1,14 @@
 import { eq } from "drizzle-orm";
-import { z } from "zod";
 import { useDb, schema } from "~~/server/utils/db";
 import { requireRole } from "~~/server/utils/requireRole";
 import { recordAdminAction } from "~~/server/utils/auditLog";
 import { getRouterId } from "~~/server/utils/routeParams";
 import { deleteRestroomBlobs } from "~~/server/utils/r2";
 import { now } from "~~/server/utils/sqlTime";
-import { readOptionalBody } from "~~/server/utils/validation";
-
-const Body = z.object({
-  message: z.string().trim().max(500).optional(),
-});
+import {
+  OptionalMessageBody,
+  readOptionalBody,
+} from "~~/server/utils/validation";
 
 /** The only two states an entry can be taken down from. */
 const REMOVABLE = ["published", "hidden"];
@@ -35,7 +33,7 @@ export default defineEventHandler(async (event) => {
 
   const id = getRouterId(event);
 
-  const body = await readOptionalBody(event, Body);
+  const body = await readOptionalBody(event, OptionalMessageBody);
   const message = body.message || null;
 
   const db = useDb(event);
@@ -96,8 +94,8 @@ export default defineEventHandler(async (event) => {
   if (!row)
     throw createError({ statusCode: 404, statusMessage: "Restroom not found" });
 
-  // The point of a removal is that the scan itself is gone, not merely
-  // delisted, so the blobs go the same way a rejection's do.
+  // Removal deletes the scan and thumbnail immediately rather than retaining
+  // them in R2 for a grace period.
   await deleteRestroomBlobs(event, row);
 
   await recordAdminAction(event, "restroom.remove", "restroom", id, {

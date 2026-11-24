@@ -1,8 +1,8 @@
 import { useR2 } from "~~/server/utils/r2";
+import { getRouterString } from "~~/server/utils/routeParams";
+
 export default defineEventHandler(async (event) => {
-  const key = getRouterParam(event, "key");
-  if (!key)
-    throw createError({ statusCode: 400, statusMessage: "Missing key" });
+  const key = getRouterString(event, "key");
 
   const thumbs = useR2(event, "THUMBS");
 

@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { useDb, schema } from "~~/server/utils/db";
-import { hashPassword, verifyPassword } from "~~/server/utils/hash";
+import { hashUserPassword, verifyUserPassword } from "~~/server/utils/hash";
 import { requireActiveUser } from "~~/server/utils/requireActiveUser";
 import { rateLimitByUser } from "~~/server/utils/rateLimit";
 
@@ -29,19 +29,22 @@ export default defineEventHandler(async (event) => {
   if (!row)
     throw createError({ statusCode: 404, statusMessage: "Account not found" });
 
-  const ok = await verifyPassword(currentPassword, row.passwordHash);
+  const ok = await verifyUserPassword(currentPassword, row.passwordHash);
   if (!ok)
     throw createError({
       statusCode: 401,
       statusMessage: "Current password is incorrect",
     });
 
-  const newHash = await hashPassword(newPassword);
+  const newHash = await hashUserPassword(newPassword);
 
-  await db
-    .update(schema.users)
-    .set({ passwordHash: newHash })
-    .where(eq(schema.users.id, user.id));
+  await db.batch([
+    db
+      .update(schema.users)
+      .set({ passwordHash: newHash })
+      .where(eq(schema.users.id, user.id)),
+    db.delete(schema.apiTokens).where(eq(schema.apiTokens.userId, user.id)),
+  ]);
 
   return { ok: true };
 });

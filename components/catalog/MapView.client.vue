@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import "maplibre-gl/dist/maplibre-gl.css";
 import maplibregl from "maplibre-gl";
 import { escapeHtml } from "~~/shared/utils/html";
 import type { RestroomSummary } from "~/types/restroom";
@@ -35,7 +36,7 @@ const cartoKey = useRuntimeConfig().public.cartoApiKey;
 // all separate requests across two hosts, and the TileJSON deliberately hands
 // back tile URLs with no key on them. So the key is stamped on every cartocdn
 // request as it goes out rather than baked into any one URL. The .mvt endpoints
-// happen to still serve unkeyed today — that reads as a grace period, not a
+// happen to still serve unkeyed today: that reads as a grace period, not a
 // promise, and this is what keeps it working when they start enforcing.
 function transformRequest(
   url: string,
@@ -617,12 +618,18 @@ watch(
     // measure again once its layout has settled. Deliberately not done on a
     // selection change, which would cut the fly-to animation short.
     if (open && !prevOpen) {
-      setTimeout(() => cameraOwned && recenterSelected(0), 360);
+      if (panelSettleTimer) clearTimeout(panelSettleTimer);
+      panelSettleTimer = setTimeout(() => {
+        panelSettleTimer = null;
+        if (cameraOwned) recenterSelected(0);
+      }, 360);
     }
     if (open !== prevOpen) observePanel(open);
   },
   { flush: "post" },
 );
+
+let panelSettleTimer: ReturnType<typeof setTimeout> | null = null;
 
 // The panel is sized to its content, so it changes height after it opens
 // (annotations load in) and whenever a different pin is selected. The padding
@@ -680,6 +687,8 @@ onBeforeUnmount(() => {
   panelObs = null;
   if (recenterTimer) clearTimeout(recenterTimer);
   recenterTimer = null;
+  if (panelSettleTimer) clearTimeout(panelSettleTimer);
+  panelSettleTimer = null;
   if (debugTimer) clearInterval(debugTimer);
   debugTimer = null;
   hoverPopup?.remove();
@@ -785,6 +794,7 @@ onBeforeUnmount(() => {
   z-index: 6;
   max-width: 60%;
   background: rgba(255, 255, 255, 0.94);
+  color: #000;
   border: 1px solid var(--ink);
   padding: 4px 6px;
   font-family: Menlo, Consolas, monospace;

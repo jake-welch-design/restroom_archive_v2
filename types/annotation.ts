@@ -1,10 +1,9 @@
 export type CameraMode = "orbit" | "pov";
 
-export interface AnnotationAuthor {
+interface AnnotationAuthor {
   id: number;
   username: string;
   displayName: string | null;
-  email: string;
 }
 
 export interface Annotation {

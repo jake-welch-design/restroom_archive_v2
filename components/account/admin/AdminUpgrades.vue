@@ -21,11 +21,6 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: "email", label: "Email" },
 ];
 
-/** An account with no display name is listed under the handle it does have. */
-function sortName(u: PendingUser) {
-  return (u.displayName || u.username).toLowerCase();
-}
-
 const { query, sortKey, sortDir, visible, isEmptyFromSearch } = useListControls<
   PendingUser,
   SortKey
@@ -38,7 +33,7 @@ const { query, sortKey, sortDir, visible, isEmptyFromSearch } = useListControls<
   compare: (a, b, key) => {
     switch (key) {
       case "name":
-        return sortName(a).localeCompare(sortName(b));
+        return userSortKey(a).localeCompare(userSortKey(b));
       case "username":
         return a.username.localeCompare(b.username);
       case "email":

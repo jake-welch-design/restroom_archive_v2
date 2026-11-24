@@ -3,7 +3,7 @@ import type { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
-import { MIN_CROP_SIZE } from "~~/shared/utils/crop";
+import { MIN_CROP_SIZE, clampInsideEdges } from "~~/shared/utils/crop";
 
 /**
  * The draggable crop box an admin uses to trim a scan.
@@ -60,21 +60,6 @@ const SHAFT_HIT_PX = 8;
  * instead, which follows the pointer sideways but not in depth.
  */
 const SHAFT_LEVEL_VIEW = 0.2;
-
-/**
- * How close the POV eye may get to any side of the frame, in model units. An
- * eye flush with the floor, or a wall, would be looking out through it.
- */
-export const POV_EDGE_MARGIN = 0.05;
-
-/** `v` kept at least POV_EDGE_MARGIN inside [min, max], or centred if it can't be. */
-export function clampInsideEdges(v: number, min: number, max: number): number {
-  const low = min + POV_EDGE_MARGIN;
-  const high = max - POV_EDGE_MARGIN;
-  // A frame shorter than two margins has no room either side; sit in it.
-  if (low > high) return (min + max) / 2;
-  return Math.min(Math.max(v, low), high);
-}
 
 /** Width of the corner brackets and of the full edges, in CSS pixels. */
 const BRACKET_WIDTH_PX = 3;

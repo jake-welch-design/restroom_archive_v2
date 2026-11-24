@@ -8,10 +8,11 @@ import { requireRole } from "~~/server/utils/requireRole";
  * A browse list rather than a queue: there is no backlog to clear, so it carries
  * no badge and is fetched only when the section is first opened.
  *
- * `pending` and `rejected` are excluded because neither was ever in the archive.
- * Pending submissions have their own queue, which previews the scan — the only
- * way to judge one — and rejected entries are gone, blobs and all. What is left
- * is what an admin might want to take down, plus the record of what already was.
+ * `pending` and `rejected` are excluded because neither was ever in the archive:
+ * pending submissions have their own review queue (which previews the scan), and
+ * rejected submissions have their own grace-period section (`AdminRejected`).
+ * What is left is what an admin might want to take down, plus the record of what
+ * already was.
  */
 const ARCHIVE_STATUSES = ["published", "hidden", "removed"];
 

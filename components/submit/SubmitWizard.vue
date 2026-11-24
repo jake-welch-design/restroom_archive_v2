@@ -78,6 +78,17 @@ const agreementsOpen = ref(false);
  * leaves the browser is both immediate and explicable. The limit it enforces is
  * the same constant the endpoint uses; see shared/utils/uploadLimits.ts.
  */
+let localBlobUrl: string | null = null;
+let resetTimer: ReturnType<typeof setTimeout> | null = null;
+
+function revokeLocalBlob() {
+  if (localBlobUrl) {
+    if (previewModelUrl.value === localBlobUrl) previewModelUrl.value = null;
+    URL.revokeObjectURL(localBlobUrl);
+    localBlobUrl = null;
+  }
+}
+
 function onFileChange(e: Event) {
   const input = e.target as HTMLInputElement;
   const file = input.files?.[0] ?? null;
@@ -88,16 +99,16 @@ function onFileChange(e: Event) {
     // `change`, and so nothing downstream treats the file as selected.
     input.value = "";
     uploadFile.value = null;
-    if (previewModelUrl.value) URL.revokeObjectURL(previewModelUrl.value);
-    previewModelUrl.value = null;
+    revokeLocalBlob();
     hasUnsavedSubmission.value = false;
     return;
   }
 
   fileError.value = "";
   uploadFile.value = file;
-  if (previewModelUrl.value) URL.revokeObjectURL(previewModelUrl.value);
-  previewModelUrl.value = file ? URL.createObjectURL(file) : null;
+  revokeLocalBlob();
+  localBlobUrl = file ? URL.createObjectURL(file) : null;
+  previewModelUrl.value = localBlobUrl;
   // An unsaved scan is not an entry, so there is nothing for the viewer's
   // admin tools to act on. Cleared explicitly rather than relied upon to be
   // null already, because an admin can reach the wizard straight from a
@@ -116,8 +127,8 @@ function onBeforeUnload(e: BeforeUnloadEvent) {
 onMounted(() => window.addEventListener("beforeunload", onBeforeUnload));
 onBeforeUnmount(() => {
   window.removeEventListener("beforeunload", onBeforeUnload);
-  if (previewModelUrl.value) URL.revokeObjectURL(previewModelUrl.value);
-  previewModelUrl.value = null;
+  if (resetTimer) clearTimeout(resetTimer);
+  revokeLocalBlob();
   hasUnsavedSubmission.value = false;
 });
 
@@ -313,10 +324,15 @@ async function submitUpload() {
     // then release the override so the panel toggle reappears.
     await refreshNuxtData("restrooms");
     select(res.slug);
-    if (previewModelUrl.value) URL.revokeObjectURL(previewModelUrl.value);
-    previewModelUrl.value = null;
+    revokeLocalBlob();
     hasUnsavedSubmission.value = false;
-    if (isAdmin.value) setTimeout(() => resetUpload(), 2000);
+    if (isAdmin.value) {
+      if (resetTimer) clearTimeout(resetTimer);
+      resetTimer = setTimeout(() => {
+        resetTimer = null;
+        resetUpload();
+      }, 2000);
+    }
   } catch (e: unknown) {
     uploadError.value = apiErrorMessage(e, "Upload failed.");
   } finally {
@@ -325,6 +341,10 @@ async function submitUpload() {
 }
 
 function resetUpload() {
+  if (resetTimer) {
+    clearTimeout(resetTimer);
+    resetTimer = null;
+  }
   uploadName.value = "";
   uploadCity.value = "";
   uploadCountry.value = "";
@@ -335,8 +355,7 @@ function resetUpload() {
   uploadDescription.value = "";
   uploadDescriptors.value = [];
   uploadFile.value = null;
-  if (previewModelUrl.value) URL.revokeObjectURL(previewModelUrl.value);
-  previewModelUrl.value = null;
+  revokeLocalBlob();
   hasUnsavedSubmission.value = false;
   uploadError.value = "";
   fileError.value = "";

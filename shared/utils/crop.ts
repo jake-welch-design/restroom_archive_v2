@@ -86,13 +86,6 @@ export interface Crop {
   level?: Level;
 }
 
-/** How a crop shifts the model's centre, and with it the viewer's world space. */
-export interface CropDelta {
-  x: number;
-  y: number;
-  z: number;
-}
-
 /**
  * Smallest a box axis may get, in model units (metres, for these scans).
  *
@@ -111,6 +104,20 @@ export const MIN_CROP_SIZE = 0.05;
  * than by anything an admin would plausibly need.
  */
 export const MAX_CROP_REMOVALS = 32;
+
+/**
+ * Minimum clearance the POV eye keeps from any face of the frame, in model
+ * units, so the camera never sits flush inside a wall or floor.
+ */
+const POV_EDGE_MARGIN = 0.05;
+
+/** Keeps `v` at least `POV_EDGE_MARGIN` inside `[min, max]`, or centred if narrower. */
+export function clampInsideEdges(v: number, min: number, max: number): number {
+  const low = min + POV_EDGE_MARGIN;
+  const high = max - POV_EDGE_MARGIN;
+  if (low > high) return (min + max) / 2;
+  return Math.min(Math.max(v, low), high);
+}
 
 const AXES = ["minX", "minY", "minZ", "maxX", "maxY", "maxZ"] as const;
 

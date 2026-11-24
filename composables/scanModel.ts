@@ -6,7 +6,7 @@ import { patchCropShader } from "~~/shared/utils/cropShader";
 /**
  * How a scan is turned into something on screen, shared by every in-app
  * renderer: the viewer (useThreeScene.ts) and the video studio
- * (useTurntableStage.ts).
+ * (turntableStage.ts).
  *
  * Lifted out of the viewer so the studio cannot drift from it. The thumbnail
  * script is the cautionary tale: it carried its own copy of the loader and
@@ -20,9 +20,8 @@ import { patchCropShader } from "~~/shared/utils/cropShader";
  * The shared Draco decoder, created once and reused by every model load.
  *
  * Scans submitted with Draco compression carry `KHR_draco_mesh_compression`,
- * and `GLTFLoader` refuses to read one without a decoder attached -- the
- * failure is the flat "No DRACOLoader instance provided." with no model. An
- * uncompressed scan never touches this, so attaching it costs nothing for the
+ * and `GLTFLoader` refuses to read one without a decoder attached (failing
+ * with "No DRACOLoader instance provided." and no model). An uncompressed scan never touches this, so attaching it costs nothing for the
  * archive's existing entries; the decoder itself is only fetched the first time
  * a compressed one is actually opened.
  *
@@ -41,8 +40,8 @@ let dracoLoader: DRACOLoader | null = null;
 export function getDracoLoader(): DRACOLoader {
   if (!dracoLoader) {
     dracoLoader = new DRACOLoader();
-    // Served from public/draco/ -- same-origin, so it satisfies
-    // `connect-src 'self'` without a CSP exception. See public/draco/README.md.
+    // Served from public/draco/ (vendored from three/examples/jsm/libs/draco/gltf/),
+    // same-origin so it satisfies `connect-src 'self'` without a CSP exception.
     dracoLoader.setDecoderPath("/draco/");
   }
   return dracoLoader;
