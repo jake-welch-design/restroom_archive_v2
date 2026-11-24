@@ -291,7 +291,7 @@ async function restore(id: number, name: string) {
 
 .filter-count {
   margin-left: 5px;
-  color: #999;
+  color: var(--faint);
 }
 
 .btn-sm.active .filter-count {
@@ -303,6 +303,6 @@ async function restore(id: number, name: string) {
 .section-note {
   margin: 0 0 12px;
   font-size: 12px;
-  color: #666;
+  color: var(--muted);
 }
 </style>

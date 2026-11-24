@@ -68,9 +68,9 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #fff;
+  background: var(--paper);
   font-family: Arial, Helvetica, sans-serif;
-  color: #000;
+  color: var(--ink);
 }
 
 /* The email's column: 600px wide at most, 32px gutters, a rule under the
@@ -87,7 +87,7 @@ onMounted(async () => {
 .confirm-rule {
   height: 1px;
   margin: 32px 0;
-  background: #000;
+  background: var(--ink);
 }
 
 .confirm-content h1 {
@@ -106,8 +106,8 @@ onMounted(async () => {
   margin-top: 0;
   padding: 16px 20px;
   border-radius: 3px;
-  background: #000;
-  color: #fff;
+  background: var(--ink);
+  color: var(--paper);
   line-height: 1;
   text-decoration: none;
 }

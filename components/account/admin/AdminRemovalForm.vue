@@ -83,7 +83,7 @@ onMounted(() => field.value?.focus());
 .removal-warning {
   margin: 0;
   font-size: 12px;
-  color: #c33;
+  color: var(--danger);
 }
 
 .inline-actions {

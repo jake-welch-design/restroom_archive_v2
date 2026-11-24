@@ -14,11 +14,11 @@
   background: transparent;
 }
 .thin-scroll::-webkit-scrollbar-thumb {
-  background: #c4c4c4;
+  background: var(--line-mid);
   border-radius: 4px;
 }
 .thin-scroll::-webkit-scrollbar-thumb:hover {
-  background: #9a9a9a;
+  background: var(--faint-hover);
 }
 .thin-scroll::-webkit-scrollbar-corner {
   background: transparent;
@@ -31,6 +31,6 @@
 @supports not selector(::-webkit-scrollbar) {
   .thin-scroll {
     scrollbar-width: thin;
-    scrollbar-color: #c4c4c4 transparent;
+    scrollbar-color: var(--line-mid) transparent;
   }
 }

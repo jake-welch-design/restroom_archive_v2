@@ -991,13 +991,13 @@ async function submitRename(a: AccountRow) {
 .account-tally {
   margin: 0;
   font-size: 11px;
-  color: #999;
+  color: var(--faint);
 }
 
 /* --- Account rows ---------------------------------------------------------- */
 
 .account-row {
-  border-bottom: 1px solid #e8e8e8;
+  border-bottom: 1px solid var(--line-faint);
 }
 
 /* The row's own divider is the list item's, so the summary inside it does not
@@ -1020,7 +1020,7 @@ async function submitRename(a: AccountRow) {
 }
 
 .admin-msg-preview {
-  color: #c33;
+  color: var(--danger);
   font-style: italic;
 }
 
@@ -1057,12 +1057,12 @@ async function submitRename(a: AccountRow) {
   padding: 0;
   font: inherit;
   font-size: 12px;
-  color: #000;
+  color: var(--ink);
   cursor: pointer;
 }
 
 .disclosure-toggle:hover {
-  color: #555;
+  color: var(--ink-soft);
 }
 
 .toggle-caret {
@@ -1079,7 +1079,7 @@ async function submitRename(a: AccountRow) {
 .disclosure-note {
   margin: 4px 0 0;
   font-size: 12px;
-  color: #999;
+  color: var(--faint);
 }
 
 /* An account with a hundred entries would otherwise push every account below it
@@ -1099,7 +1099,7 @@ async function submitRename(a: AccountRow) {
   flex-direction: column;
   gap: 2px;
   padding: 6px 0;
-  border-bottom: 1px solid #e8e8e8;
+  border-bottom: 1px solid var(--line-faint);
 }
 
 .disclosure-item:last-child {
@@ -1114,7 +1114,7 @@ async function submitRename(a: AccountRow) {
 
 .disclosure-title {
   font-size: 13px;
-  color: #000;
+  color: var(--ink);
   line-height: 1.3;
 }
 
@@ -1126,7 +1126,7 @@ async function submitRename(a: AccountRow) {
 
 .disclosure-meta {
   font-size: 12px;
-  color: #999;
+  color: var(--faint);
 }
 
 /* The item is a column, so a button would otherwise stretch the full width of

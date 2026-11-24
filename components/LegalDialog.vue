@@ -220,9 +220,9 @@ function onClick(e: MouseEvent) {
   width: min(680px, calc(100vw - 32px));
   max-height: min(80vh, 760px);
   padding: 0;
-  border: 1px solid #000;
-  background: #fff;
-  color: #000;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
   font-family: Arial, Helvetica, sans-serif;
   /* The dialog is a top-layer element, so it sits outside .about-page and
      inherits none of its tokens. Everything it needs is restated here. */
@@ -249,7 +249,7 @@ function onClick(e: MouseEvent) {
   justify-content: space-between;
   gap: 16px;
   padding: 12px 16px;
-  border-bottom: 1px solid #ddd;
+  border-bottom: 1px solid var(--line-soft);
   flex: 0 0 auto;
 }
 
@@ -257,7 +257,7 @@ function onClick(e: MouseEvent) {
   margin: 0;
   font-size: 14px;
   font-weight: 400;
-  color: #666;
+  color: var(--muted);
 }
 
 .legal-close {
@@ -267,7 +267,7 @@ function onClick(e: MouseEvent) {
   font-size: 20px;
   line-height: 1;
   cursor: pointer;
-  color: #000;
+  color: var(--ink);
 }
 
 .legal-body {
@@ -281,8 +281,8 @@ function onClick(e: MouseEvent) {
   margin: 1.6em 0 0.6em;
   font-size: 14px;
   font-weight: 400;
-  color: #666;
-  border-bottom: 1px solid #ddd;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line-soft);
   padding-bottom: 4px;
 }
 .legal-body h3:first-child {
@@ -310,12 +310,12 @@ function onClick(e: MouseEvent) {
 }
 
 .legal-body a {
-  color: #000;
+  color: var(--ink);
   text-decoration: underline;
 }
 
 .legal-updated {
-  color: #666;
+  color: var(--muted);
   margin-top: 1.6em;
 }
 

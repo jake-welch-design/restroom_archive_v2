@@ -107,7 +107,7 @@ async function submit() {
 
 .request-cta-copy {
   margin: 0;
-  color: #666;
+  color: var(--muted);
 }
 
 .agreement-form {
@@ -137,7 +137,7 @@ async function submit() {
 .agreement-note {
   margin: 4px 0 0;
   font-size: 11px;
-  color: #999;
+  color: var(--faint);
   line-height: 1.5;
 }
 

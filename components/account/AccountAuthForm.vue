@@ -215,7 +215,7 @@ async function submit() {
      border, the way the catalog's controls strip does. */
   margin-top: calc(-1 * var(--gutter));
   margin-bottom: 16px;
-  border-bottom: 1px solid #000;
+  border-bottom: 1px solid var(--ink);
   overflow-x: auto;
   box-sizing: border-box;
   min-height: var(--strip-align-height, 0px);
@@ -229,7 +229,7 @@ async function submit() {
 .signup-intro-title {
   margin: 0 0 8px;
   padding-bottom: 8px;
-  border-bottom: 1px solid #000;
+  border-bottom: 1px solid var(--ink);
   font-size: 15px;
   font-weight: 400;
 }
@@ -237,7 +237,7 @@ async function submit() {
 .signup-intro p {
   margin: 0;
   font-size: 12px;
-  color: #666;
+  color: var(--muted);
 }
 
 .form {
@@ -249,7 +249,7 @@ async function submit() {
 .forgot-password-link {
   align-self: flex-start;
   font-size: 12px;
-  color: #000;
+  color: var(--ink);
   text-decoration: underline;
 }
 

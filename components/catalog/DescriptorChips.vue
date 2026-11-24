@@ -57,9 +57,9 @@ const { isTagActive } = useTagFilter();
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  background: #fff;
-  color: #000;
-  border: 1px solid #000;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--ink);
   border-radius: 3px;
   padding: 3px 8px;
   font: inherit;
@@ -72,15 +72,15 @@ const { isTagActive } = useTagFilter();
 }
 
 .tag-chip:hover:not(.active) {
-  background: #f0f0f0;
+  background: var(--surface);
 }
 
 .tag-chip.active {
-  background: #000;
-  color: #fff;
+  background: var(--ink);
+  color: var(--paper);
 }
 
 .tag-chip.active:hover {
-  background: #333;
+  background: var(--ink-strong);
 }
 </style>

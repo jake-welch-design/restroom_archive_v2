@@ -89,8 +89,8 @@ const emit = defineEmits<{
   bottom: 16px;
   left: 16px;
   right: 16px;
-  background: #fff;
-  border: 1px solid #000;
+  background: var(--paper);
+  border: 1px solid var(--map-edge);
   padding: 8px 24px 20px;
   /* Sized to its content, up to a third of the map; scrolls past that. */
   max-height: 33.33%;
@@ -107,7 +107,7 @@ const emit = defineEmits<{
   gap: 16px;
   margin-bottom: 10px;
   padding-bottom: 8px;
-  border-bottom: 1px solid #e8e8e8;
+  border-bottom: 1px solid var(--list-inner-rule);
 }
 
 .panel-info {
@@ -124,7 +124,7 @@ const emit = defineEmits<{
 
 .panel-meta {
   font-size: 13px;
-  color: #666;
+  color: var(--muted);
 }
 
 .panel-close {
@@ -134,12 +134,12 @@ const emit = defineEmits<{
   font-size: 20px;
   line-height: 1;
   cursor: pointer;
-  color: #999;
+  color: var(--faint);
   flex-shrink: 0;
 }
 
 .panel-close:hover {
-  color: #000;
+  color: var(--ink);
 }
 
 .description {
@@ -149,13 +149,13 @@ const emit = defineEmits<{
 }
 .desc-text {
   margin: 0;
-  color: #000;
+  color: var(--ink);
   font-size: 12px;
   line-height: 1.35;
 }
 /* Matches the `.annotation-meta` further down the panel. */
 .submitter-line {
-  color: #999;
+  color: var(--faint);
   font-size: 12px;
 }
 
@@ -172,7 +172,7 @@ const emit = defineEmits<{
 .annotations-section {
   margin-top: 8px;
   padding-top: 12px;
-  border-top: 1px solid #e8e8e8;
+  border-top: 1px solid var(--list-inner-rule);
 }
 
 /* Sheet layout: the panel narrows to the map's left half, still docked to the

@@ -729,7 +729,7 @@ function resetUpload() {
    segmented control, so the two rows don't read at the same level. */
 .step-tabs {
   display: flex;
-  border-bottom: 1px solid #000;
+  border-bottom: 1px solid var(--ink);
 }
 .step-tab {
   flex: 1 1 0;
@@ -744,18 +744,18 @@ function resetUpload() {
   padding: 6px 4px 7px;
   font: inherit;
   font-size: 12px;
-  color: #999;
+  color: var(--faint);
   cursor: pointer;
 }
 .step-tab:hover:not(.active):not(:disabled) {
-  color: #595959;
+  color: var(--ink-hover);
 }
 .step-tab.active {
-  color: #000;
-  border-bottom-color: #000;
+  color: var(--ink);
+  border-bottom-color: var(--ink);
 }
 .step-tab:disabled {
-  color: #ccc;
+  color: var(--line);
   cursor: not-allowed;
 }
 .step-num {
@@ -766,7 +766,7 @@ function resetUpload() {
 .maps-link {
   margin-left: auto;
   font-size: 11px;
-  color: #000;
+  color: var(--ink);
   white-space: nowrap;
 }
 
@@ -793,7 +793,7 @@ function resetUpload() {
 }
 .review-label {
   font-size: 11px;
-  color: #666;
+  color: var(--muted);
 }
 .review-tags {
   display: flex;
@@ -801,8 +801,8 @@ function resetUpload() {
   gap: 6px;
 }
 .review-tag {
-  background: #000;
-  color: #fff;
+  background: var(--ink);
+  color: var(--paper);
   font-size: 11px;
   padding: 2px 6px;
 }
@@ -843,12 +843,12 @@ function resetUpload() {
   padding: 0;
   font: inherit;
   font-size: 12px;
-  color: #666;
+  color: var(--muted);
   cursor: pointer;
 }
 
 .disclosure-toggle:hover {
-  color: #000;
+  color: var(--ink);
 }
 
 .toggle-caret {
@@ -870,6 +870,6 @@ function resetUpload() {
   gap: 6px;
   font-size: 11px;
   line-height: 1.5;
-  color: #666;
+  color: var(--muted);
 }
 </style>

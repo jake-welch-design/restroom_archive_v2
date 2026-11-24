@@ -637,11 +637,11 @@ function setAdminSection(value: string) {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #fff;
+  background: var(--paper);
   font-family: Arial, Helvetica, sans-serif;
   font-size: 13px;
   line-height: 1.4;
-  color: #000;
+  color: var(--ink);
   overflow: hidden;
 }
 
@@ -697,8 +697,8 @@ function setAdminSection(value: string) {
 .account-role {
   font-size: 11px;
   line-height: 1.4;
-  background: #000;
-  color: #fff;
+  background: var(--ink);
+  color: var(--paper);
   padding: 2px 6px;
   border-radius: 3px;
 }
@@ -712,7 +712,7 @@ function setAdminSection(value: string) {
   display: flex;
   align-items: flex-end;
   gap: 20px;
-  border-bottom: 1px solid #000;
+  border-bottom: 1px solid var(--ink);
   padding-block: 10px;
   margin-bottom: 16px;
   overflow-x: auto;
@@ -739,7 +739,7 @@ function setAdminSection(value: string) {
 }
 
 .account-tabs .tab-btn:not(.active) .count {
-  background: #999;
+  background: var(--faint);
 }
 
 /* Banners */
@@ -749,7 +749,7 @@ function setAdminSection(value: string) {
 }
 
 .admin-message-banner {
-  background: #c33;
+  background: var(--danger);
   color: #fff;
   padding: 10px 12px;
   margin-bottom: 12px;

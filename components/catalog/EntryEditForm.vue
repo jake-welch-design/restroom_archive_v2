@@ -343,7 +343,7 @@ onMounted(() => {
 <style scoped>
 /* The section rule, matching `.description` in the read view it replaces. */
 .edit-inline {
-  border-top: 1px solid #e8e8e8;
+  border-top: 1px solid var(--line-faint);
   padding-top: 12px;
 }
 
@@ -381,7 +381,7 @@ onMounted(() => {
 
 .edit-label {
   font-size: 12px;
-  color: #666;
+  color: var(--muted);
 }
 
 .edit-input {
@@ -391,14 +391,14 @@ onMounted(() => {
   -webkit-appearance: none;
   box-sizing: border-box;
   border: 0;
-  border-bottom: 1px solid #000;
+  border-bottom: 1px solid var(--ink);
   border-radius: 0;
   padding: 3px 0;
   font: inherit;
   font-size: 14px;
   background: transparent;
   outline: none;
-  color: #000;
+  color: var(--ink);
   width: 100%;
   min-width: 0;
   /* One height for every kind of field, so labels line up across a row and an
@@ -428,7 +428,7 @@ select.edit-input {
   grid-column: 1 / -1;
   margin: -2px 0 0;
   font-size: 12px;
-  color: #666;
+  color: var(--muted);
 }
 
 .merge-row {
@@ -446,7 +446,7 @@ select.edit-input {
 }
 
 .edit-textarea {
-  border: 1px solid #000;
+  border: 1px solid var(--ink);
   padding: 4px 6px;
   resize: vertical;
 }
@@ -454,7 +454,7 @@ select.edit-input {
 .edit-error {
   margin: 0;
   font-size: 13px;
-  color: #c33;
+  color: var(--danger);
 }
 
 .edit-actions {
@@ -465,14 +465,14 @@ select.edit-input {
 
 .edit-btn {
   background: transparent;
-  border: 1px solid #000;
+  border: 1px solid var(--ink);
   padding: 3px 10px;
   font: inherit;
   /* Matches `.edit-label` on the fields above it. */
   font-size: 12px;
   /* Set outright: a button does not inherit colour, and iOS's default is pale
      enough to vanish, most of all on a disabled Save. */
-  color: #000;
+  color: var(--ink);
   cursor: pointer;
 }
 
@@ -484,11 +484,11 @@ select.edit-input {
 /* Hover only where there is a pointer: a tap on iOS leaves it stuck on. */
 @media (hover: hover) {
   .edit-btn-save:hover:not(:disabled) {
-    background: #000;
-    color: #fff;
+    background: var(--ink);
+    color: var(--paper);
   }
   .edit-btn-cancel:hover {
-    background: #f4f4f4;
+    background: var(--canvas);
   }
 }
 
@@ -507,8 +507,8 @@ select.edit-input {
   border: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  background: #fff;
-  color: #000;
+  background: var(--paper);
+  color: var(--ink);
   font-family: Arial, Helvetica, sans-serif;
   font-size: 16px;
   line-height: 1.4;
@@ -525,8 +525,8 @@ select.edit-input {
   gap: 12px;
   padding: 8px 16px;
   padding-top: calc(8px + env(safe-area-inset-top, 0px));
-  background: #fff;
-  border-bottom: 1px solid #000;
+  background: var(--paper);
+  border-bottom: 1px solid var(--ink);
 }
 
 .edit-sheet-head .link-btn {

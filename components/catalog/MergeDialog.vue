@@ -399,9 +399,9 @@ async function merge() {
   width: min(560px, calc(100vw - 32px));
   max-height: min(85vh, 760px);
   padding: 0;
-  border: 1px solid #000;
-  background: #fff;
-  color: #000;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
   font-family: Arial, Helvetica, sans-serif;
   font-size: 14px;
   line-height: 1.4;
@@ -425,7 +425,7 @@ async function merge() {
   justify-content: space-between;
   gap: 16px;
   padding: 12px 16px;
-  border-bottom: 1px solid #ddd;
+  border-bottom: 1px solid var(--line-soft);
 }
 
 .merge-head h2 {
@@ -441,7 +441,7 @@ async function merge() {
   font-size: 20px;
   line-height: 1;
   cursor: pointer;
-  color: #000;
+  color: var(--ink);
 }
 
 .merge-body {
@@ -463,12 +463,12 @@ async function merge() {
   margin: 0;
   font-size: 12px;
   font-weight: 400;
-  color: #666;
+  color: var(--muted);
 }
 
 .merge-search {
   border: 0;
-  border-bottom: 1px solid #000;
+  border-bottom: 1px solid var(--ink);
   padding: 4px 0;
   font: inherit;
   outline: none;
@@ -481,7 +481,7 @@ async function merge() {
   padding: 0;
   max-height: 200px;
   overflow-y: auto;
-  border: 1px solid #e8e8e8;
+  border: 1px solid var(--line-faint);
 }
 
 .merge-option {
@@ -492,40 +492,40 @@ async function merge() {
   text-align: left;
   background: none;
   border: 0;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--surface);
   padding: 6px 8px;
   font: inherit;
-  color: #000;
+  color: var(--ink);
   cursor: pointer;
 }
 
 .merge-option:hover:not(.active) {
-  background: #f4f4f4;
+  background: var(--canvas);
 }
 
 .merge-option.active {
-  background: #000;
-  color: #fff;
+  background: var(--ink);
+  color: var(--paper);
 }
 
 .opt-meta {
   font-size: 12px;
-  color: #666;
+  color: var(--muted);
 }
 
 .merge-option.active .opt-meta {
-  color: #ccc;
+  color: var(--line);
 }
 
 .merge-empty {
   padding: 8px;
-  color: #666;
+  color: var(--muted);
 }
 
 .merge-note {
   margin: 0;
   font-size: 12px;
-  color: #666;
+  color: var(--muted);
 }
 
 /* The catalog filter's chips: selected is filled. */
@@ -536,9 +536,9 @@ async function merge() {
 }
 
 .merge-chip {
-  background: #fff;
-  color: #000;
-  border: 1px solid #000;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--ink);
   border-radius: 3px;
   padding: 3px 8px;
   font: inherit;
@@ -548,8 +548,8 @@ async function merge() {
 }
 
 .merge-chip.active {
-  background: #000;
-  color: #fff;
+  background: var(--ink);
+  color: var(--paper);
 }
 
 .merge-coords {
@@ -566,13 +566,13 @@ async function merge() {
 }
 
 .merge-coords label.disabled {
-  color: #999;
+  color: var(--faint);
   cursor: default;
 }
 
 .coord-val {
   margin-left: 4px;
-  color: #666;
+  color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
 
@@ -585,7 +585,7 @@ async function merge() {
 .merge-custom input {
   width: 140px;
   border: 0;
-  border-bottom: 1px solid #000;
+  border-bottom: 1px solid var(--ink);
   padding: 3px 0;
   font: inherit;
   outline: none;
@@ -595,12 +595,12 @@ async function merge() {
 .merge-summary {
   margin: 0;
   padding-top: 12px;
-  border-top: 1px solid #e8e8e8;
+  border-top: 1px solid var(--line-faint);
 }
 
 .merge-error {
   margin: 0;
-  color: #c33;
+  color: var(--danger);
   font-size: 13px;
 }
 
@@ -610,7 +610,7 @@ async function merge() {
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
-  border-top: 1px solid #ddd;
+  border-top: 1px solid var(--line-soft);
 }
 
 /* iOS zooms into focused fields under 16px. */

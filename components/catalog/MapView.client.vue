@@ -17,6 +17,16 @@ const mapContainer = ref<HTMLDivElement | null>(null);
 // getting data updates, so the gap would only widen.
 const CARTO_STYLE_URL =
   "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
+// Dark Matter is Positron's dark sibling from the same CARTO family: same
+// vector source and layer structure, so the key and everything layered on top
+// carry over unchanged. Used while the display mode resolves to dark (Dark, or
+// System on a dark OS).
+const CARTO_DARK_STYLE_URL =
+  "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
+
+const { resolved: theme } = useTheme();
+const styleUrlFor = (t: string) =>
+  t === "dark" ? CARTO_DARK_STYLE_URL : CARTO_STYLE_URL;
 
 const cartoKey = useRuntimeConfig().public.cartoApiKey;
 
@@ -150,7 +160,7 @@ function initMap() {
 
   map = new maplibregl.Map({
     container: el,
-    style: CARTO_STYLE_URL,
+    style: styleUrlFor(theme.value),
     transformRequest,
     center: [-98, 38],
     zoom: 4,
@@ -495,6 +505,41 @@ function applyBasemapVisibility() {
   );
 }
 
+// Swap the street basemap between Positron and Dark Matter when the display
+// mode changes. `setStyle` replaces the whole style, so `transformStyle` carries
+// our own sources and layers (satellite imagery, the pins) across from the old
+// one, keeping their order on top of the new basemap. Layer-scoped listeners
+// (pin click and hover) are keyed by layer id and survive the swap. The new
+// basemap's layers are recounted for the satellite toggle and, if satellite is
+// showing, arrive already hidden so they don't fetch tiles nobody sees.
+watch(theme, (t) => {
+  if (!map) return;
+  const oldBasemap = new Set(basemapLayerIds);
+  map.setStyle(styleUrlFor(t), {
+    transformStyle: (prev, next) => {
+      if (!prev) return next;
+      basemapLayerIds = next.layers.map((l) => l.id);
+      const hide = basemap.value === "satellite";
+      const ours = prev.layers.filter((l) => !oldBasemap.has(l.id));
+      const ourSources = Object.fromEntries(
+        Object.entries(prev.sources).filter(([id]) =>
+          ours.some((l) => "source" in l && l.source === id),
+        ),
+      );
+      return {
+        ...next,
+        sources: { ...next.sources, ...ourSources },
+        layers: [
+          ...next.layers.map((l) =>
+            hide ? { ...l, layout: { ...l.layout, visibility: "none" } } : l,
+          ),
+          ...ours,
+        ],
+      } as maplibregl.StyleSpecification;
+    },
+  });
+});
+
 function setBasemap(next: Basemap) {
   if (!map || basemap.value === next) return;
   basemap.value = next;
@@ -648,7 +693,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="map-wrap">
+  <div class="map-wrap" :class="{ 'map-dark': theme === 'dark' }">
     <div ref="mapContainer" class="map" />
 
     <!-- Rendered here rather than registered as a maplibre IControl: the
@@ -687,7 +732,7 @@ onBeforeUnmount(() => {
 .map {
   position: absolute;
   inset: 16px;
-  border: 1px solid #000;
+  border: 1px solid var(--map-edge);
 }
 
 /* Sits just inside the map's top-left corner (the map is inset 16px, so 24px
@@ -702,15 +747,15 @@ onBeforeUnmount(() => {
   transition: left 0.3s ease;
   display: flex;
   flex-direction: column;
-  border: 1px solid #000;
-  background: #fff;
+  border: 1px solid var(--ink);
+  background: var(--paper);
 }
 
 .basemap-switch button {
   appearance: none;
   border: 0;
-  background: #fff;
-  color: #000;
+  background: var(--paper);
+  color: var(--ink);
   font-family: Arial, Helvetica, sans-serif;
   font-size: 11px;
   line-height: 1;
@@ -720,16 +765,16 @@ onBeforeUnmount(() => {
 }
 
 .basemap-switch button + button {
-  border-top: 1px solid #000;
+  border-top: 1px solid var(--ink);
 }
 
 .basemap-switch button:hover:not([aria-pressed="true"]) {
-  background: #f0f0f0;
+  background: var(--surface);
 }
 
 .basemap-switch button[aria-pressed="true"] {
-  background: #000;
-  color: #fff;
+  background: var(--ink);
+  color: var(--paper);
   cursor: default;
 }
 
@@ -740,7 +785,7 @@ onBeforeUnmount(() => {
   z-index: 6;
   max-width: 60%;
   background: rgba(255, 255, 255, 0.94);
-  border: 1px solid #000;
+  border: 1px solid var(--ink);
   padding: 4px 6px;
   font-family: Menlo, Consolas, monospace;
   font-size: 9px;
@@ -772,9 +817,9 @@ onBeforeUnmount(() => {
 
 <style>
 .restroom-hover-popup .maplibregl-popup-content {
-  background: #fff;
-  color: #000;
-  border: 1px solid #000;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--ink);
   border-radius: 0;
   padding: 6px 8px;
   font-family: Arial, Helvetica, sans-serif;
@@ -789,7 +834,36 @@ onBeforeUnmount(() => {
   font-weight: 600;
 }
 .restroom-hover-popup .hover-date {
-  color: #555;
+  color: var(--ink-soft);
   margin-top: 2px;
+}
+
+/* MapLibre's own chrome (zoom buttons, attribution) is white by default and
+   lives outside this component's scope, so `.map-dark` (set from the resolved
+   theme, which covers System as well as Dark) reaches it unscoped. In dark it
+   follows the panel: black buttons with their icons inverted, and a dark
+   attribution strip. */
+.map-dark .maplibregl-ctrl-group {
+  background: #000;
+  box-shadow: 0 0 0 1px #333;
+}
+.map-dark .maplibregl-ctrl-group button + button {
+  border-top-color: #333;
+}
+.map-dark .maplibregl-ctrl-group button .maplibregl-ctrl-icon {
+  filter: invert(1);
+}
+.map-dark .maplibregl-ctrl-group button:not(:disabled):hover {
+  background-color: #1a1a1a;
+}
+.map-dark .maplibregl-ctrl-attrib {
+  background: rgb(0 0 0 / 0.6);
+  color: #999;
+}
+.map-dark .maplibregl-ctrl-attrib a {
+  color: #ccc;
+}
+.map-dark .maplibregl-ctrl-attrib-button {
+  filter: invert(1);
 }
 </style>

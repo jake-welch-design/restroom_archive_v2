@@ -19,7 +19,7 @@
   padding: 6px 14px 7px;
   font: inherit;
   font-size: 15px;
-  color: #999;
+  color: var(--faint);
   cursor: pointer;
 }
 
@@ -30,12 +30,12 @@
 }
 
 .tab-btn:hover:not(.active) {
-  color: #595959;
+  color: var(--ink-hover);
 }
 
 .tab-btn.active {
-  color: #000;
-  border-bottom-color: #000;
+  color: var(--ink);
+  border-bottom-color: var(--ink);
 }
 
 /* Same panel-width step as the rest of the panel's chrome. */

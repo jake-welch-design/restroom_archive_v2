@@ -267,7 +267,7 @@ function onTileClick(slug: string, e: MouseEvent) {
   aspect-ratio: 1;
   box-sizing: border-box;
   padding: var(--ring);
-  background: #f0f0f0;
+  background: var(--surface);
   overflow: hidden;
   position: relative;
 }
@@ -280,8 +280,8 @@ function onTileClick(slug: string, e: MouseEvent) {
 @media (hover: hover) {
   .tile:hover:not(.selected) .thumb {
     --ring: 3px;
-    background: #fff;
-    box-shadow: inset 0 0 0 1px #000;
+    background: var(--paper);
+    box-shadow: inset 0 0 0 1px var(--ink);
   }
 }
 .tile:focus-visible {
@@ -289,8 +289,27 @@ function onTileClick(slug: string, e: MouseEvent) {
 }
 .tile:focus-visible .thumb {
   --ring: 3px;
-  background: #fff;
-  box-shadow: inset 0 0 0 1px #000;
+  background: var(--paper);
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+/* Resting outline (`--grid-edge`, dark mode only). Drawn over the thumbnail,
+   which an inset shadow would sit under. Hover, focus and the open tile have
+   their own full-strength rings, so it steps aside for those. */
+.thumb::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--grid-edge);
+  pointer-events: none;
+}
+.tile:focus-visible .thumb::after,
+.tile.selected .thumb::after {
+  display: none;
+}
+@media (hover: hover) {
+  .tile:hover .thumb::after {
+    display: none;
+  }
 }
 .thumb img {
   width: 100%;
@@ -326,7 +345,7 @@ function onTileClick(slug: string, e: MouseEvent) {
 }
 .tile-info.selected {
   position: static;
-  color: #000;
+  color: var(--ink);
   text-shadow: none;
   padding: 0;
   pointer-events: auto;
@@ -335,8 +354,8 @@ function onTileClick(slug: string, e: MouseEvent) {
 .expanded {
   width: 100%;
   height: 100%;
-  background: #fff;
-  border: 1px solid #000;
+  background: var(--paper);
+  border: 1px solid var(--ink);
   padding: 10px 12px;
   overflow-y: auto;
   box-sizing: border-box;
@@ -347,13 +366,13 @@ function onTileClick(slug: string, e: MouseEvent) {
 }
 .desc-text {
   margin: 0;
-  color: #000;
+  color: var(--ink);
   font-size: 11px;
   line-height: 1.35;
 }
 /* Matches the compact `.annotation-meta` directly below it. */
 .submitter-line {
-  color: #999;
+  color: var(--faint);
   font-size: 11px;
 }
 .annotations-section {

@@ -2,14 +2,14 @@
    would sit awkwardly against the archive's hairline borders. */
 :focus-visible {
   outline: none;
-  background-color: #ebebeb;
+  background-color: var(--surface-3);
 }
 
 input:focus-visible,
 textarea:focus-visible,
 select:focus-visible {
   outline: none;
-  background-color: #ebebeb;
+  background-color: var(--surface-3);
 }
 
 /* Skip link. Visually hidden until focused. */
@@ -19,11 +19,11 @@ select:focus-visible {
   left: 0;
   z-index: 9999;
   padding: 8px 16px;
-  background: #fff;
-  color: #000;
+  background: var(--paper);
+  color: var(--ink);
   font-family: Arial, Helvetica, sans-serif;
   font-size: 14px;
-  border: 2px solid #000;
+  border: 2px solid var(--ink);
   text-decoration: none;
   white-space: nowrap;
 }

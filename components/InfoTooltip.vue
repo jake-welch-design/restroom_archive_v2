@@ -177,9 +177,9 @@ onBeforeUnmount(() => {
   width: 15px;
   height: 15px;
   border-radius: 50%;
-  border: 1px solid #666;
+  border: 1px solid var(--muted);
   background: transparent;
-  color: #666;
+  color: var(--muted);
   font: inherit;
   font-size: 10px;
   font-style: italic;
@@ -192,8 +192,8 @@ onBeforeUnmount(() => {
 }
 .info-btn:hover,
 .info-btn:focus-visible {
-  border-color: #000;
-  color: #000;
+  border-color: var(--ink);
+  color: var(--ink);
 }
 </style>
 

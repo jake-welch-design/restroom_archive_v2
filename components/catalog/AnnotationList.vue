@@ -148,12 +148,12 @@ async function deleteAnnotation(id: number) {
   padding: 0;
   font: inherit;
   font-size: var(--toggle-size);
-  color: #000;
+  color: var(--ink);
   cursor: pointer;
 }
 
 .annotations-toggle:hover {
-  color: #555;
+  color: var(--ink-soft);
 }
 
 .toggle-caret {
@@ -180,12 +180,12 @@ async function deleteAnnotation(id: number) {
   align-items: flex-start;
   gap: var(--item-gap);
   padding: var(--item-padding);
-  border-bottom: 1px solid #e8e8e8;
+  border-bottom: 1px solid var(--line-faint);
   cursor: pointer;
 }
 
 .annotation-item:hover {
-  background: #f9f9f9;
+  background: var(--surface-1);
 }
 
 .annotation-main {
@@ -200,13 +200,13 @@ async function deleteAnnotation(id: number) {
 
 .annotation-body {
   font-size: var(--body-size);
-  color: #000;
+  color: var(--ink);
   line-height: 1.3;
 }
 
 .annotation-meta {
   font-size: var(--meta-size);
-  color: #999;
+  color: var(--faint);
 }
 
 .annotation-delete {
@@ -216,13 +216,13 @@ async function deleteAnnotation(id: number) {
   font: inherit;
   font-size: var(--delete-size);
   line-height: 1;
-  color: #999;
+  color: var(--faint);
   cursor: pointer;
   flex-shrink: 0;
 }
 
 .annotation-delete:hover:not(:disabled) {
-  color: #c33;
+  color: var(--danger);
 }
 
 .annotation-delete:disabled {
@@ -233,6 +233,6 @@ async function deleteAnnotation(id: number) {
 .annotation-empty {
   margin: 4px 0 0;
   font-size: var(--empty-size);
-  color: #999;
+  color: var(--faint);
 }
 </style>

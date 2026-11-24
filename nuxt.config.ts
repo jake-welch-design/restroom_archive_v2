@@ -6,6 +6,7 @@ export default defineNuxtConfig({
 
   css: [
     "maplibre-gl/dist/maplibre-gl.css",
+    "~/assets/css/theme.css",
     "~/assets/css/a11y.css",
     "~/assets/css/scrollbars.css",
     "~/assets/css/forms.css",

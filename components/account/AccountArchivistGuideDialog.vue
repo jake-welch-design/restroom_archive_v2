@@ -372,9 +372,9 @@ function onKeydown(e: KeyboardEvent) {
   width: min(680px, calc(100vw - 32px));
   height: min(80vh, 760px);
   padding: 0;
-  border: 1px solid #000;
-  background: #fff;
-  color: #000;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
   font-family: Arial, Helvetica, sans-serif;
   overflow: hidden;
 }
@@ -395,7 +395,7 @@ function onKeydown(e: KeyboardEvent) {
   justify-content: space-between;
   gap: 16px;
   padding: 12px 16px;
-  border-bottom: 1px solid #ddd;
+  border-bottom: 1px solid var(--line-soft);
   flex: 0 0 auto;
 }
 
@@ -403,7 +403,7 @@ function onKeydown(e: KeyboardEvent) {
   margin: 0;
   font-size: 14px;
   font-weight: 400;
-  color: #666;
+  color: var(--muted);
 }
 
 .guide-close {
@@ -413,13 +413,13 @@ function onKeydown(e: KeyboardEvent) {
   font-size: 20px;
   line-height: 1;
   cursor: pointer;
-  color: #000;
+  color: var(--ink);
 }
 
 .guide-nav {
   flex: 0 0 auto;
   padding: 10px 16px 0;
-  border-bottom: 1px solid #ddd;
+  border-bottom: 1px solid var(--line-soft);
 }
 
 /* The plain row is built to tuck under a segmented one; here it stands alone,
@@ -438,7 +438,7 @@ function onKeydown(e: KeyboardEvent) {
 .guide-step-count {
   margin: 0 0 4px;
   font-size: 12px;
-  color: #666;
+  color: var(--muted);
 }
 
 .guide-body h3 {
@@ -470,7 +470,7 @@ function onKeydown(e: KeyboardEvent) {
 }
 
 .guide-body a {
-  color: #000;
+  color: var(--ink);
   text-decoration: underline;
 }
 
@@ -480,11 +480,11 @@ function onKeydown(e: KeyboardEvent) {
   max-width: 100%;
   height: auto;
   margin: 0 0 0.9em;
-  border: 1px solid #000;
+  border: 1px solid var(--ink);
 }
 
 .guide-note {
-  border-left: 3px solid #000;
+  border-left: 3px solid var(--ink);
   padding: 2px 0 2px 10px;
 }
 
@@ -495,7 +495,7 @@ function onKeydown(e: KeyboardEvent) {
   justify-content: space-between;
   gap: 12px;
   padding: 10px 16px;
-  border-top: 1px solid #ddd;
+  border-top: 1px solid var(--line-soft);
 }
 
 .guide-arrow {
@@ -504,11 +504,11 @@ function onKeydown(e: KeyboardEvent) {
   gap: 8px;
   min-width: 90px;
   background: transparent;
-  border: 1px solid #000;
+  border: 1px solid var(--ink);
   padding: 5px 12px;
   font: inherit;
   font-size: 12px;
-  color: #000;
+  color: var(--ink);
   cursor: pointer;
 }
 
@@ -517,12 +517,12 @@ function onKeydown(e: KeyboardEvent) {
 }
 
 .guide-arrow:hover:not(:disabled) {
-  background: #f4f4f4;
+  background: var(--canvas);
 }
 
 .guide-arrow:disabled {
-  border-color: #ddd;
-  color: #bbb;
+  border-color: var(--line-soft);
+  color: var(--line-strong);
   cursor: default;
 }
 
@@ -535,11 +535,11 @@ function onKeydown(e: KeyboardEvent) {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #ddd;
+  background: var(--line-soft);
 }
 
 .guide-dot.active {
-  background: #000;
+  background: var(--ink);
 }
 
 /* Viewport, not container, query: see the note at the end of LegalDialog. */

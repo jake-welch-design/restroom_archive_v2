@@ -11,7 +11,11 @@ if (import.meta.client) {
   });
 }
 
+// Light/dark mode, rendered onto <html> on the server (see useTheme).
+const { pref } = useTheme();
+
 useHead({
+  htmlAttrs: { "data-theme": pref },
   titleTemplate: (title) =>
     title ? `The Restroom Archive – ${title}` : "The Restroom Archive",
 });

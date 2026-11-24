@@ -21,12 +21,9 @@
 
 :root {
   /* Palette. The archive is monochrome by design; the only colour in the
-     system is the error red. */
-  --ink: #000;
-  --paper: #fff;
-  --muted: #666;
-  --dim: #999;
-  --danger: #c33;
+     system is the error red. --ink, --paper, --muted and --danger come from
+     assets/css/theme.css, which switches them for dark mode. */
+  --dim: var(--faint);
 
   /* Form metrics. Defaults match the account page and submission wizard,
      which between them account for most forms in the application. */
@@ -173,7 +170,7 @@ select.field-input option[value=""] {
 }
 
 .primary-btn:hover:not(:disabled) {
-  background: #333;
+  background: var(--ink-strong);
 }
 
 .primary-btn:disabled {

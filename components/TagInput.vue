@@ -192,7 +192,7 @@ function onBlur() {
   flex-wrap: wrap;
   align-items: center;
   gap: 4px;
-  border-bottom: 1px solid #000;
+  border-bottom: 1px solid var(--ink);
   padding: 3px 0;
   cursor: text;
   min-height: 24px;
@@ -201,8 +201,8 @@ function onBlur() {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  background: #000;
-  color: #fff;
+  background: var(--ink);
+  color: var(--paper);
   padding: 4px 6px;
   font-size: 12px;
   font-weight: 200;
@@ -212,7 +212,7 @@ function onBlur() {
 .tag-x {
   background: transparent;
   border: 0;
-  color: #fff;
+  color: var(--paper);
   font: inherit;
   font-size: 12px;
   line-height: 1;
@@ -220,7 +220,7 @@ function onBlur() {
   padding: 0;
 }
 .tag-x:hover {
-  color: #ccc;
+  color: var(--line);
 }
 .tag-inner {
   border: 0;
@@ -231,7 +231,7 @@ function onBlur() {
   background: transparent;
   flex: 1 1 80px;
   min-width: 80px;
-  color: #000;
+  color: var(--ink);
 }
 
 .tag-suggestions {
@@ -243,8 +243,8 @@ function onBlur() {
   margin: 0;
   padding: 0;
   list-style: none;
-  background: #fff;
-  border: 1px solid #000;
+  background: var(--paper);
+  border: 1px solid var(--ink);
   border-top: 0;
   max-height: 180px;
   overflow-y: auto;
@@ -256,8 +256,8 @@ function onBlur() {
   cursor: pointer;
 }
 .tag-suggestion.active {
-  background: #000;
-  color: #fff;
+  background: var(--ink);
+  color: var(--paper);
 }
 
 /* iOS zooms the page when a field under 16px takes focus; see `.field-input` in

@@ -70,7 +70,7 @@ defineEmits<{ (e: "update:modelValue", id: string): void }>();
   gap: 6px;
   white-space: nowrap;
   background: transparent;
-  border: 1px solid #000;
+  border: 1px solid var(--ink);
   /* Every button carries its own border and overlaps its neighbour, so
      adjacent buttons share one hairline and the control still reads as a
      segmented block once the row wraps in a narrow panel. */
@@ -78,7 +78,7 @@ defineEmits<{ (e: "update:modelValue", id: string): void }>();
   padding: 5px 12px;
   font: inherit;
   font-size: 12px;
-  color: #666;
+  color: var(--muted);
   cursor: pointer;
 }
 .subtab-btn.gap-before {
@@ -103,26 +103,26 @@ defineEmits<{ (e: "update:modelValue", id: string): void }>();
 }
 .subtab-btn:hover:not(.active),
 :slotted(.subtab-btn:hover) {
-  background: #f4f4f4;
-  color: #000;
+  background: var(--canvas);
+  color: var(--ink);
 }
 .subtab-btn.active {
-  background: #000;
-  color: #fff;
+  background: var(--ink);
+  color: var(--paper);
 }
 .count {
   font-size: 11px;
-  background: #000;
-  color: #fff;
+  background: var(--ink);
+  color: var(--paper);
   border-radius: 6px;
   padding: 1px 6px;
 }
 .subtab-btn:not(.active) .count {
-  background: #666;
+  background: var(--muted);
 }
 .subtab-btn.active .count {
-  background: #fff;
-  color: #000;
+  background: var(--paper);
+  color: var(--ink);
 }
 
 /* --- The plain variant ----------------------------------------------------- */
@@ -145,18 +145,18 @@ defineEmits<{ (e: "update:modelValue", id: string): void }>();
 
 .is-plain .subtab-btn:hover:not(.active) {
   background: transparent;
-  color: #000;
+  color: var(--ink);
 }
 
 .is-plain .subtab-btn.active {
   background: transparent;
-  color: #000;
-  border-bottom-color: #000;
+  color: var(--ink);
+  border-bottom-color: var(--ink);
 }
 
 .is-plain .subtab-btn.active .count {
-  background: #000;
-  color: #fff;
+  background: var(--ink);
+  color: var(--paper);
 }
 
 /* The first item lines up with the list below rather than sitting a pad-width

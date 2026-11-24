@@ -359,10 +359,10 @@ async function submitContact() {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #fff;
+  background: var(--paper);
   font-family: Arial, Helvetica, sans-serif;
   font-size: 16px;
-  color: #000;
+  color: var(--ink);
   overflow: hidden;
 }
 
@@ -400,13 +400,13 @@ async function submitContact() {
 }
 
 .about-content a {
-  color: #000;
+  color: var(--ink);
   text-decoration: underline;
 }
 
 .about-content h1 {
   margin: 0 0 0.5em;
-  color: #666;
+  color: var(--muted);
   font-size: 14px;
   font-weight: 400;
 }
@@ -417,7 +417,7 @@ async function submitContact() {
    above the rule, so this keeps the same space on either side of it. */
 .about-content section + section {
   padding-top: 1.2em;
-  border-top: 1px solid #e8e8e8;
+  border-top: 1px solid var(--line-faint);
 }
 
 .about-content section:last-of-type p:last-child {
@@ -507,7 +507,7 @@ async function submitContact() {
 
 .about-footer p {
   font-size: 12px;
-  color: #666;
+  color: var(--muted);
   margin: 0;
   line-height: 1.4;
 }

@@ -1,0 +1,127 @@
+/* Color tokens for the panel UI (catalog, account, dialogs). Light is the
+   archive's original black-on-white; each token is named for its role and
+   holds the exact hex it replaced, so light mode is unchanged.
+
+   Dark (the display button in the viewer's controls) follows the Weekly
+   Report email's dark scheme in shared/utils/weeklyReport.ts: a straight
+   inversion — black body, white ink and rules, #999 muted, #1a1a1a surfaces,
+   #111 canvas. The 3D viewer side is
+   already black and stays out of this: its overlays keep literal colors.
+
+   Set on <html data-theme="light|dark|system"> by `useTheme`, from a cookie
+   so the server renders the right theme and there's no flash on load. */
+:root {
+  --ink: #000;
+  --ink-strong: #333;
+  --ink-soft: #555;
+  --ink-hover: #595959;
+  --muted: #666;
+  --faint-strong: #888;
+  --faint: #999;
+  --faint-hover: #9a9a9a;
+  --line-strong: #bbb;
+  --line-mid: #c4c4c4;
+  --line: #ccc;
+  --line-soft: #ddd;
+  --line-faint: #e8e8e8;
+  --surface-3: #ebebeb;
+  --surface: #f0f0f0;
+  --canvas: #f4f4f4;
+  --surface-2: #f7f7f7;
+  --surface-1: #f9f9f9;
+  --paper: #fff;
+  --danger: #c33;
+  --danger-strong: #e33;
+  /* Divider between the panel and the always-black viewer. White against
+     black already draws that edge in light mode, so it's off there. */
+  --panel-edge: transparent;
+  /* Lines between rows in the list view. The strip above the list keeps the
+     full-strength --ink rule; in dark the rows step down to --rule-quiet so
+     the list reads quieter than the controls. */
+  --list-rule: #000;
+  /* The separators inside an open row, above and below the description. */
+  --list-inner-rule: #e8e8e8;
+  /* Outline around a resting grid tile. Light tiles sit on white as grey
+     squares and need none. */
+  --grid-edge: transparent;
+  /* Frame around the map and the restroom card that slides up over it. */
+  --map-edge: #000;
+  /* Outline around the expand tab, joining the panel edge. */
+  --tab-edge: transparent;
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --ink: #fff;
+  --ink-strong: #ccc;
+  --ink-soft: #aaa;
+  --ink-hover: #a6a6a6;
+  --muted: #999;
+  --faint-strong: #777;
+  --faint: #707070;
+  --faint-hover: #8a8a8a;
+  --line-strong: #555;
+  --line-mid: #4a4a4a;
+  --line: #444;
+  --line-soft: #333;
+  --line-faint: #2a2a2a;
+  --surface-3: #262626;
+  --surface: #1a1a1a;
+  --canvas: #111;
+  --surface-2: #161616;
+  --surface-1: #141414;
+  --paper: #000;
+  --danger: #e05050;
+  --danger-strong: #ff6b6b;
+  /* The one grey for content dividers: list rows, the open row's inner
+     separators, grid tile outlines and the map's frame all share it. */
+  --rule-quiet: #333;
+  --panel-edge: #fff;
+  --list-rule: var(--rule-quiet);
+  --list-inner-rule: var(--rule-quiet);
+  --grid-edge: var(--rule-quiet);
+  --map-edge: var(--rule-quiet);
+  --tab-edge: var(--panel-edge);
+  /* Native controls (date pickers, scrollbars, autofill) follow along. */
+  color-scheme: dark;
+}
+
+/* System: the same dark values, applied when the OS asks for dark. Duplicated
+   rather than resolved in JavaScript so the server-rendered page is already
+   right on first paint. Keep it in step with the block above. */
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="system"] {
+    --ink: #fff;
+    --ink-strong: #ccc;
+    --ink-soft: #aaa;
+    --ink-hover: #a6a6a6;
+    --muted: #999;
+    --faint-strong: #777;
+    --faint: #707070;
+    --faint-hover: #8a8a8a;
+    --line-strong: #555;
+    --line-mid: #4a4a4a;
+    --line: #444;
+    --line-soft: #333;
+    --line-faint: #2a2a2a;
+    --surface-3: #262626;
+    --surface: #1a1a1a;
+    --canvas: #111;
+    --surface-2: #161616;
+    --surface-1: #141414;
+    --paper: #000;
+    --danger: #e05050;
+    --danger-strong: #ff6b6b;
+    /* The one grey for content dividers: list rows, the open row's inner
+       separators, grid tile outlines and the map's frame all share it. */
+    --rule-quiet: #333;
+    --panel-edge: #fff;
+    --list-rule: var(--rule-quiet);
+    --list-inner-rule: var(--rule-quiet);
+    --grid-edge: var(--rule-quiet);
+    --map-edge: var(--rule-quiet);
+    --tab-edge: var(--panel-edge);
+    /* Native controls (date pickers, scrollbars, autofill) follow along. */
+    color-scheme: dark;
+  }
+}

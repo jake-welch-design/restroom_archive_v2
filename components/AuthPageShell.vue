@@ -30,10 +30,10 @@ defineProps<{ title: string }>();
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #fff;
+  background: var(--paper);
   font-family: Arial, Helvetica, sans-serif;
   font-size: 16px;
-  color: #000;
+  color: var(--ink);
   overflow: hidden;
 
   /* These pages run a step larger than the account page, so the shared form
@@ -55,7 +55,7 @@ defineProps<{ title: string }>();
   margin: 0 0 16px;
   font-size: 18px;
   font-weight: 400;
-  border-bottom: 1px solid #000;
+  border-bottom: 1px solid var(--ink);
   padding-bottom: 4px;
 }
 

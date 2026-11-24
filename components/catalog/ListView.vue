@@ -250,13 +250,13 @@ function onNameClick(e: MouseEvent) {
      into `--sbw`), which lines the header's columns up with the rows' and ends
      its bottom rule flush with theirs instead of 8px past them. */
   margin-right: var(--sbw, 0px);
-  background: #fff;
+  background: var(--paper);
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   padding: 10px 24px;
   border-top: none;
-  border-bottom: 1px solid #000;
+  border-bottom: 1px solid var(--ink);
   font-size: 14px;
   flex: 0 0 auto;
 }
@@ -270,13 +270,13 @@ function onNameClick(e: MouseEvent) {
   font: inherit;
   font-size: 14px;
   text-align: left;
-  color: #000;
+  color: var(--ink);
   cursor: pointer;
 }
 .th .arrow {
   font-size: 10px;
   line-height: 1;
-  color: #000;
+  color: var(--ink);
 }
 /* Inherits everything so the cell reads exactly as the bare text it replaced;
    the row above it still owns the hover and cursor. */
@@ -308,11 +308,11 @@ function onNameClick(e: MouseEvent) {
   overflow-x: hidden;
 }
 .row {
-  border-bottom: 1px solid #000;
+  border-bottom: 1px solid var(--list-rule);
   cursor: pointer;
 }
 .row:hover:not(.selected) {
-  background: #f4f4f4;
+  background: var(--canvas);
 }
 .row-main {
   display: grid;
@@ -324,7 +324,7 @@ function onNameClick(e: MouseEvent) {
   min-height: 20px;
 }
 .row.selected {
-  background: #fff;
+  background: var(--paper);
 }
 .row-expanded {
   padding: 0 24px 0;
@@ -333,7 +333,7 @@ function onNameClick(e: MouseEvent) {
    the same light divider the account tab uses. The top padding lives here
    rather than on `.row-expanded` so the rule sits directly under the row. */
 .description {
-  border-top: 1px solid #e8e8e8;
+  border-top: 1px solid var(--list-inner-rule);
   padding-top: 12px;
   display: flex;
   flex-direction: column;
@@ -343,13 +343,13 @@ function onNameClick(e: MouseEvent) {
 /* Read view */
 .desc-text {
   margin: 0;
-  color: #000;
+  color: var(--ink);
   font-size: 14px;
   line-height: 1.35;
 }
 /* Matches the `.annotation-meta` below the divider. */
 .submitter-line {
-  color: #999;
+  color: var(--faint);
   font-size: 12px;
 }
 .edit-link {
@@ -359,12 +359,12 @@ function onNameClick(e: MouseEvent) {
   font: inherit;
   /* Secondary action: stays small next to the 14px row text it aligns with. */
   font-size: 12px;
-  color: #595959;
+  color: var(--ink-hover);
   cursor: pointer;
   flex-shrink: 0;
 }
 .edit-link:hover {
-  color: #000;
+  color: var(--ink);
 }
 
 /* Annotations */
@@ -374,7 +374,7 @@ function onNameClick(e: MouseEvent) {
      description, tags and attribution sit from each other. */
   margin-bottom: 12px;
   padding-top: 12px;
-  border-top: 1px solid #e8e8e8;
+  border-top: 1px solid var(--list-inner-rule);
 }
 /* Responsive columns via container queries */
 @container (max-width: 560px) {

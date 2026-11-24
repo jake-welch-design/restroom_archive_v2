@@ -335,8 +335,8 @@ onBeforeUnmount(() => {
   max-width: 460px;
   aspect-ratio: 1;
   margin: 0 auto;
-  border: 1px solid #000;
-  background: #f7f7f7;
+  border: 1px solid var(--ink);
+  background: var(--surface-2);
   cursor: pointer;
 }
 
@@ -380,19 +380,19 @@ onBeforeUnmount(() => {
   max-width: 460px;
   height: 10px; /* 12px on screen, with the borders */
   margin: -1px auto 0; /* sit on the video's bottom border, not below it */
-  border: 1px solid #000;
-  background: #fff;
+  border: 1px solid var(--ink);
+  background: var(--paper);
   cursor: pointer;
   touch-action: none; /* or a horizontal drag scrolls the step instead */
 }
 
 .gv-fill {
   height: 100%;
-  background: #000;
+  background: var(--ink);
 }
 
 .gv-track:focus-visible {
-  outline: 2px solid #000;
+  outline: 2px solid var(--ink);
   outline-offset: 2px;
 }
 
@@ -403,6 +403,6 @@ onBeforeUnmount(() => {
   margin: 7px auto 0;
   font-size: 12px;
   line-height: 1.4;
-  color: #666;
+  color: var(--muted);
 }
 </style>

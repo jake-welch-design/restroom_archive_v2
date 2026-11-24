@@ -320,7 +320,7 @@ onBeforeUnmount(() => {
 }
 
 .trigger:focus-visible {
-  outline: 1px solid #000;
+  outline: 1px solid var(--ink);
   outline-offset: 2px;
 }
 
@@ -358,14 +358,14 @@ onBeforeUnmount(() => {
 }
 
 .archive-date:has(.native:focus-visible) .label {
-  outline: 1px solid #000;
+  outline: 1px solid var(--ink);
   outline-offset: 2px;
 }
 
 @media (hover: hover) {
   .archive-date:hover .label,
   .trigger.open {
-    color: #595959;
+    color: var(--ink-hover);
   }
 }
 </style>
@@ -380,12 +380,12 @@ onBeforeUnmount(() => {
   margin: 0;
   padding: 4px 0;
   list-style: none;
-  background: #fff;
-  border: 1px solid #000;
+  background: var(--paper);
+  border: 1px solid var(--ink);
   font-family: Arial, Helvetica, sans-serif;
   font-size: 13px;
   line-height: 1.3;
-  color: #000;
+  color: var(--ink);
   max-height: 240px;
   overflow-y: auto;
   box-sizing: border-box;
@@ -400,11 +400,11 @@ onBeforeUnmount(() => {
 
 .archive-date-option:hover,
 .archive-date-option:focus {
-  background: #f4f4f4;
+  background: var(--canvas);
 }
 
 /* The date already on screen, in the grey the site marks "you are here" with. */
 .archive-date-option.current {
-  color: #595959;
+  color: var(--ink-hover);
 }
 </style>

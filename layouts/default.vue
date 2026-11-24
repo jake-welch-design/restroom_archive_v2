@@ -359,7 +359,7 @@ function goPrev() {
   flex: 0 0 auto;
   width: clamp(360px, 50%, 864px);
   height: 100%;
-  background: #fff;
+  background: var(--paper);
   overflow: hidden;
   transition: margin-left 0.35s ease;
   position: relative;
@@ -376,6 +376,24 @@ function goPrev() {
   margin-left: calc(-1 * clamp(360px, 50%, 864px));
 }
 
+/* Divider between the panel and the viewer (`--panel-edge`, theme.css). A
+   pseudo-element rather than a border or inset shadow: the page inside fills
+   the panel with its own background and would paint over either. The tab's
+   background covers it where the tab attaches, and the tab's own `::before`
+   carries the line around its outside, so the edge reads as one outline with
+   an opening for the tab rather than a rule cutting across it. */
+.panel::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--panel-edge);
+  pointer-events: none;
+  z-index: 100;
+}
+
 .expand-tab {
   position: absolute;
   left: calc(clamp(360px, 50%, 864px) - 4px);
@@ -385,7 +403,7 @@ function goPrev() {
   top: var(--tab-top, 61.5px);
   width: 22px;
   height: calc(var(--tab-height, 69px) - 1px);
-  background: #fff;
+  background: var(--paper);
   border: none;
   border-radius: 0 8px 8px 0;
   display: flex;
@@ -402,10 +420,29 @@ function goPrev() {
   left: -4px;
 }
 
+/* The tab's half of the divider: top, right and bottom, starting 3px in so it
+   joins the panel's line at the panel's last pixel (the tab overlaps the panel
+   by 4px). Its own colour (`--tab-edge`), so the tab can stand out from the
+   quieter edge line. The tab fits *between* the strip's top and bottom rules,
+   so the outline reaches 1px past it each way to land on those rules and
+   continue them. */
+.expand-tab::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  right: 0;
+  bottom: -1px;
+  left: 3px;
+  border: 1px solid var(--tab-edge);
+  border-left: none;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
 .caret {
   font-size: 16px;
   line-height: 1;
-  color: #000;
+  color: var(--ink);
 }
 .caret.flip {
   display: inline-block;
@@ -554,6 +591,13 @@ function goPrev() {
     margin-left: 0;
     margin-top: calc(-100dvh * var(--panel-frac, 0.55));
   }
+  /* The sheet's divider runs along its bottom edge instead. */
+  .panel::after {
+    top: auto;
+    left: 0;
+    width: auto;
+    height: 1px;
+  }
   /* While the finger is down everything must track it exactly, not ease. */
   .shell.dragging .panel,
   .shell.dragging .viewer-panel,
@@ -598,6 +642,26 @@ function goPrev() {
     touch-action: none;
     transition: top 0.35s ease;
   }
+  /* Here the tab hangs below the sheet rather than overlapping it, so its
+     outline reaches up 1px over the sheet's line, and `::after` paints out the
+     stretch of that line between its two sides. */
+  .expand-tab::before {
+    top: -1px;
+    bottom: 0;
+    left: 0;
+    border: 1px solid var(--tab-edge);
+    border-top: none;
+  }
+  .expand-tab::after {
+    content: "";
+    position: absolute;
+    top: -1px;
+    left: 1px;
+    right: 1px;
+    height: 1px;
+    background: var(--paper);
+    pointer-events: none;
+  }
   .expand-tab.closed {
     top: 0;
     left: auto;
@@ -612,10 +676,10 @@ function goPrev() {
     width: 36px;
     height: 4px;
     border-radius: 2px;
-    background: #c4c4c4;
+    background: var(--line-mid);
   }
   .expand-tab:active .grabber {
-    background: #9a9a9a;
+    background: var(--faint-hover);
   }
   .bottom-nav {
     bottom: 0.75rem;

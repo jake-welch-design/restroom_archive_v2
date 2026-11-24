@@ -795,7 +795,7 @@ async function confirmDelete() {
 <style scoped>
 .settings-saved {
   font-size: 11px;
-  color: #666;
+  color: var(--muted);
 }
 
 .notify-check {
@@ -803,7 +803,7 @@ async function confirmDelete() {
   align-items: center;
   gap: 8px;
   font-size: 12px;
-  color: #000;
+  color: var(--ink);
   cursor: pointer;
 }
 
@@ -815,29 +815,29 @@ async function confirmDelete() {
   margin: 0 0 4px;
   font-size: 11px;
   line-height: 1.5;
-  color: #666;
+  color: var(--muted);
 }
 
 .notify-hint a,
 .notify-steps a {
-  color: #000;
+  color: var(--ink);
 }
 
 .notify-hint code,
 .notify-warning code {
   font-family: inherit;
-  background: #f0f0f0;
+  background: var(--surface);
   padding: 0 3px;
 }
 
 .notify-check-disabled {
-  color: #999;
+  color: var(--faint);
   cursor: default;
 }
 
 .notify-name {
   font-weight: 600;
-  color: #000;
+  color: var(--ink);
 }
 
 .notify-steps {
@@ -845,7 +845,7 @@ async function confirmDelete() {
   padding-left: 18px;
   font-size: 12px;
   line-height: 1.6;
-  color: #000;
+  color: var(--ink);
 }
 
 /* Not `.form-error`: nothing the admin did failed. It is a caution about the
@@ -867,13 +867,13 @@ async function confirmDelete() {
   margin: 0 0 4px;
   font-size: 12px;
   line-height: 1.5;
-  color: #c33;
+  color: var(--danger);
 }
 
 .confirm-code {
   font-family: inherit;
-  color: #000;
-  background: #f0f0f0;
+  color: var(--ink);
+  background: var(--surface);
   padding: 0 4px;
 }
 </style>

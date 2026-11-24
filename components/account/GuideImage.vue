@@ -48,7 +48,7 @@ const src = computed(() => `/guide/${props.name}.jpg`);
 }
 
 .guide-figure a:focus-visible {
-  outline: 2px solid #000;
+  outline: 2px solid var(--ink);
   outline-offset: 2px;
 }
 
@@ -59,8 +59,8 @@ const src = computed(() => `/guide/${props.name}.jpg`);
   max-width: 460px;
   aspect-ratio: 1;
   margin: 0 auto;
-  border: 1px solid #000;
-  background: #f7f7f7;
+  border: 1px solid var(--ink);
+  background: var(--surface-2);
 }
 
 .guide-figure figcaption {
@@ -68,6 +68,6 @@ const src = computed(() => `/guide/${props.name}.jpg`);
   margin: 2px auto 0;
   font-size: 12px;
   line-height: 1.4;
-  color: #666;
+  color: var(--muted);
 }
 </style>

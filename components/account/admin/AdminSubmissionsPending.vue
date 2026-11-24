@@ -262,13 +262,13 @@ async function confirmReject(id: number) {
 
 .queue-head {
   padding: 0 0 6px;
-  border-bottom: 1px solid #000;
+  border-bottom: 1px solid var(--ink);
   font-size: 12px;
-  color: #666;
+  color: var(--muted);
 }
 
 .queue-row {
-  border-bottom: 1px solid #e8e8e8;
+  border-bottom: 1px solid var(--line-faint);
 }
 
 .queue-main {
@@ -283,12 +283,12 @@ async function confirmReject(id: number) {
 }
 
 .queue-main:hover:not(.active) {
-  background: #f9f9f9;
+  background: var(--surface-1);
 }
 
 .queue-cell {
   font-size: 12px;
-  color: #666;
+  color: var(--muted);
 }
 
 .queue-expanded {
@@ -304,7 +304,7 @@ async function confirmReject(id: number) {
 }
 
 .detail-list dt {
-  color: #666;
+  color: var(--muted);
   white-space: nowrap;
 }
 

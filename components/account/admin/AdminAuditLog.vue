@@ -169,21 +169,21 @@ const { query, sortKey, sortDir, visible, isEmptyFromSearch } = useListControls<
    tag, and Vue's `condense` whitespace handling drops a leading space there, so
    the two ran together as "Jakebanned user". */
 .audit-action {
-  color: #000;
+  color: var(--ink);
   margin-left: 4px;
 }
 
 /* The target id is a database key, not prose, so it is set in a monospace face
    at the support step to read as a reference rather than part of the sentence. */
 .audit-target {
-  color: #888;
+  color: var(--faint-strong);
   font-family: ui-monospace, Menlo, monospace;
   font-size: 12px;
   margin-left: 4px;
 }
 
 .audit-meta-summary {
-  color: #666;
+  color: var(--muted);
   word-break: break-word;
 }
 </style>

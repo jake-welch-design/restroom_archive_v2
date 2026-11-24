@@ -549,8 +549,8 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #fff;
-  color: #000;
+  background: var(--paper);
+  color: var(--ink);
   font-family: Arial, Helvetica, sans-serif;
   font-size: 16px;
   overflow: hidden;
@@ -575,7 +575,7 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
   align-items: center;
   gap: 20px;
   padding: 10px 24px;
-  border-bottom: 1px solid #000;
+  border-bottom: 1px solid var(--ink);
   font-size: 14px;
   flex: 0 0 auto;
 }
@@ -584,7 +584,7 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
   display: flex;
   align-items: center;
   gap: 6px;
-  border-bottom: 1px solid #000;
+  border-bottom: 1px solid var(--ink);
 }
 
 .search input {
@@ -618,11 +618,11 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
   font-size: 14px;
   cursor: pointer;
   padding: 0;
-  color: #000;
+  color: var(--ink);
 }
 
 .sort-btn.active {
-  color: #000;
+  color: var(--ink);
 }
 
 .sort-arrow {
@@ -665,7 +665,7 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
   font: inherit;
   font-size: 14px;
   cursor: pointer;
-  color: #000;
+  color: var(--ink);
 }
 
 .cols-btn svg {
@@ -678,12 +678,12 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
 
 .cols-btn.active,
 .grid-cols.auto .cols-3 {
-  color: #595959;
+  color: var(--ink-hover);
 }
 
 @media (hover: hover) {
   .cols-btn:hover {
-    color: #595959;
+    color: var(--ink-hover);
   }
 }
 
@@ -696,9 +696,9 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
 }
 
 .date-val {
-  color: #666;
+  color: var(--muted);
   font-size: 14px;
-  box-shadow: 0 1px 0 #000;
+  box-shadow: 0 1px 0 var(--ink);
 }
 
 .date-icon-wrap {
@@ -706,12 +706,12 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
   display: inline-flex;
   align-items: center;
   cursor: pointer;
-  color: #000;
+  color: var(--ink);
   isolation: isolate;
 }
 
 .date-icon-wrap:hover {
-  color: #555;
+  color: var(--ink-soft);
 }
 
 .date-native {
@@ -738,11 +738,11 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
   font-size: 14px;
   text-decoration: none;
   cursor: pointer;
-  color: #000;
+  color: var(--ink);
 }
 
 .control-btn.active {
-  color: #595959;
+  color: var(--ink-hover);
 }
 
 /* Hover tint for the control bar's text buttons, previewing the `.active`
@@ -750,7 +750,7 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
    stuck until the next tap. */
 @media (hover: hover) {
   .control-btn:hover {
-    color: #595959;
+    color: var(--ink-hover);
   }
 }
 
@@ -761,7 +761,7 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
 }
 
 .filter-btn.active {
-  color: #000;
+  color: var(--ink);
 }
 
 .filter-caret {
@@ -809,9 +809,9 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
 .filter-chip {
   display: inline-flex;
   align-items: center;
-  background: #fff;
-  color: #000;
-  border: 1px solid #000;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--ink);
   border-radius: 3px;
   padding: 3px 8px;
   font: inherit;
@@ -824,12 +824,12 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
 }
 
 .filter-chip:hover:not(.active) {
-  background: #f0f0f0;
+  background: var(--surface);
 }
 
 .filter-chip.active {
-  background: #000;
-  color: #fff;
+  background: var(--ink);
+  color: var(--paper);
 }
 
 .view-mode {
@@ -859,11 +859,11 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
 
 .state {
   padding: 24px;
-  color: #666;
+  color: var(--muted);
 }
 
 .state.error {
-  color: #c33;
+  color: var(--danger);
 }
 
 /* Compact scale, keyed to the panel's width at the same 560px where
@@ -905,10 +905,10 @@ watch([viewMode, filterOpen, pending, () => rows.value.length], () =>
   }
   /* The grid drops to two columns at this width while no count is chosen. */
   .grid-cols.auto .cols-3 {
-    color: #000;
+    color: var(--ink);
   }
   .grid-cols.auto .cols-2 {
-    color: #595959;
+    color: var(--ink-hover);
   }
   .control-btn,
   .sort-btn,

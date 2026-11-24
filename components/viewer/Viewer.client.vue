@@ -487,6 +487,19 @@ function unpin(el: Element) {
   node.style.top = "";
 }
 
+// --- Display mode -------------------------------------------------------------
+// Light, dark or follow the system. Cycled by the first button out of the menu;
+// it themes the panel, not the scan, which is always on black.
+const { pref: themePref, cycleTheme } = useTheme();
+const THEME_LABEL = { light: "Light", dark: "Dark", system: "System" } as const;
+const THEME_NEXT = { light: "dark", dark: "system", system: "light" } as const;
+const themeTitle = computed(
+  () =>
+    `Display: ${THEME_LABEL[themePref.value]}. Switch to ${THEME_LABEL[
+      THEME_NEXT[themePref.value]
+    ].toLowerCase()}.`,
+);
+
 // --- Control menu -------------------------------------------------------------
 // Every control folds behind one "more" button: on desktop they slide out to its
 // left along the top edge, on mobile they rise out of it up the right-hand edge.
@@ -584,75 +597,25 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
         class="overlay-right"
         :class="{
           open: controlsOpen,
-          'can-crop': canCrop,
           cropping: canCrop && cropEditing,
         }"
       >
-        <!-- The scan's own controls: view mode, and the crop tool's buttons. A
-        wrapper only so that on mobile they can stack bottom up in the column;
-        on desktop it is display: contents and the row is laid out as if it
-        were not there.
+        <!-- Counting out from the menu button: display mode, view mode,
+        annotations, then crop (admins) with the crop tool's buttons beyond it.
 
-        DOM order is the desktop order, left to right: view mode, reset, rotate,
-        mode, crop, then annotations and the menu button. On desktop, opening the
-        tool slides view mode and crop right into the space the annotation
-        buttons leave (see "Control row motion" in the script). On mobile the
-        stack grows upward from crop, so neither moves; `order` sets that
-        stacking, see the stylesheet. -->
+        DOM order is the desktop order, left to right: the crop tool's reset,
+        rotate and mode buttons, crop, annotations, view mode, display, and the
+        menu button. On desktop, opening the tool slides crop right into the
+        space the annotation buttons leave (see "Control row motion" in the
+        script). The mobile column is the same order read bottom up from the
+        button.
+
+        The crop buttons sit in a wrapper only so that on mobile they can stack
+        bottom up from crop, so the tool grows away from the button rather than
+        pushing crop around; on desktop it is display: contents and the row is
+        laid out as if it were not there. `order` sets that stacking, see the
+        stylesheet. -->
         <div class="ctrl-stack">
-          <!-- View mode: single circle that changes icon -->
-          <div class="ctrl-group view-mode-group" data-slide>
-            <button
-              class="ctrl-btn"
-              :title="
-                mode === 'pov' ? 'Switch to orbit view' : 'Switch to POV view'
-              "
-              :aria-label="
-                mode === 'pov' ? 'Switch to orbit view' : 'Switch to POV view'
-              "
-              @click="toggleViewMode"
-            >
-              <!-- Eye icon for POV mode -->
-              <svg
-                v-if="mode === 'pov'"
-                viewBox="0 0 16 16"
-                width="20"
-                height="20"
-                fill="none"
-                stroke="#ffffff"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" />
-                <circle cx="8" cy="8" r="2" />
-              </svg>
-              <!-- Orbit icon for Orbit mode -->
-              <svg
-                v-else
-                viewBox="252 0 810 750"
-                width="20"
-                height="20"
-                fill="none"
-                aria-hidden="true"
-              >
-                <path
-                  d="M657.382716 505.679012L442.469136 379.259259V126.419753L657.382716 0l214.91358 126.419753v252.839506z m164.345679-151.703703V192.158025l-139.061728 84.878222v162.550518z m-328.691358 0l139.061728 85.586172V269.602765l-139.061728-83.361185V353.975309zM657.382716 50.567901l-144.371358 88.822519L660.214519 227.555556h5.676246l140.174223-85.560889z"
-                  fill="#ffffff"
-                />
-                <path
-                  d="M720.592593 670.024691l-113.777778 101.135803v-79.03763C412.988049 675.018272 252.839506 581.290667 252.839506 467.753086c0-51.098864 30.340741-98.089086 80.845432-136.06558l33.261037 35.043556C326.997333 395.39042 303.407407 430.168494 303.407407 467.753086c0 86.926222 137.569975 158.84642 303.407408 173.776593V568.888889z"
-                  fill="#ffffff"
-                />
-                <path
-                  d="M783.802469 632.907852C916.770765 607.446914 1011.358025 543.149827 1011.358025 467.753086c0-42.085136-29.50637-80.693728-78.569877-111.059753l34.866568-34.866568C1026.439901 361.34558 1061.925926 412.204247 1061.925926 467.753086c0 100.819753-116.67279 186.191012-278.123457 216.064v-50.909234z"
-                  fill="#ffffff"
-                />
-              </svg>
-            </button>
-          </div>
-
           <!-- Crop tool buttons, only while it is open. -->
           <Transition
             name="ctrl-pop"
@@ -829,9 +792,8 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
             </div>
           </Transition>
 
-          <!-- Crop: admins only, and only on an entry that exists. Sits with the
-          view-mode control rather than the annotation group because it is about
-          the scan itself, not about what has been written on it. -->
+          <!-- Crop: admins only, and only on an entry that exists. Furthest out:
+          an editing tool, used far less than anything nearer the button. -->
           <div v-if="canCrop" class="ctrl-group crop-group" data-slide>
             <button
               class="ctrl-btn ctrl-crop"
@@ -923,6 +885,120 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
             </button>
           </div>
         </Transition>
+
+        <!-- View mode: single circle that changes icon -->
+        <div class="ctrl-group view-mode-group">
+          <button
+            class="ctrl-btn"
+            :title="
+              mode === 'pov' ? 'Switch to orbit view' : 'Switch to POV view'
+            "
+            :aria-label="
+              mode === 'pov' ? 'Switch to orbit view' : 'Switch to POV view'
+            "
+            @click="toggleViewMode"
+          >
+            <!-- Eye icon for POV mode -->
+            <svg
+              v-if="mode === 'pov'"
+              viewBox="0 0 16 16"
+              width="20"
+              height="20"
+              fill="none"
+              stroke="#ffffff"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" />
+              <circle cx="8" cy="8" r="2" />
+            </svg>
+            <!-- Orbit icon for Orbit mode -->
+            <svg
+              v-else
+              viewBox="252 0 810 750"
+              width="20"
+              height="20"
+              fill="none"
+              aria-hidden="true"
+            >
+              <path
+                d="M657.382716 505.679012L442.469136 379.259259V126.419753L657.382716 0l214.91358 126.419753v252.839506z m164.345679-151.703703V192.158025l-139.061728 84.878222v162.550518z m-328.691358 0l139.061728 85.586172V269.602765l-139.061728-83.361185V353.975309zM657.382716 50.567901l-144.371358 88.822519L660.214519 227.555556h5.676246l140.174223-85.560889z"
+                fill="#ffffff"
+              />
+              <path
+                d="M720.592593 670.024691l-113.777778 101.135803v-79.03763C412.988049 675.018272 252.839506 581.290667 252.839506 467.753086c0-51.098864 30.340741-98.089086 80.845432-136.06558l33.261037 35.043556C326.997333 395.39042 303.407407 430.168494 303.407407 467.753086c0 86.926222 137.569975 158.84642 303.407408 173.776593V568.888889z"
+                fill="#ffffff"
+              />
+              <path
+                d="M783.802469 632.907852C916.770765 607.446914 1011.358025 543.149827 1011.358025 467.753086c0-42.085136-29.50637-80.693728-78.569877-111.059753l34.866568-34.866568C1026.439901 361.34558 1061.925926 412.204247 1061.925926 467.753086c0 100.819753-116.67279 186.191012-278.123457 216.064v-50.909234z"
+                fill="#ffffff"
+              />
+            </svg>
+          </button>
+        </div>
+
+        <!-- Display mode: sun, moon, or a screen for "follow the system".
+        Nearest the menu button, so it is the first thing out of it. -->
+        <div class="ctrl-group theme-group">
+          <button
+            class="ctrl-btn"
+            :title="themeTitle"
+            :aria-label="themeTitle"
+            @click="cycleTheme"
+          >
+            <!-- Sun -->
+            <svg
+              v-if="themePref === 'light'"
+              viewBox="0 0 16 16"
+              width="18"
+              height="18"
+              fill="none"
+              stroke="#ffffff"
+              stroke-width="1.3"
+              stroke-linecap="round"
+              aria-hidden="true"
+            >
+              <circle cx="8" cy="8" r="2.75" />
+              <path
+                d="M8 1.5v1.5M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1.06 1.06M11.54 11.54l1.06 1.06M3.4 12.6l1.06-1.06M11.54 4.46l1.06-1.06"
+              />
+            </svg>
+            <!-- Moon -->
+            <svg
+              v-else-if="themePref === 'dark'"
+              viewBox="0 0 16 16"
+              width="18"
+              height="18"
+              fill="none"
+              stroke="#ffffff"
+              stroke-width="1.3"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path
+                d="M13.2 10.1A5.6 5.6 0 0 1 5.9 2.8a5.6 5.6 0 1 0 7.3 7.3z"
+              />
+            </svg>
+            <!-- Computer: follow the system -->
+            <svg
+              v-else
+              viewBox="0 0 16 16"
+              width="18"
+              height="18"
+              fill="none"
+              stroke="#ffffff"
+              stroke-width="1.3"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="1.75" y="2.5" width="12.5" height="8.5" rx="1" />
+              <path d="M6 14h4M8 11v3" />
+            </svg>
+          </button>
+        </div>
 
         <!-- The menu button, the one control always shown: folds the rest away
         and brings them back out of it. Last in the DOM, so it ends the desktop
@@ -1240,31 +1316,31 @@ canvas {
 }
 /* Each pill's distance from the button, counting outwards. It sets both the
    stagger and how far the pill travels, so further ones come from further
-   away and the row reads as coming out of the button. Along the desktop row:
-   annotations, crop, then the crop tool's buttons while it is open, and view
-   mode last, wherever that leaves it. */
-.annotation-group {
+   away and the row reads as coming out of the button. The same in the desktop
+   row and the mobile column: display, view mode, annotations, crop, then the
+   crop tool's buttons, which take the annotations' place while it is open. */
+.theme-group {
   --reach: 0;
 }
 .view-mode-group {
   --reach: 1;
 }
-.crop-group {
-  --reach: 1;
+.annotation-group {
+  --reach: 2;
 }
-.overlay-right.can-crop .view-mode-group {
+.crop-group {
+  --reach: 3;
+}
+.overlay-right.cropping .crop-group {
   --reach: 2;
 }
 .crop-mode-group {
-  --reach: 2;
-}
-.crop-rotate-group {
   --reach: 3;
 }
-.crop-reset-group {
+.crop-rotate-group {
   --reach: 4;
 }
-.overlay-right.cropping .view-mode-group {
+.crop-reset-group {
   --reach: 5;
 }
 /* Folding: all together, quickly. Visibility flips only once the fade ends, so
@@ -1424,9 +1500,9 @@ canvas {
   }
   /* The menu as a column up the right-hand edge, rising from the button in the
   bottom-right corner. A plain top-down column of the DOM order, so the button
-  (last) is at the bottom, the annotation pill above it, then the view-mode/crop
-  stack, which keeps its own bottom-up `order` below. Only as wide as its widest
-  pill, so it covers none of the layout's bottom nav. */
+  (last) is at the bottom, then display, view mode and the annotation pill above
+  it, then the crop stack, which keeps its own bottom-up `order` below. Only as
+  wide as its widest pill, so it covers none of the layout's bottom nav. */
   .overlay-right {
     position: absolute;
     bottom: 0.75rem;
@@ -1436,11 +1512,10 @@ canvas {
     justify-content: flex-end;
     gap: 8px;
   }
-  /* The same buttons as the desktop row, stacked: view mode at the bottom, then
-  crop, then the tool's mode and reset buttons above it while it is open. They
-  grow upward from crop, so neither view mode nor crop moves when the tool
-  opens. The DOM order is the desktop one, so `order` sets the stack's and
-  column-reverse lays it bottom up. Transparent to pointer events like the
+  /* The crop buttons, stacked: crop at the bottom, then the tool's mode, rotate
+  and reset buttons above it while it is open. They grow upward from crop, so
+  crop doesn't move when the tool opens. The DOM order is the desktop one, so
+  `order` sets the stack's and column-reverse lays it bottom up. Transparent to pointer events like the
   column around it, so the gaps between buttons do not swallow touches meant
   for the scan. */
   .ctrl-stack {
@@ -1453,20 +1528,17 @@ canvas {
   .ctrl-stack > * {
     pointer-events: auto;
   }
-  .ctrl-stack > .view-mode-group {
+  .ctrl-stack > .crop-group {
     order: 0;
   }
-  .ctrl-stack > .crop-group {
+  .ctrl-stack > .crop-mode-group {
     order: 1;
   }
-  .ctrl-stack > .crop-mode-group {
+  .ctrl-stack > .crop-rotate-group {
     order: 2;
   }
-  .ctrl-stack > .crop-rotate-group {
-    order: 3;
-  }
   .ctrl-stack > .crop-reset-group {
-    order: 4;
+    order: 3;
   }
   /* Vertical dots for the column. */
   .ctrl-more svg {
@@ -1498,28 +1570,6 @@ canvas {
     left: 2px;
   }
 
-  /* Distances from the button, counting up the column: annotations, view
-  mode, crop, then the crop tool's buttons. */
-  .annotation-group {
-    --reach: 0;
-  }
-  .view-mode-group,
-  .overlay-right.can-crop .view-mode-group,
-  .overlay-right.cropping .view-mode-group {
-    --reach: 1;
-  }
-  .crop-group {
-    --reach: 2;
-  }
-  .crop-mode-group {
-    --reach: 3;
-  }
-  .crop-rotate-group {
-    --reach: 4;
-  }
-  .crop-reset-group {
-    --reach: 5;
-  }
   /* Folded pills drop towards the button rather than sliding sideways. */
   .overlay-right:not(.open) .ctrl-group {
     transform: translateY(calc((var(--reach, 0) + 1) * 14px)) scale(0.85);

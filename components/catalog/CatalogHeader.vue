@@ -93,14 +93,14 @@ watch(
 .catalog-head {
   display: flex;
   flex-direction: column;
-  border-bottom: 1px solid #000;
+  border-bottom: 1px solid var(--ink);
   flex: 0 0 auto;
   font-family: Arial, Helvetica, sans-serif;
   /* Pinned, not inherited: the header has to be the same height on every page,
      and pages set their own line-height on the root (Account's 1.4 made this
      ~6px taller than on Catalog, dropping the whole head-row out of line). */
   line-height: normal;
-  background: #fff;
+  background: var(--paper);
   /* One gutter and one nav size for the row, the toggle and the drawer under
      it, stepped by panel width alongside the rest of the panel (see the
      container query below) so whichever nav is showing matches the controls. */
@@ -119,7 +119,7 @@ watch(
   margin: 0;
   font-size: 24px;
   font-weight: 400;
-  color: #000;
+  color: var(--ink);
 }
 
 .site-title a {
@@ -134,19 +134,19 @@ watch(
 }
 
 .top-nav a {
-  color: #000;
+  color: var(--ink);
   text-decoration: none;
 }
 
 .top-nav a.active {
-  color: #595959;
+  color: var(--ink-hover);
 }
 
 /* Matches the account tabs' hover (color tint, no underline); pointer
    devices only so a tap doesn't leave the tint stuck on. */
 @media (hover: hover) {
   .top-nav a:hover {
-    color: #595959;
+    color: var(--ink-hover);
   }
 }
 
@@ -164,13 +164,13 @@ watch(
   font-family: inherit;
   font-size: var(--nav-font);
   line-height: 1;
-  color: #000;
+  color: var(--ink);
 }
 
 /* Same hover treatment as the nav links; pointer devices only. */
 @media (hover: hover) {
   .menu-toggle:hover {
-    color: #595959;
+    color: var(--ink-hover);
   }
 }
 
@@ -229,19 +229,19 @@ watch(
   }
 
   .mobile-nav a {
-    color: #000;
+    color: var(--ink);
     text-decoration: none;
   }
 
   .mobile-nav a.active {
-    color: #595959;
+    color: var(--ink-hover);
   }
 
   /* Reached with a mouse in a narrow panel. On a phone `hover: hover` is
      false and this never applies. */
   @media (hover: hover) {
     .mobile-nav a:hover {
-      color: #595959;
+      color: var(--ink-hover);
     }
   }
 }

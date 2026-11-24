@@ -248,9 +248,9 @@ async function onSubmitted() {
 
 <style scoped>
 .awaiting {
-  border-left: 3px solid #000;
+  border-left: 3px solid var(--ink);
   padding: 8px 12px;
-  color: #666;
+  color: var(--muted);
 }
 
 .awaiting p {
@@ -272,6 +272,6 @@ async function onSubmitted() {
 }
 
 .rejection-msg {
-  color: #c33;
+  color: var(--danger);
 }
 </style>

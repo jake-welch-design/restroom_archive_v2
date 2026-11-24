@@ -94,9 +94,9 @@ function onClick(e: MouseEvent) {
 .wr-dialog {
   width: min(420px, calc(100vw - 32px));
   padding: 0;
-  border: 1px solid #000;
-  background: #fff;
-  color: #000;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
   font-family: Arial, Helvetica, sans-serif;
   font-size: 14px;
   line-height: 1.5;
@@ -124,13 +124,13 @@ function onClick(e: MouseEvent) {
   font-size: 20px;
   line-height: 1;
   cursor: pointer;
-  color: #000;
+  color: var(--ink);
 }
 
 .wr-rule {
   height: 1px;
   margin: 0 24px;
-  background: #000;
+  background: var(--ink);
 }
 
 .wr-body {

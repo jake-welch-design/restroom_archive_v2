@@ -255,7 +255,7 @@ function removalNote(e: ArchiveEntry) {
    a badge for a backlog the way the sub-tab counts are. */
 .filter-count {
   margin-left: 5px;
-  color: #999;
+  color: var(--faint);
 }
 
 .btn-sm.active .filter-count {

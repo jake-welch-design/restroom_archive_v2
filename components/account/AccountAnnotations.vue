@@ -63,6 +63,6 @@ async function remove(slug: string, id: number) {
 /* The annotation's own text, which is the point of the row, so it reads at
    full strength rather than in the muted colour the rest of the meta uses. */
 .annotation-text {
-  color: #000;
+  color: var(--ink);
 }
 </style>

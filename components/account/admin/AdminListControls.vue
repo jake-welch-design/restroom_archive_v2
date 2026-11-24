@@ -132,7 +132,7 @@ const sortDir = defineModel<"asc" | "desc">("sortDir", { required: true });
   display: flex;
   align-items: center;
   gap: 6px;
-  border-bottom: 1px solid #000;
+  border-bottom: 1px solid var(--ink);
 }
 
 .search input {
@@ -148,7 +148,7 @@ const sortDir = defineModel<"asc" | "desc">("sortDir", { required: true });
 .search-icon {
   display: inline-flex;
   align-items: center;
-  color: #000;
+  color: var(--ink);
 }
 
 .search-icon.clear {
@@ -166,7 +166,7 @@ const sortDir = defineModel<"asc" | "desc">("sortDir", { required: true });
 }
 
 .sort-label {
-  color: #666;
+  color: var(--muted);
 }
 
 /* Stripped of the native chrome for the same reason the buttons are: this strip
@@ -176,12 +176,12 @@ const sortDir = defineModel<"asc" | "desc">("sortDir", { required: true });
   appearance: none;
   background: transparent;
   border: 0;
-  border-bottom: 1px solid #000;
+  border-bottom: 1px solid var(--ink);
   border-radius: 0;
   padding: 2px 0;
   font: inherit;
   font-size: 12px;
-  color: #000;
+  color: var(--ink);
   cursor: pointer;
 }
 
@@ -192,7 +192,7 @@ const sortDir = defineModel<"asc" | "desc">("sortDir", { required: true });
   border: 0;
   padding: 2px;
   font: inherit;
-  color: #000;
+  color: var(--ink);
   cursor: pointer;
 }
 
@@ -214,7 +214,7 @@ const sortDir = defineModel<"asc" | "desc">("sortDir", { required: true });
   .search-icon.clear:hover,
   .sort-dir:hover,
   .sort-select:hover {
-    color: #555;
+    color: var(--ink-soft);
   }
 }
 </style>
