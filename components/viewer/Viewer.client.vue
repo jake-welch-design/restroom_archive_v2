@@ -1151,12 +1151,10 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
       </div>
     </div>
 
-    <!-- The crop tool's note, in the annotation hint's place and style. A toast
-    replaces it while it shows, as toasts replace that hint, which is how the
-    mode toggle's message gets the spot to itself. The warning is here because
-    there is no panel left to put it in, and it is the one thing worth knowing
-    before the next press saves. -->
-    <div v-if="cropEditing && !toastMessage" class="crosshair-hint crop-note">
+    <!-- The crop tool's note, in the annotation hint's place and style. The
+    warning is here because there is no panel left to put it in, and it is the
+    one thing worth knowing before the next press saves. -->
+    <div v-if="cropEditing" class="crosshair-hint crop-note">
       {{
         cropSaving ? "Saving" : cropTool === "rotate" ? "Rotating" : "Cropping"
       }}
@@ -1185,13 +1183,12 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
       </span>
     </div>
 
-    <div
-      v-if="createMode && !pendingPoint && !toastMessage"
-      class="crosshair-hint"
-    >
+    <div v-if="createMode && !pendingPoint" class="crosshair-hint">
       Click to place an annotation
     </div>
 
+    <!-- Tool toasts sit in the middle of the scan, apart from the hints along
+    the top, so a toggle's message never covers the hint for the tool. -->
     <div class="viewport-toast-wrap">
       <Transition name="toast">
         <div v-if="toastMessage" class="viewport-toast">{{ toastMessage }}</div>
@@ -1600,9 +1597,9 @@ canvas {
 }
 .viewport-toast-wrap {
   position: absolute;
-  top: 0.75rem;
+  top: 50%;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translate(-50%, -50%);
   pointer-events: none;
   z-index: 4;
 }
@@ -1719,8 +1716,11 @@ canvas {
   .crosshair-hint {
     top: 2.75rem;
   }
+  /* Centred on what the sheet leaves visible: when it is dragged past its
+  resting height it slides over the viewer's top (`--sheet-cover-frac`, from
+  the layout). */
   .viewport-toast-wrap {
-    top: 2.75rem;
+    top: calc(50% + 100dvh * var(--sheet-cover-frac, 0) / 2);
   }
 }
 </style>

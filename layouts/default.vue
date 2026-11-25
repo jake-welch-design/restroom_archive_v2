@@ -80,6 +80,12 @@ const sheetStyle = computed(() => ({
   "--push-frac": String(
     isClosed.value ? 0 : Math.min(activeFrac.value, PUSH_MAX),
   ),
+  // How much of the viewer's top the sheet covers once it slides over it, as a
+  // fraction of the viewport, so the viewer can centre its toasts on the part
+  // still on screen.
+  "--sheet-cover-frac": String(
+    isClosed.value ? 0 : Math.max(0, activeFrac.value - PUSH_MAX),
+  ),
 }));
 
 let dragPointerId: number | null = null;

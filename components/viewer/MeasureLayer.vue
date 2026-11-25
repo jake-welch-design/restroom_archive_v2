@@ -5,14 +5,24 @@ import type { RoomMeasurement } from "~/composables/roomMeasure";
 export interface ProjectedLabel {
   x: number;
   y: number;
+  /** Unit screen direction from the line toward the room's outside. */
+  nx: number;
+  ny: number;
   visible: boolean;
 }
 
 const props = defineProps<{
   measurement: RoomMeasurement | null;
   visible: boolean;
-  projectSegment: (start: THREE.Vector3, end: THREE.Vector3) => ProjectedLabel;
+  projectSegment: (
+    start: THREE.Vector3,
+    end: THREE.Vector3,
+    outward: THREE.Vector3,
+  ) => ProjectedLabel;
 }>();
+
+/** Space between a line and the nearest edge of its label, in px. */
+const LABEL_GAP_PX = 5;
 
 // Projected edge-label positions, updated on animation frames only when
 // visible labels actually move so a stationary camera causes zero Vue updates.
@@ -25,7 +35,11 @@ function sameLabelPos(
   return (
     !!a &&
     a.visible === b.visible &&
-    (!b.visible || (Math.abs(a.x - b.x) < 0.1 && Math.abs(a.y - b.y) < 0.1))
+    (!b.visible ||
+      (Math.abs(a.x - b.x) < 0.1 &&
+        Math.abs(a.y - b.y) < 0.1 &&
+        Math.abs(a.nx - b.nx) < 0.01 &&
+        Math.abs(a.ny - b.ny) < 0.01))
   );
 }
 
@@ -39,7 +53,7 @@ function tick() {
     let changed = prev.size !== m.segments.length;
     const next = new Map<string, ProjectedLabel>();
     for (const seg of m.segments) {
-      const p = props.projectSegment(seg.start, seg.end);
+      const p = props.projectSegment(seg.start, seg.end, seg.outward);
       next.set(seg.id, p);
       if (!changed && !sameLabelPos(prev.get(seg.id), p)) changed = true;
     }
@@ -52,6 +66,27 @@ onMounted(() => {
   frameId = requestAnimationFrame(tick);
 });
 onBeforeUnmount(() => cancelAnimationFrame(frameId));
+
+/**
+ * Places a label just outside its line. The anchor sits LABEL_GAP_PX off the
+ * line along the outward normal, and the label shifts by half its own size
+ * along that normal (scaled so its nearest edge or corner meets the anchor),
+ * so it clears the line at any angle without measuring the text.
+ */
+function labelStyle(id: string) {
+  const p = labelPositions.value.get(id);
+  if (!p || !p.visible) {
+    return { display: "none" };
+  }
+  const reach = Math.max(Math.abs(p.nx), Math.abs(p.ny)) || 1;
+  const sx = p.nx / reach;
+  const sy = p.ny / reach;
+  return {
+    left: `${p.x + p.nx * LABEL_GAP_PX}px`,
+    top: `${p.y + p.ny * LABEL_GAP_PX}px`,
+    transform: `translate(${-50 + sx * 50}%, ${-50 + sy * 50}%)`,
+  };
+}
 
 const areaText = computed(() => {
   if (!props.measurement) return "";
@@ -66,11 +101,7 @@ const areaText = computed(() => {
       :key="seg.id"
       class="measure-label"
       :class="seg.kind"
-      :style="{
-        left: `${labelPositions.get(seg.id)?.x ?? 0}px`,
-        top: `${labelPositions.get(seg.id)?.y ?? 0}px`,
-        display: labelPositions.get(seg.id)?.visible ? 'inline-block' : 'none',
-      }"
+      :style="labelStyle(seg.id)"
     >
       {{ seg.label }}
     </span>
@@ -92,21 +123,16 @@ const areaText = computed(() => {
 
 .measure-label {
   position: absolute;
-  transform: translate(-50%, -50%);
-  padding: 1px 5px;
-  border-radius: 3px;
-  background: rgba(0, 0, 0, 0.72);
   color: #ffffff;
   font-family: Arial, Helvetica, sans-serif;
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   line-height: 1.25;
   white-space: nowrap;
-  border: 1px solid rgba(255, 255, 255, 0.32);
-}
-
-.measure-label.vertical {
-  border-color: rgba(34, 197, 94, 0.65);
+  /* No backing box: a tight shadow keeps the text readable on pale scans. */
+  text-shadow:
+    0 0 2px rgba(0, 0, 0, 0.9),
+    0 1px 3px rgba(0, 0, 0, 0.7);
 }
 
 .measure-area {
@@ -124,7 +150,6 @@ const areaText = computed(() => {
 @media (max-width: 750px) {
   .measure-label {
     font-size: 10px;
-    padding: 1px 4px;
   }
   .measure-area {
     font-size: 12px;

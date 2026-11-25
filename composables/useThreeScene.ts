@@ -2284,19 +2284,49 @@ export function useThreeScene(
 
   const segStartView = new THREE.Vector3();
   const segEndView = new THREE.Vector3();
-  const segMidClip = new THREE.Vector4();
+  const segMidView = new THREE.Vector3();
+  const segOutView = new THREE.Vector3();
+  const segClip = new THREE.Vector4();
+  const segStartPx = new THREE.Vector2();
+  const segEndPx = new THREE.Vector2();
+  const segMidPx = new THREE.Vector2();
+  const segOutPx = new THREE.Vector2();
 
+  /** View space to CSS pixels on the canvas; false when behind the camera. */
+  function viewToPx(
+    view: THREE.Vector3,
+    out: THREE.Vector2,
+    width: number,
+    height: number,
+  ): boolean {
+    segClip
+      .set(view.x, view.y, view.z, 1)
+      .applyMatrix4(camera!.projectionMatrix);
+    if (segClip.w <= 1e-6) return false;
+    out.set(
+      ((segClip.x / segClip.w) * 0.5 + 0.5) * width,
+      ((-segClip.y / segClip.w) * 0.5 + 0.5) * height,
+    );
+    return true;
+  }
+
+  /**
+   * Screen position of a measurement edge's label: the midpoint of its
+   * on-screen part, plus `nx`/`ny`, the unit screen direction perpendicular to
+   * the line on the side `outward` (model-local) points to, so the label can
+   * sit outside the room rather than on top of it.
+   */
   function projectSegment(
     start: THREE.Vector3,
     end: THREE.Vector3,
-  ): { x: number; y: number; visible: boolean } {
-    if (!camera || !renderer || !currentModel) {
-      return { x: 0, y: 0, visible: false };
-    }
+    outward: THREE.Vector3,
+  ): { x: number; y: number; nx: number; ny: number; visible: boolean } {
+    const hidden = { x: 0, y: 0, nx: 0, ny: -1, visible: false };
+    if (!camera || !renderer || !currentModel) return hidden;
     const canvas = renderer.domElement;
     const width = canvas.clientWidth;
     const height = canvas.clientHeight;
-    if (!width || !height) return { x: 0, y: 0, visible: false };
+    if (!width || !height) return hidden;
 
     segStartView.copy(start);
     segEndView.copy(end);
@@ -2309,34 +2339,60 @@ export function useThreeScene(
       const nearZ = -Math.max(camera.near * 1.5, 0.05);
       const aBehind = segStartView.z > nearZ;
       const bBehind = segEndView.z > nearZ;
-      if (aBehind && bBehind) return { x: 0, y: 0, visible: false };
+      if (aBehind && bBehind) return hidden;
       if (aBehind || bBehind) {
         const dz = segEndView.z - segStartView.z;
-        if (Math.abs(dz) < 1e-6) return { x: 0, y: 0, visible: false };
+        if (Math.abs(dz) < 1e-6) return hidden;
         const t = (nearZ - segStartView.z) / dz;
         if (aBehind) segStartView.lerp(segEndView, t);
         else segEndView.lerp(segStartView, 1 - t);
       }
     }
 
-    segMidClip.set(
-      0.5 * (segStartView.x + segEndView.x),
-      0.5 * (segStartView.y + segEndView.y),
-      0.5 * (segStartView.z + segEndView.z),
-      1,
-    );
-    segMidClip.applyMatrix4(camera.projectionMatrix);
-    if (segMidClip.w <= 0) return { x: 0, y: 0, visible: false };
+    segMidView.addVectors(segStartView, segEndView).multiplyScalar(0.5);
+    if (!viewToPx(segMidView, segMidPx, width, height)) return hidden;
+    viewToPx(segStartView, segStartPx, width, height);
+    viewToPx(segEndView, segEndPx, width, height);
 
-    const ndcX = segMidClip.x / segMidClip.w;
-    const ndcY = segMidClip.y / segMidClip.w;
+    // Which way is outward on screen: project a point a few centimetres out.
+    segOutView
+      .copy(outward)
+      .transformDirection(currentModel.matrixWorld)
+      .transformDirection(camera.matrixWorldInverse)
+      .multiplyScalar(0.05)
+      .add(segMidView);
+    let outX = 0;
+    let outY = -1;
+    if (viewToPx(segOutView, segOutPx, width, height)) {
+      outX = segOutPx.x - segMidPx.x;
+      outY = segOutPx.y - segMidPx.y;
+    }
+
+    let nx: number;
+    let ny: number;
+    const tx = segEndPx.x - segStartPx.x;
+    const ty = segEndPx.y - segStartPx.y;
+    const lineLen = Math.hypot(tx, ty);
+    if (lineLen > 4) {
+      // Perpendicular to the line, flipped to the outward side.
+      nx = -ty / lineLen;
+      ny = tx / lineLen;
+      if (nx * outX + ny * outY < 0) {
+        nx = -nx;
+        ny = -ny;
+      }
+    } else {
+      // Looking straight down the edge: only the outward direction is left.
+      const outLen = Math.hypot(outX, outY);
+      nx = outLen > 1e-6 ? outX / outLen : 0;
+      ny = outLen > 1e-6 ? outY / outLen : -1;
+    }
+
+    const ndcX = (segMidPx.x / width) * 2 - 1;
+    const ndcY = (segMidPx.y / height) * 2 - 1;
     const visible =
       ndcX >= -1.08 && ndcX <= 1.08 && ndcY >= -1.08 && ndcY <= 1.08;
-    return {
-      x: (ndcX * 0.5 + 0.5) * width,
-      y: (-ndcY * 0.5 + 0.5) * height,
-      visible,
-    };
+    return { x: segMidPx.x, y: segMidPx.y, nx, ny, visible };
   }
 
   function project(point: THREE.Vector3): {
